@@ -9,7 +9,4 @@ def home():
 
 @app.post("/generate")
 def generate():
-    return {
-        "status": "ok",
-        "message": "works"
-    }
+    return {"status": "ok"}
