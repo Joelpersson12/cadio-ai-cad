@@ -1,0 +1,19 @@
+main.py
+from fastapi import FastAPI
+from pydantic import BaseModel
+import cadquery as cq
+
+app = FastAPI()
+
+class Request(BaseModel):
+    prompt: str
+
+@app.post("/generate")
+def generate(data: Request):
+
+    model = cq.Workplane("XY").box(50, 20, 10)
+    cq.exporters.export(model, "model.stl")
+
+    return {
+        "download_url": "https://example.com/model.stl"
+    }
