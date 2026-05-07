@@ -1,16 +1,15 @@
 main.py
 from fastapi import FastAPI
-from pydantic import BaseModel
 
 app = FastAPI()
 
-class Request(BaseModel):
-    prompt: str
+@app.get("/")
+def home():
+    return {"status": "Cadio API running"}
 
 @app.post("/generate")
-def generate(data: Request):
+def generate():
     return {
         "status": "ok",
-        "prompt": data.prompt,
-        "message": "backend works"
+        "message": "works"
     }
