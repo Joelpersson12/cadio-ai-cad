@@ -4,11 +4,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import cadquery as cq
 import uuid
-import os
+from openai import OpenAI
+
+client = OpenAI(api_key="DIN_OPENAI_API_KEY")
 
 app = FastAPI()
 
-# CORS (fixar Lovable connection)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,24 +18,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# input från Lovable
 class Request(BaseModel):
     prompt: str
 
 
-# enkel AI logik (MVP)
-def create_model(prompt: str):
+def ai_design(prompt: str):
 
-    p = prompt.lower()
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "Return only one: phone_stand, bracket, box, case"
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
 
-    if "phone stand" in p:
+    return response.choices[0].message.content.strip()
+
+
+def build_model(design: str):
+
+    if design == "phone_stand":
         return cq.Workplane("XY").box(80, 10, 120)
 
-    elif "bracket" in p:
-        return cq.Workplane("XY").box(60, 20, 10)
+    if design == "bracket":
+        return cq.Workplane("XY").box(60, 20, 20)
 
-    else:
-        return cq.Workplane("XY").box(40, 40, 40)
+    if design == "case":
+        return cq.Workplane("XY").box(100, 60, 30)
+
+    return cq.Workplane("XY").box(40, 40, 40)
 
 
 @app.get("/")
@@ -45,20 +63,21 @@ def home():
 @app.post("/generate")
 def generate(data: Request):
 
-    model = create_model(data.prompt)
+    design = ai_design(data.prompt)
+    model = build_model(design)
 
-    filename = f"{uuid.uuid4()}.stl"
-    path = f"/tmp/{filename}"
+    file_id = str(uuid.uuid4())
+    path = f"/tmp/{file_id}.stl"
 
     cq.exporters.export(model, path)
 
     return {
         "status": "generated",
-        "prompt": data.prompt,
-        "download_url": f"/download/{filename}"
+        "design": design,
+        "download_url": f"/download/{file_id}"
     }
 
 
-@app.get("/download/{file}")
-def download(file: str):
-    return FileResponse(f"/tmp/{file}")
+@app.get("/download/{file_id}")
+def download(file_id: str):
+    return FileResponse(f"/tmp/{file_id}.stl")
