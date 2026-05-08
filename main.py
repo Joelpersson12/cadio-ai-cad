@@ -6,7 +6,8 @@ import cadquery as cq
 import uuid
 from openai import OpenAI
 
-client = OpenAI(api_key="DIN_OPENAI_API_KEY")
+import os
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = FastAPI()
 
