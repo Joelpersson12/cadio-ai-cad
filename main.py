@@ -6,8 +6,8 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["*"],  # öppnar för alla origins (dev-läge)
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -21,8 +21,7 @@ def home():
 
 @app.post("/generate")
 def generate(data: Request):
-
     return {
         "status": "generated",
-        "message": f"You generated: {data.prompt}"
+        "message": data.prompt
     }
