@@ -6,16 +6,22 @@ from openai import OpenAI
 import cadquery as cq
 import uuid
 import os
+import json
 
-# OpenAI client
+# -----------------------------
+# OPENAI
+# -----------------------------
+
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
-# FastAPI app
+# -----------------------------
+# FASTAPI
+# -----------------------------
+
 app = FastAPI()
 
-# CORS (för Lovable/frontend)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,12 +30,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request model
+# -----------------------------
+# REQUEST MODEL
+# -----------------------------
+
 class Request(BaseModel):
     prompt: str
 
+# -----------------------------
+# AI PARAMETRIC DESIGN
+# -----------------------------
 
-# AI DESIGN FUNCTION
 def ai_design(prompt: str):
 
     try:
@@ -39,11 +50,32 @@ def ai_design(prompt: str):
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "You are a CAD assistant. "
-                        "Return ONLY one of these words: "
-                        "phone_stand, bracket, case, box"
-                    )
+                    "content": """
+You are an AI CAD designer.
+
+Return ONLY valid JSON.
+
+Examples:
+
+{
+  "type": "headset_stand",
+  "height": 240,
+  "width": 120,
+  "thickness": 8
+}
+
+{
+  "type": "phone_stand",
+  "height": 120,
+  "width": 80,
+  "angle": 30
+}
+
+{
+  "type": "box",
+  "size": 40
+}
+"""
                 },
                 {
                     "role": "user",
@@ -52,35 +84,122 @@ def ai_design(prompt: str):
             ]
         )
 
-        result = response.choices[0].message.content.strip().lower()
+        result = response.choices[0].message.content.strip()
 
-        print("AI RESULT:", result)
+        print("AI RESPONSE:")
+        print(result)
 
-        return result
+        return json.loads(result)
 
     except Exception as e:
 
-        print("OPENAI ERROR:", e)
+        print("AI ERROR:", e)
 
-        return "box"
+        return {
+            "type": "box",
+            "size": 40
+        }
 
-
+# -----------------------------
 # BUILD CAD MODEL
-def build_model(design: str):
+# -----------------------------
+
+def build_model(design):
 
     try:
 
-        if design == "phone_stand":
-            return cq.Workplane("XY").box(80, 10, 120)
+        model_type = design.get("type")
 
-        elif design == "bracket":
-            return cq.Workplane("XY").box(60, 20, 20)
+        # --------------------------------
+        # HEADSET STAND
+        # --------------------------------
 
-        elif design == "case":
-            return cq.Workplane("XY").box(100, 60, 30)
+        if model_type == "headset_stand":
+
+            height = design.get("height", 240)
+            width = design.get("width", 120)
+            thickness = design.get("thickness", 8)
+
+            # Base
+            base = (
+                cq.Workplane("XY")
+                .box(width, width, thickness)
+            )
+
+            # Vertical stand
+            stand = (
+                cq.Workplane("XY")
+                .transformed(offset=(0, 0, height / 2))
+                .box(thickness, thickness, height)
+            )
+
+            return base.union(stand)
+
+        # --------------------------------
+        # PHONE STAND
+        # --------------------------------
+
+        elif model_type == "phone_stand":
+
+            width = design.get("width", 80)
+            height = design.get("height", 120)
+            thickness = design.get("thickness", 8)
+
+            return (
+                cq.Workplane("XY")
+                .box(width, thickness, height)
+            )
+
+        # --------------------------------
+        # SIMPLE CASE
+        # --------------------------------
+
+        elif model_type == "case":
+
+            width = design.get("width", 100)
+            depth = design.get("depth", 60)
+            height = design.get("height", 30)
+
+            return (
+                cq.Workplane("XY")
+                .box(width, depth, height)
+            )
+
+        # --------------------------------
+        # BRACKET
+        # --------------------------------
+
+        elif model_type == "bracket":
+
+            width = design.get("width", 60)
+            depth = design.get("depth", 20)
+            height = design.get("height", 60)
+
+            vertical = (
+                cq.Workplane("XY")
+                .box(depth, depth, height)
+            )
+
+            horizontal = (
+                cq.Workplane("XY")
+                .transformed(offset=(width / 2, 0, depth / 2))
+                .box(width, depth, depth)
+            )
+
+            return vertical.union(horizontal)
+
+        # --------------------------------
+        # DEFAULT BOX
+        # --------------------------------
 
         else:
-            return cq.Workplane("XY").box(40, 40, 40)
+
+            size = design.get("size", 40)
+
+            return (
+                cq.Workplane("XY")
+                .box(size, size, size)
+            )
 
     except Exception as e:
 
@@ -88,28 +207,36 @@ def build_model(design: str):
 
         return cq.Workplane("XY").box(40, 40, 40)
 
-
+# -----------------------------
 # HOME
+# -----------------------------
+
 @app.get("/")
 def home():
+
     return {
         "status": "Cadio AI CAD running"
     }
 
+# -----------------------------
+# GENERATE CAD
+# -----------------------------
 
-# GENERATE ENDPOINT
 @app.post("/generate")
 def generate(data: Request):
 
     try:
 
-        # AI decides design
+        # AI creates parameters
         design = ai_design(data.prompt)
+
+        print("DESIGN:")
+        print(design)
 
         # Build CAD model
         model = build_model(design)
 
-        # Create filename
+        # Create file id
         file_id = str(uuid.uuid4())
 
         # STL path
@@ -118,7 +245,6 @@ def generate(data: Request):
         # Export STL
         cq.exporters.export(model, path)
 
-        # Return response
         return {
             "status": "generated",
             "prompt": data.prompt,
@@ -135,8 +261,10 @@ def generate(data: Request):
             "message": str(e)
         }
 
-
+# -----------------------------
 # DOWNLOAD STL
+# -----------------------------
+
 @app.get("/download/{file_id}")
 def download(file_id: str):
 
