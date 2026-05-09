@@ -21,11 +21,19 @@ app.add_middleware(
 )
 
 # --------------------------------
-# REQUEST MODEL
+# REQUEST MODELS
 # --------------------------------
 
 class Request(BaseModel):
     prompt: str
+
+
+class UpdateRequest(BaseModel):
+    type: str
+    width: float = 100
+    height: float = 100
+    depth: float = 100
+    thickness: float = 8
 
 # --------------------------------
 # AI DESIGN DETECTION
@@ -45,6 +53,7 @@ def ai_design(prompt: str):
             "type": "headset_stand",
             "height": 240,
             "width": 120,
+            "depth": 120,
             "thickness": 8
         }
 
@@ -58,6 +67,7 @@ def ai_design(prompt: str):
             "type": "phone_stand",
             "height": 120,
             "width": 80,
+            "depth": 70,
             "thickness": 8
         }
 
@@ -71,7 +81,8 @@ def ai_design(prompt: str):
             "type": "bracket",
             "width": 60,
             "height": 60,
-            "depth": 20
+            "depth": 20,
+            "thickness": 8
         }
 
     # ----------------------------
@@ -84,7 +95,8 @@ def ai_design(prompt: str):
             "type": "case",
             "width": 100,
             "height": 30,
-            "depth": 60
+            "depth": 60,
+            "thickness": 3
         }
 
     # ----------------------------
@@ -95,7 +107,10 @@ def ai_design(prompt: str):
 
         return {
             "type": "box",
-            "size": 40
+            "width": 40,
+            "height": 40,
+            "depth": 40,
+            "thickness": 4
         }
 
 # --------------------------------
@@ -118,27 +133,28 @@ def build_model(design):
             width = design.get("width", 120)
             thickness = design.get("thickness", 8)
 
-            # Base
             base = (
                 cq.Workplane("XY")
                 .box(width, width, thickness)
             )
 
-            # Vertical stand
             stand = (
                 cq.Workplane("XY")
                 .transformed(offset=(0, 0, height / 2))
                 .box(thickness, thickness, height)
             )
 
-            # Top hook
             top_hook = (
                 cq.Workplane("XY")
                 .transformed(offset=(0, 0, height))
                 .box(width / 2, thickness, thickness)
             )
 
-            return base.union(stand).union(top_hook)
+            return (
+                base
+                .union(stand)
+                .union(top_hook)
+            )
 
         # ----------------------------
         # PHONE STAND
@@ -148,22 +164,24 @@ def build_model(design):
 
             width = design.get("width", 80)
             height = design.get("height", 120)
+            depth = design.get("depth", 70)
             thickness = design.get("thickness", 8)
 
-            # Base
             base = (
                 cq.Workplane("XY")
-                .box(width, height / 2, thickness)
+                .box(width, depth, thickness)
             )
 
-            # Back support
             back = (
                 cq.Workplane("XY")
                 .transformed(offset=(0, -20, height / 2))
                 .box(width, thickness, height)
             )
 
-            return base.union(back)
+            return (
+                base
+                .union(back)
+            )
 
         # ----------------------------
         # BRACKET
@@ -186,7 +204,10 @@ def build_model(design):
                 .box(width, depth, depth)
             )
 
-            return vertical.union(horizontal)
+            return (
+                vertical
+                .union(horizontal)
+            )
 
         # ----------------------------
         # CASE
@@ -217,11 +238,13 @@ def build_model(design):
 
         else:
 
-            size = design.get("size", 40)
+            width = design.get("width", 40)
+            depth = design.get("depth", 40)
+            height = design.get("height", 40)
 
             return (
                 cq.Workplane("XY")
-                .box(size, size, size)
+                .box(width, depth, height)
             )
 
     except Exception as e:
@@ -242,7 +265,7 @@ def home():
     }
 
 # --------------------------------
-# GENERATE CAD
+# GENERATE MODEL
 # --------------------------------
 
 @app.post("/generate")
@@ -250,7 +273,7 @@ def generate(data: Request):
 
     try:
 
-        # AI decides design
+        # AI design
         design = ai_design(data.prompt)
 
         print("PROMPT:")
@@ -259,13 +282,13 @@ def generate(data: Request):
         print("DESIGN:")
         print(design)
 
-        # Build CAD model
+        # Build model
         model = build_model(design)
 
-        # Create unique file ID
+        # Create file id
         file_id = str(uuid.uuid4())
 
-        # STL file path
+        # STL path
         path = f"/tmp/{file_id}.stl"
 
         # Export STL
@@ -273,7 +296,6 @@ def generate(data: Request):
 
         return {
             "status": "generated",
-            "prompt": data.prompt,
             "design": design,
             "download_url": f"/download/{file_id}"
         }
@@ -281,6 +303,44 @@ def generate(data: Request):
     except Exception as e:
 
         print("GENERATE ERROR:", e)
+
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+# --------------------------------
+# LIVE MODEL UPDATE
+# --------------------------------
+
+@app.post("/update-model")
+def update_model(data: UpdateRequest):
+
+    try:
+
+        design = {
+            "type": data.type,
+            "width": data.width,
+            "height": data.height,
+            "depth": data.depth,
+            "thickness": data.thickness
+        }
+
+        model = build_model(design)
+
+        file_id = str(uuid.uuid4())
+
+        path = f"/tmp/{file_id}.stl"
+
+        cq.exporters.export(model, path)
+
+        return {
+            "status": "updated",
+            "design": design,
+            "download_url": f"/download/{file_id}"
+        }
+
+    except Exception as e:
 
         return {
             "status": "error",
