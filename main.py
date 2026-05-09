@@ -38,7 +38,7 @@ PRINTERS = {
     "prusa_mk4": (250, 210, 220),
 }
 
-DEFAULT_PRINTER = "adventurer_3"
+DEFAULT_PRINTER = "None"
 
 PRINTER_ALIASES = {
     "flashforge_adventurer_3": "adventurer_3",
