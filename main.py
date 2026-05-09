@@ -2,19 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from openai import OpenAI
+
 import cadquery as cq
 import uuid
-import os
-import json
-
-# --------------------------------
-# OPENAI CLIENT
-# --------------------------------
-
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
 
 # --------------------------------
 # FASTAPI
@@ -38,73 +28,70 @@ class Request(BaseModel):
     prompt: str
 
 # --------------------------------
-# AI DESIGN FUNCTION
+# AI DESIGN DETECTION
 # --------------------------------
 
 def ai_design(prompt: str):
 
-    try:
+    prompt_lower = prompt.lower()
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            response_format={"type": "json_object"},
-            messages=[
-                {
-                    "role": "system",
-                    "content": """
-You are an AI CAD designer.
+    # ----------------------------
+    # HEADSET STAND
+    # ----------------------------
 
-Return ONLY valid JSON.
+    if "headset" in prompt_lower:
 
-Examples:
+        return {
+            "type": "headset_stand",
+            "height": 240,
+            "width": 120,
+            "thickness": 8
+        }
 
-{
-  "type": "headset_stand",
-  "height": 240,
-  "width": 120,
-  "thickness": 8
-}
+    # ----------------------------
+    # PHONE STAND
+    # ----------------------------
 
-{
-  "type": "phone_stand",
-  "height": 120,
-  "width": 80,
-  "thickness": 8,
-  "angle": 30
-}
+    elif "phone" in prompt_lower:
 
-{
-  "type": "bracket",
-  "width": 60,
-  "height": 60,
-  "depth": 20
-}
+        return {
+            "type": "phone_stand",
+            "height": 120,
+            "width": 80,
+            "thickness": 8
+        }
 
-{
-  "type": "case",
-  "width": 100,
-  "height": 30,
-  "depth": 60
-}
-"""
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
+    # ----------------------------
+    # BRACKET
+    # ----------------------------
 
-        result = response.choices[0].message.content
+    elif "bracket" in prompt_lower:
 
-        print("AI RESPONSE:")
-        print(result)
+        return {
+            "type": "bracket",
+            "width": 60,
+            "height": 60,
+            "depth": 20
+        }
 
-        return json.loads(result)
+    # ----------------------------
+    # CASE
+    # ----------------------------
 
-    except Exception as e:
+    elif "case" in prompt_lower:
 
-        print("AI ERROR:", e)
+        return {
+            "type": "case",
+            "width": 100,
+            "height": 30,
+            "depth": 60
+        }
+
+    # ----------------------------
+    # DEFAULT BOX
+    # ----------------------------
+
+    else:
 
         return {
             "type": "box",
@@ -131,17 +118,20 @@ def build_model(design):
             width = design.get("width", 120)
             thickness = design.get("thickness", 8)
 
+            # Base
             base = (
                 cq.Workplane("XY")
                 .box(width, width, thickness)
             )
 
+            # Vertical stand
             stand = (
                 cq.Workplane("XY")
                 .transformed(offset=(0, 0, height / 2))
                 .box(thickness, thickness, height)
             )
 
+            # Top hook
             top_hook = (
                 cq.Workplane("XY")
                 .transformed(offset=(0, 0, height))
@@ -160,18 +150,20 @@ def build_model(design):
             height = design.get("height", 120)
             thickness = design.get("thickness", 8)
 
-            back = (
-                cq.Workplane("XY")
-                .transformed(offset=(0, 0, height / 2))
-                .box(width, thickness, height)
-            )
-
+            # Base
             base = (
                 cq.Workplane("XY")
                 .box(width, height / 2, thickness)
             )
 
-            return back.union(base)
+            # Back support
+            back = (
+                cq.Workplane("XY")
+                .transformed(offset=(0, -20, height / 2))
+                .box(width, thickness, height)
+            )
+
+            return base.union(back)
 
         # ----------------------------
         # BRACKET
@@ -206,10 +198,18 @@ def build_model(design):
             depth = design.get("depth", 60)
             height = design.get("height", 30)
 
-            return (
+            outer = (
                 cq.Workplane("XY")
                 .box(width, depth, height)
             )
+
+            inner = (
+                cq.Workplane("XY")
+                .transformed(offset=(0, 0, 2))
+                .box(width - 6, depth - 6, height - 4)
+            )
+
+            return outer.cut(inner)
 
         # ----------------------------
         # DEFAULT BOX
@@ -242,7 +242,7 @@ def home():
     }
 
 # --------------------------------
-# GENERATE ENDPOINT
+# GENERATE CAD
 # --------------------------------
 
 @app.post("/generate")
@@ -250,8 +250,11 @@ def generate(data: Request):
 
     try:
 
-        # AI design
+        # AI decides design
         design = ai_design(data.prompt)
+
+        print("PROMPT:")
+        print(data.prompt)
 
         print("DESIGN:")
         print(design)
@@ -259,10 +262,10 @@ def generate(data: Request):
         # Build CAD model
         model = build_model(design)
 
-        # Create unique file id
+        # Create unique file ID
         file_id = str(uuid.uuid4())
 
-        # STL path
+        # STL file path
         path = f"/tmp/{file_id}.stl"
 
         # Export STL
