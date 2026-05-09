@@ -7,7 +7,7 @@ import cadquery as cq
 import uuid
 
 # --------------------------------
-# APP SETUP
+# APP
 # --------------------------------
 
 app = FastAPI()
@@ -21,10 +21,10 @@ app.add_middleware(
 )
 
 # --------------------------------
-# CONSTANTS
+# SYSTEM CONFIG
 # --------------------------------
 
-PRINT_UNIT = 1  # 1 unit = 1 mm
+UNIT_SCALE = 1
 
 PRINTERS = {
     "adventurer_3": (150, 150, 150),
@@ -37,14 +37,16 @@ PRINTERS = {
 DEFAULT_PRINTER = "adventurer_3"
 
 # --------------------------------
-# REQUEST MODEL
+# REQUEST
 # --------------------------------
 
 class Request(BaseModel):
     prompt: str
+    printer: str = DEFAULT_PRINTER
+    fit: bool = True  # 🔥 toggle from frontend
 
 # --------------------------------
-# SIMPLE AI LOGIC (STABLE)
+# AI LOGIC (STABLE)
 # --------------------------------
 
 def ai_design(prompt: str):
@@ -60,9 +62,6 @@ def ai_design(prompt: str):
     if "bracket" in p:
         return {"type": "bracket", "width": 60, "height": 60, "depth": 20, "thickness": 8}
 
-    if "case" in p:
-        return {"type": "case", "width": 100, "height": 30, "depth": 60, "thickness": 3}
-
     return {"type": "box", "width": 40, "height": 40, "depth": 40, "thickness": 4}
 
 # --------------------------------
@@ -74,45 +73,63 @@ def build_model(d):
     t = d["type"]
 
     if t == "headset_stand":
-
         base = cq.Workplane("XY").box(d["width"], d["depth"], d["thickness"])
         stand = cq.Workplane("XY").transformed(offset=(0, 0, d["height"]/2)).box(d["thickness"], d["thickness"], d["height"])
-
         return base.union(stand)
 
     if t == "phone_stand":
-
         base = cq.Workplane("XY").box(d["width"], d["depth"], d["thickness"])
         back = cq.Workplane("XY").transformed(offset=(0, -10, d["height"]/2)).box(d["width"], d["thickness"], d["height"])
-
         return base.union(back)
 
     if t == "bracket":
-
         v = cq.Workplane("XY").box(d["depth"], d["depth"], d["height"])
         h = cq.Workplane("XY").transformed(offset=(d["width"]/2, 0, d["depth"]/2)).box(d["width"], d["depth"], d["depth"])
-
         return v.union(h)
-
-    if t == "case":
-
-        outer = cq.Workplane("XY").box(d["width"], d["depth"], d["height"])
-        inner = cq.Workplane("XY").transformed(offset=(0, 0, 2)).box(d["width"]-6, d["depth"]-6, d["height"]-4)
-
-        return outer.cut(inner)
 
     return cq.Workplane("XY").box(d["width"], d["depth"], d["height"])
 
 # --------------------------------
-# AUTO FIT TO PRINTER
+# PRINT SCORE (NEW)
 # --------------------------------
 
-def auto_fit(model, printer_key: str):
+def printability_score(model, printer_key):
 
-    if printer_key not in PRINTERS:
-        printer_key = DEFAULT_PRINTER
+    bbox = model.val().BoundingBox()
+    max_x, max_y, max_z = PRINTERS.get(printer_key, PRINTERS[DEFAULT_PRINTER])
 
-    max_x, max_y, max_z = PRINTERS[printer_key]
+    fits = (
+        bbox.xlen <= max_x and
+        bbox.ylen <= max_y and
+        bbox.zlen <= max_z
+    )
+
+    size_ratio = (bbox.xlen * bbox.ylen * bbox.zlen) / (max_x * max_y * max_z)
+
+    score = 100
+
+    if not fits:
+        score -= 50
+
+    score -= int(size_ratio * 50)
+
+    return max(0, min(100, score))
+
+# --------------------------------
+# AUTO ORIENTATION (LIGHT VERSION)
+# --------------------------------
+
+def auto_orient(model):
+    # placeholder for future full rotation system
+    return model
+
+# --------------------------------
+# AUTO FIT
+# --------------------------------
+
+def auto_fit(model, printer_key):
+
+    max_x, max_y, max_z = PRINTERS.get(printer_key, PRINTERS[DEFAULT_PRINTER])
 
     bbox = model.val().BoundingBox()
 
@@ -137,7 +154,7 @@ def home():
     return {"status": "Cadio running"}
 
 # --------------------------------
-# GENERATE MODEL
+# GENERATE (MAIN PIPELINE)
 # --------------------------------
 
 @app.post("/generate")
@@ -148,12 +165,19 @@ def generate(data: Request):
     # enforce mm system
     for k in ["width", "height", "depth", "thickness"]:
         if k in design:
-            design[k] = float(design[k]) * PRINT_UNIT
+            design[k] = float(design[k]) * UNIT_SCALE
 
     model = build_model(design)
 
-    # auto-fit safely to default printer
-    model = auto_fit(model, DEFAULT_PRINTER)
+    # orientation step (future)
+    model = auto_orient(model)
+
+    # fit toggle
+    if data.fit:
+        model = auto_fit(model, data.printer)
+
+    # score
+    score = printability_score(model, data.printer)
 
     file_id = str(uuid.uuid4())
     path = f"/tmp/{file_id}.stl"
@@ -163,11 +187,13 @@ def generate(data: Request):
     return {
         "status": "ok",
         "design": design,
+        "printer": data.printer,
+        "printability_score": score,
         "download_url": f"/download/{file_id}"
     }
 
 # --------------------------------
-# DOWNLOAD STL
+# DOWNLOAD
 # --------------------------------
 
 @app.get("/download/{file_id}")
