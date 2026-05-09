@@ -5,15 +5,12 @@ import uuid
 
 import cadquery as cq
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request as FastAPIRequest
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-
-# --------------------------------
-# APP
-# --------------------------------
 
 app = FastAPI()
 
@@ -25,17 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# --------------------------------
-# UNIT SYSTEM (mm)
-# --------------------------------
-
 UNIT_SCALE = 1
-
-
-# --------------------------------
-# PRINTER DATABASE
-# --------------------------------
 
 PRINTERS = {
     "adventurer_3": (150, 150, 150),
@@ -48,65 +35,87 @@ PRINTERS = {
 DEFAULT_PRINTER = "adventurer_3"
 
 
-# --------------------------------
-# REQUEST MODEL
-# --------------------------------
-
-class Request(BaseModel):
+class GenerateRequest(BaseModel):
     prompt: str
     printer: str = DEFAULT_PRINTER
     fit: bool = True
 
 
-# --------------------------------
-# AI DESIGN ENGINE (STABLE RULE-BASED)
-# --------------------------------
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: FastAPIRequest,
+    exc: RequestValidationError,
+):
+    print("VALIDATION ERROR:", exc)
+    return JSONResponse(
+        status_code=422,
+        content={"status": "error", "message": str(exc)},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: FastAPIRequest, exc: Exception):
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "message": str(exc)},
+    )
+
 
 def ai_design(prompt: str):
     p = prompt.lower()
 
     if "headset" in p:
-        return {
-            "type": "headset_stand",
-            "width": 120,
-            "height": 240,
-            "depth": 120,
-            "thickness": 8,
-        }
+        return {"type": "headset_stand", "width": 120, "height": 240, "depth": 120, "thickness": 8}
 
     if "phone" in p:
-        return {
-            "type": "phone_stand",
-            "width": 80,
-            "height": 120,
-            "depth": 70,
-            "thickness": 8,
-        }
+        return {"type": "phone_stand", "width": 80, "height": 120, "depth": 70, "thickness": 8}
 
     if "bracket" in p:
-        return {
-            "type": "bracket",
-            "width": 60,
-            "height": 60,
-            "depth": 20,
-            "thickness": 8,
-        }
+        return {"type": "bracket", "width": 60, "height": 60, "depth": 20, "thickness": 8}
 
     if "case" in p:
-        return {
-            "type": "case",
-            "width": 100,
-            "height": 30,
-            "depth": 60,
-            "thickness": 3,
-        }
+        return {"type": "case", "width": 100, "height": 30, "depth": 60, "thickness": 3}
 
     return {"type": "box", "width": 40, "height": 40, "depth": 40, "thickness": 4}
 
 
-# --------------------------------
-# CAD BUILDER
-# --------------------------------
+def as_cq_shape(model):
+    """
+    Normalize any CadQuery result to cq.Shape.
+    No code below this point needs low-level geometry APIs.
+    """
+    if isinstance(model, cq.Shape):
+        return model
+
+    if isinstance(model, cq.Workplane):
+        value = model.val()
+        if isinstance(value, cq.Shape):
+            return value
+
+    try:
+        value = cq.Shape.cast(model)
+        if isinstance(value, cq.Shape):
+            return value
+    except Exception:
+        pass
+
+    raise TypeError(f"Expected CadQuery Shape or Workplane, got {type(model).__name__}")
+
+
+def as_workplane(shape):
+    return cq.Workplane("XY").add(as_cq_shape(shape))
+
+
+def bounding_box(model):
+    shape = as_cq_shape(model)
+    return shape.BoundingBox()
+
+
+def clean_shape(model):
+    shape = as_cq_shape(model)
+    return as_cq_shape(shape.clean())
+
 
 def build_model(d):
     t = d["type"]
@@ -118,8 +127,7 @@ def build_model(d):
             .transformed(offset=(0, 0, d["height"] / 2))
             .box(d["thickness"], d["thickness"], d["height"])
         )
-
-        return base.union(stand)
+        return as_cq_shape(base.union(stand))
 
     if t == "phone_stand":
         base = cq.Workplane("XY").box(d["width"], d["depth"], d["thickness"])
@@ -128,8 +136,7 @@ def build_model(d):
             .transformed(offset=(0, -10, d["height"] / 2))
             .box(d["width"], d["thickness"], d["height"])
         )
-
-        return base.union(back)
+        return as_cq_shape(base.union(back))
 
     if t == "bracket":
         v = cq.Workplane("XY").box(d["depth"], d["depth"], d["height"])
@@ -138,8 +145,7 @@ def build_model(d):
             .transformed(offset=(d["width"] / 2, 0, d["depth"] / 2))
             .box(d["width"], d["depth"], d["depth"])
         )
-
-        return v.union(h)
+        return as_cq_shape(v.union(h))
 
     if t == "case":
         outer = cq.Workplane("XY").box(d["width"], d["depth"], d["height"])
@@ -148,15 +154,10 @@ def build_model(d):
             .transformed(offset=(0, 0, 2))
             .box(d["width"] - 6, d["depth"] - 6, d["height"] - 4)
         )
+        return as_cq_shape(outer.cut(inner))
 
-        return outer.cut(inner)
+    return as_cq_shape(cq.Workplane("XY").box(d["width"], d["depth"], d["height"]))
 
-    return cq.Workplane("XY").box(d["width"], d["depth"], d["height"])
-
-
-# --------------------------------
-# PRINTER NORMALIZATION
-# --------------------------------
 
 def normalize_printer(printer: str):
     if not printer:
@@ -183,37 +184,31 @@ def normalize_printer(printer: str):
     return printer_key if printer_key in PRINTERS else DEFAULT_PRINTER
 
 
-def bounding_box(model):
-    return model.val().wrapped.BoundingBox()
-
-
-# --------------------------------
-# AUTO FIT
-# --------------------------------
-
 def auto_fit(model, printer_key):
+    printer_key = normalize_printer(printer_key)
+    printer_x, printer_y, printer_z = PRINTERS[printer_key]
+    shape = as_cq_shape(model)
+    bbox = bounding_box(shape)
 
-    max_x, max_y, max_z = PRINTERS.get(printer_key, PRINTERS[DEFAULT_PRINTER])
-
-    # CORRECT CadQuery bbox usage
-    bbox = model.val().BoundingBox()
+    if bbox.xlen <= 0 or bbox.ylen <= 0 or bbox.zlen <= 0:
+        raise ValueError("Model has invalid zero-size bounding box")
 
     scale = min(
-        max_x / bbox.xlen,
-        max_y / bbox.ylen,
-        max_z / bbox.zlen,
-        1
+        printer_x / bbox.xlen,
+        printer_y / bbox.ylen,
+        printer_z / bbox.zlen,
+        1,
     )
 
+    print("PRINTER:", printer_key)
+    print("BOUNDS:", bbox.xlen, bbox.ylen, bbox.zlen)
+    print("SCALE:", scale)
+
     if scale < 1:
-        model = model.scale(scale)
+        shape = as_cq_shape(shape.scale(scale))
 
-    return model
+    return shape
 
-
-# --------------------------------
-# PRINT SCORE
-# --------------------------------
 
 def printability_score(model, printer_key):
     printer_key = normalize_printer(printer_key)
@@ -233,21 +228,13 @@ def printability_score(model, printer_key):
     return max(0, min(100, score))
 
 
-# --------------------------------
-# HOME
-# --------------------------------
-
 @app.get("/")
 def home():
     return {"status": "Cadio running"}
 
 
-# --------------------------------
-# GENERATE PIPELINE
-# --------------------------------
-
 @app.post("/generate")
-def generate(data: Request):
+def generate(data: GenerateRequest):
     try:
         printer_key = normalize_printer(data.printer)
         design = ai_design(data.prompt)
@@ -256,23 +243,23 @@ def generate(data: Request):
             if key in design:
                 design[key] = float(design[key]) * UNIT_SCALE
 
-        model = build_model(design)
+        shape = as_cq_shape(build_model(design))
 
         if data.fit:
-            model = auto_fit(model, printer_key)
+            shape = auto_fit(shape, printer_key)
         else:
-            bbox = bounding_box(model)
+            bbox = bounding_box(shape)
             print("PRINTER:", printer_key)
             print("BOUNDS:", bbox.xlen, bbox.ylen, bbox.zlen)
             print("SCALE:", 1)
 
-        model = model.clean()
-        score = printability_score(model, printer_key)
+        shape = clean_shape(shape)
+        score = printability_score(shape, printer_key)
 
         file_id = str(uuid.uuid4())
         path = os.path.join(tempfile.gettempdir(), f"{file_id}.stl")
 
-        cq.exporters.export(model, path)
+        cq.exporters.export(as_workplane(shape), path)
 
         return {
             "status": "ok",
@@ -281,20 +268,14 @@ def generate(data: Request):
             "printability_score": score,
             "download_url": f"/download/{file_id}",
         }
+
     except Exception as exc:
         traceback.print_exc()
         return JSONResponse(
             status_code=500,
-            content={
-                "status": "error",
-                "message": str(exc),
-            },
+            content={"status": "error", "message": str(exc)},
         )
 
-
-# --------------------------------
-# DOWNLOAD
-# --------------------------------
 
 @app.get("/download/{file_id}")
 def download(file_id: str):
@@ -304,10 +285,7 @@ def download(file_id: str):
         if not os.path.exists(path):
             return JSONResponse(
                 status_code=404,
-                content={
-                    "status": "error",
-                    "message": "File not found",
-                },
+                content={"status": "error", "message": "File not found"},
             )
 
         return FileResponse(
@@ -315,14 +293,12 @@ def download(file_id: str):
             media_type="application/octet-stream",
             filename=f"{file_id}.stl",
         )
+
     except Exception as exc:
         traceback.print_exc()
         return JSONResponse(
             status_code=500,
-            content={
-                "status": "error",
-                "message": str(exc),
-            },
+            content={"status": "error", "message": str(exc)},
         )
 
 
