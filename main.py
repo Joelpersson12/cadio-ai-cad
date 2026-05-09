@@ -8,17 +8,17 @@ import uuid
 import os
 import json
 
-# -----------------------------
-# OPENAI
-# -----------------------------
+# --------------------------------
+# OPENAI CLIENT
+# --------------------------------
 
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
-# -----------------------------
+# --------------------------------
 # FASTAPI
-# -----------------------------
+# --------------------------------
 
 app = FastAPI()
 
@@ -30,16 +30,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -----------------------------
+# --------------------------------
 # REQUEST MODEL
-# -----------------------------
+# --------------------------------
 
 class Request(BaseModel):
     prompt: str
 
-# -----------------------------
-# AI PARAMETRIC DESIGN
-# -----------------------------
+# --------------------------------
+# AI DESIGN FUNCTION
+# --------------------------------
 
 def ai_design(prompt: str):
 
@@ -47,6 +47,7 @@ def ai_design(prompt: str):
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
+            response_format={"type": "json_object"},
             messages=[
                 {
                     "role": "system",
@@ -68,12 +69,22 @@ Examples:
   "type": "phone_stand",
   "height": 120,
   "width": 80,
+  "thickness": 8,
   "angle": 30
 }
 
 {
-  "type": "box",
-  "size": 40
+  "type": "bracket",
+  "width": 60,
+  "height": 60,
+  "depth": 20
+}
+
+{
+  "type": "case",
+  "width": 100,
+  "height": 30,
+  "depth": 60
 }
 """
                 },
@@ -84,7 +95,7 @@ Examples:
             ]
         )
 
-        result = response.choices[0].message.content.strip()
+        result = response.choices[0].message.content
 
         print("AI RESPONSE:")
         print(result)
@@ -100,9 +111,9 @@ Examples:
             "size": 40
         }
 
-# -----------------------------
-# BUILD CAD MODEL
-# -----------------------------
+# --------------------------------
+# CAD MODEL BUILDER
+# --------------------------------
 
 def build_model(design):
 
@@ -110,9 +121,9 @@ def build_model(design):
 
         model_type = design.get("type")
 
-        # --------------------------------
+        # ----------------------------
         # HEADSET STAND
-        # --------------------------------
+        # ----------------------------
 
         if model_type == "headset_stand":
 
@@ -120,24 +131,28 @@ def build_model(design):
             width = design.get("width", 120)
             thickness = design.get("thickness", 8)
 
-            # Base
             base = (
                 cq.Workplane("XY")
                 .box(width, width, thickness)
             )
 
-            # Vertical stand
             stand = (
                 cq.Workplane("XY")
                 .transformed(offset=(0, 0, height / 2))
                 .box(thickness, thickness, height)
             )
 
-            return base.union(stand)
+            top_hook = (
+                cq.Workplane("XY")
+                .transformed(offset=(0, 0, height))
+                .box(width / 2, thickness, thickness)
+            )
 
-        # --------------------------------
+            return base.union(stand).union(top_hook)
+
+        # ----------------------------
         # PHONE STAND
-        # --------------------------------
+        # ----------------------------
 
         elif model_type == "phone_stand":
 
@@ -145,35 +160,28 @@ def build_model(design):
             height = design.get("height", 120)
             thickness = design.get("thickness", 8)
 
-            return (
+            back = (
                 cq.Workplane("XY")
+                .transformed(offset=(0, 0, height / 2))
                 .box(width, thickness, height)
             )
 
-        # --------------------------------
-        # SIMPLE CASE
-        # --------------------------------
-
-        elif model_type == "case":
-
-            width = design.get("width", 100)
-            depth = design.get("depth", 60)
-            height = design.get("height", 30)
-
-            return (
+            base = (
                 cq.Workplane("XY")
-                .box(width, depth, height)
+                .box(width, height / 2, thickness)
             )
 
-        # --------------------------------
+            return back.union(base)
+
+        # ----------------------------
         # BRACKET
-        # --------------------------------
+        # ----------------------------
 
         elif model_type == "bracket":
 
             width = design.get("width", 60)
-            depth = design.get("depth", 20)
             height = design.get("height", 60)
+            depth = design.get("depth", 20)
 
             vertical = (
                 cq.Workplane("XY")
@@ -188,9 +196,24 @@ def build_model(design):
 
             return vertical.union(horizontal)
 
-        # --------------------------------
+        # ----------------------------
+        # CASE
+        # ----------------------------
+
+        elif model_type == "case":
+
+            width = design.get("width", 100)
+            depth = design.get("depth", 60)
+            height = design.get("height", 30)
+
+            return (
+                cq.Workplane("XY")
+                .box(width, depth, height)
+            )
+
+        # ----------------------------
         # DEFAULT BOX
-        # --------------------------------
+        # ----------------------------
 
         else:
 
@@ -207,9 +230,9 @@ def build_model(design):
 
         return cq.Workplane("XY").box(40, 40, 40)
 
-# -----------------------------
+# --------------------------------
 # HOME
-# -----------------------------
+# --------------------------------
 
 @app.get("/")
 def home():
@@ -218,16 +241,16 @@ def home():
         "status": "Cadio AI CAD running"
     }
 
-# -----------------------------
-# GENERATE CAD
-# -----------------------------
+# --------------------------------
+# GENERATE ENDPOINT
+# --------------------------------
 
 @app.post("/generate")
 def generate(data: Request):
 
     try:
 
-        # AI creates parameters
+        # AI design
         design = ai_design(data.prompt)
 
         print("DESIGN:")
@@ -236,7 +259,7 @@ def generate(data: Request):
         # Build CAD model
         model = build_model(design)
 
-        # Create file id
+        # Create unique file id
         file_id = str(uuid.uuid4())
 
         # STL path
@@ -261,9 +284,9 @@ def generate(data: Request):
             "message": str(e)
         }
 
-# -----------------------------
+# --------------------------------
 # DOWNLOAD STL
-# -----------------------------
+# --------------------------------
 
 @app.get("/download/{file_id}")
 def download(file_id: str):
