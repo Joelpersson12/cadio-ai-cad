@@ -5,10 +5,9 @@ from pydantic import BaseModel
 
 import cadquery as cq
 import uuid
-import os
 
 # --------------------------------
-# APP
+# APP SETUP
 # --------------------------------
 
 app = FastAPI()
@@ -22,20 +21,30 @@ app.add_middleware(
 )
 
 # --------------------------------
-# STANDARD: 1 UNIT = 1 MM
+# CONSTANTS
 # --------------------------------
 
-UNIT_SCALE = 1
+PRINT_UNIT = 1  # 1 unit = 1 mm
+
+PRINTERS = {
+    "adventurer_3": (150, 150, 150),
+    "adventurer_5m": (220, 220, 250),
+    "bambu_x1c": (256, 256, 256),
+    "ender_3": (220, 220, 250),
+    "prusa_mk4": (250, 210, 220),
+}
+
+DEFAULT_PRINTER = "adventurer_3"
 
 # --------------------------------
-# REQUEST
+# REQUEST MODEL
 # --------------------------------
 
 class Request(BaseModel):
     prompt: str
 
 # --------------------------------
-# SIMPLE AI RULE ENGINE (STABIL VERSION)
+# SIMPLE AI LOGIC (STABLE)
 # --------------------------------
 
 def ai_design(prompt: str):
@@ -62,7 +71,7 @@ def ai_design(prompt: str):
 
 def build_model(d):
 
-    t = d.get("type")
+    t = d["type"]
 
     if t == "headset_stand":
 
@@ -88,11 +97,36 @@ def build_model(d):
     if t == "case":
 
         outer = cq.Workplane("XY").box(d["width"], d["depth"], d["height"])
-        inner = cq.Workplane("XY").transformed(offset=(0,0,2)).box(d["width"]-6, d["depth"]-6, d["height"]-4)
+        inner = cq.Workplane("XY").transformed(offset=(0, 0, 2)).box(d["width"]-6, d["depth"]-6, d["height"]-4)
 
         return outer.cut(inner)
 
     return cq.Workplane("XY").box(d["width"], d["depth"], d["height"])
+
+# --------------------------------
+# AUTO FIT TO PRINTER
+# --------------------------------
+
+def auto_fit(model, printer_key: str):
+
+    if printer_key not in PRINTERS:
+        printer_key = DEFAULT_PRINTER
+
+    max_x, max_y, max_z = PRINTERS[printer_key]
+
+    bbox = model.val().BoundingBox()
+
+    scale = min(
+        max_x / bbox.xlen,
+        max_y / bbox.ylen,
+        max_z / bbox.zlen,
+        1
+    )
+
+    if scale < 1:
+        model = model.scale(scale)
+
+    return model
 
 # --------------------------------
 # HOME
@@ -103,7 +137,7 @@ def home():
     return {"status": "Cadio running"}
 
 # --------------------------------
-# GENERATE
+# GENERATE MODEL
 # --------------------------------
 
 @app.post("/generate")
@@ -111,12 +145,15 @@ def generate(data: Request):
 
     design = ai_design(data.prompt)
 
-    # enforce mm scale
+    # enforce mm system
     for k in ["width", "height", "depth", "thickness"]:
         if k in design:
-            design[k] = float(design[k]) * UNIT_SCALE
+            design[k] = float(design[k]) * PRINT_UNIT
 
     model = build_model(design)
+
+    # auto-fit safely to default printer
+    model = auto_fit(model, DEFAULT_PRINTER)
 
     file_id = str(uuid.uuid4())
     path = f"/tmp/{file_id}.stl"
@@ -130,7 +167,7 @@ def generate(data: Request):
     }
 
 # --------------------------------
-# DOWNLOAD
+# DOWNLOAD STL
 # --------------------------------
 
 @app.get("/download/{file_id}")
