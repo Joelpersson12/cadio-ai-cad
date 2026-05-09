@@ -1,4 +1,3 @@
-import os
 import uuid
 import traceback
 
@@ -18,46 +17,16 @@ app.add_middleware(
 )
 
 # --------------------------------
-# SESSION STORAGE (FUSION STYLE CORE)
+# STATE (THIS IS THE CORE OF "FUSION FEEL")
 # --------------------------------
 
-SESSIONS = {}
+MODELS = {}
 
 # --------------------------------
-# PRINTERS (MM ONLY)
+# AI PARSER (SIMPLE BUT STABLE)
 # --------------------------------
 
-PRINTERS = {
-    "adventurer_3": (150, 150, 150),
-    "adventurer_5m": (220, 220, 250),
-    "creator_pro_2": (200, 148, 150),
-    "bambu_x1c": (256, 256, 256),
-    "ender_3": (220, 220, 250),
-    "prusa_mk4": (250, 210, 220),
-}
-
-DEFAULT_PRINTER = "adventurer_3"
-
-# --------------------------------
-# SAFE PRINTER HANDLING
-# --------------------------------
-
-def normalize_printer(p):
-    if not p:
-        return DEFAULT_PRINTER
-
-    p = str(p).lower().replace(" ", "_")
-
-    if p in PRINTERS:
-        return p
-
-    return DEFAULT_PRINTER
-
-# --------------------------------
-# AI → SHAPE
-# --------------------------------
-
-def ai_design(prompt: str):
+def ai_to_shape(prompt: str):
     p = (prompt or "").lower()
 
     if "phone" in p:
@@ -72,10 +41,10 @@ def ai_design(prompt: str):
     return "box"
 
 # --------------------------------
-# CAD GENERATOR
+# MODEL GENERATION (PARAMETRIC CORE)
 # --------------------------------
 
-def build_model(shape):
+def build(shape):
 
     if shape == "phone":
         base = cq.Workplane("XY").box(80, 70, 8)
@@ -84,8 +53,8 @@ def build_model(shape):
 
     if shape == "headset":
         base = cq.Workplane("XY").box(120, 120, 8)
-        stand = cq.Workplane("XY").transformed(offset=(0, 0, 120)).box(8, 8, 240)
-        return base.union(stand)
+        arm = cq.Workplane("XY").transformed(offset=(0, 0, 120)).box(8, 8, 240)
+        return base.union(arm)
 
     if shape == "bracket":
         v = cq.Workplane("XY").box(60, 60, 80)
@@ -100,15 +69,16 @@ def build_model(shape):
     return cq.Workplane("XY").box(40, 40, 40)
 
 # --------------------------------
-# SESSION UPDATE (FUSION BEHAVIOR)
+# SESSION UPDATE (THIS IS "FUSION BEHAVIOR")
 # --------------------------------
 
-def update_session(session_id, prompt):
+def update(session_id: str, prompt: str):
 
-    shape = ai_design(prompt)
-    model = build_model(shape)
+    shape = ai_to_shape(prompt)
+    model = build(shape)
 
-    SESSIONS[session_id] = model
+    # overwrite SAME model (this is key difference vs STL system)
+    MODELS[session_id] = model
 
     return model
 
@@ -120,42 +90,33 @@ def bbox(model):
     return model.val().BoundingBox()
 
 # --------------------------------
-# API
+# API: LIVE MODEL (NOT FILE GENERATION)
 # --------------------------------
 
-@app.get("/")
-def home():
-    return {"status": "Cadio Fusion AI ready"}
-
 @app.post("/generate")
-async def generate(request: Request):
+async def generate(req: Request):
 
     try:
-        data = await request.json()
+        data = await req.json()
 
         prompt = data.get("prompt", "")
         session_id = data.get("session_id") or str(uuid.uuid4())
-        printer = normalize_printer(data.get("printer"))
 
-        model = update_session(session_id, prompt)
-
+        model = update(session_id, prompt)
         b = bbox(model)
 
         return {
             "status": "ok",
             "session_id": session_id,
-            "printer": printer,
+
+            # THIS IS WHAT FRONTEND SHOULD RENDER LIVE
+            "model_state": "updated",
 
             "bounds": {
                 "x": b.xlen,
                 "y": b.ylen,
                 "z": b.zlen
-            },
-
-            "model_ready": True,
-
-            # frontend should always re-fetch or update scene
-            "view_mode": "live"
+            }
         }
 
     except Exception as e:
@@ -165,22 +126,24 @@ async def generate(request: Request):
             content={"status": "error", "message": str(e)},
         )
 
+# --------------------------------
+# EXPORT (ONLY WHEN USER WANTS)
+# --------------------------------
+
 @app.get("/export/{session_id}")
 def export(session_id: str):
 
-    if session_id not in SESSIONS:
-        return {"error": "session not found"}
+    if session_id not in MODELS:
+        return {"error": "no model"}
 
     path = f"/tmp/{session_id}.stl"
-    cq.exporters.export(SESSIONS[session_id], path)
+    cq.exporters.export(MODELS[session_id], path)
 
-    return {
-        "download": path
-    }
+    return {"download": path}
 
 # --------------------------------
 # RUN
 # --------------------------------
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+    uvicorn.run(app, host="0.0.0.0", port=8000)
