@@ -18,13 +18,13 @@ app.add_middleware(
 )
 
 # --------------------------------
-# MEMORY STATE (THIS IS THE KEY FIX)
+# SESSION STORAGE (FUSION STYLE CORE)
 # --------------------------------
 
-SESSION_MODELS = {}
+SESSIONS = {}
 
 # --------------------------------
-# PRINTERS
+# PRINTERS (MM ONLY)
 # --------------------------------
 
 PRINTERS = {
@@ -32,12 +32,29 @@ PRINTERS = {
     "adventurer_5m": (220, 220, 250),
     "creator_pro_2": (200, 148, 150),
     "bambu_x1c": (256, 256, 256),
+    "ender_3": (220, 220, 250),
+    "prusa_mk4": (250, 210, 220),
 }
 
 DEFAULT_PRINTER = "adventurer_3"
 
 # --------------------------------
-# SIMPLE AI PARSER
+# SAFE PRINTER HANDLING
+# --------------------------------
+
+def normalize_printer(p):
+    if not p:
+        return DEFAULT_PRINTER
+
+    p = str(p).lower().replace(" ", "_")
+
+    if p in PRINTERS:
+        return p
+
+    return DEFAULT_PRINTER
+
+# --------------------------------
+# AI → SHAPE
 # --------------------------------
 
 def ai_design(prompt: str):
@@ -55,7 +72,7 @@ def ai_design(prompt: str):
     return "box"
 
 # --------------------------------
-# MODEL GENERATOR (STATEFUL CORE)
+# CAD GENERATOR
 # --------------------------------
 
 def build_model(shape):
@@ -67,8 +84,8 @@ def build_model(shape):
 
     if shape == "headset":
         base = cq.Workplane("XY").box(120, 120, 8)
-        arm = cq.Workplane("XY").transformed(offset=(0, 0, 120)).box(8, 8, 240)
-        return base.union(arm)
+        stand = cq.Workplane("XY").transformed(offset=(0, 0, 120)).box(8, 8, 240)
+        return base.union(stand)
 
     if shape == "bracket":
         v = cq.Workplane("XY").box(60, 60, 80)
@@ -83,15 +100,15 @@ def build_model(shape):
     return cq.Workplane("XY").box(40, 40, 40)
 
 # --------------------------------
-# UPDATE ENGINE (FUSION-LIKE CORE)
+# SESSION UPDATE (FUSION BEHAVIOR)
 # --------------------------------
 
-def update_model(session_id, prompt):
+def update_session(session_id, prompt):
 
     shape = ai_design(prompt)
     model = build_model(shape)
 
-    SESSION_MODELS[session_id] = model
+    SESSIONS[session_id] = model
 
     return model
 
@@ -108,7 +125,7 @@ def bbox(model):
 
 @app.get("/")
 def home():
-    return {"status": "Fusion AI CAD running"}
+    return {"status": "Cadio Fusion AI ready"}
 
 @app.post("/generate")
 async def generate(request: Request):
@@ -117,21 +134,28 @@ async def generate(request: Request):
         data = await request.json()
 
         prompt = data.get("prompt", "")
-        session_id = data.get("session_id", str(uuid.uuid4()))
+        session_id = data.get("session_id") or str(uuid.uuid4())
+        printer = normalize_printer(data.get("printer"))
 
-        model = update_model(session_id, prompt)
+        model = update_session(session_id, prompt)
 
         b = bbox(model)
 
         return {
             "status": "ok",
             "session_id": session_id,
+            "printer": printer,
 
-            # 🔥 THIS IS THE KEY: FRONTEND SHOULD USE THIS STATE
-            "bounds": {"x": b.xlen, "y": b.ylen, "z": b.zlen},
+            "bounds": {
+                "x": b.xlen,
+                "y": b.ylen,
+                "z": b.zlen
+            },
 
             "model_ready": True,
-            "view_mode": "live_edit"
+
+            # frontend should always re-fetch or update scene
+            "view_mode": "live"
         }
 
     except Exception as e:
@@ -141,22 +165,18 @@ async def generate(request: Request):
             content={"status": "error", "message": str(e)},
         )
 
-# --------------------------------
-# EXPORT (OPTIONAL)
-# --------------------------------
-
 @app.get("/export/{session_id}")
 def export(session_id: str):
 
-    if session_id not in SESSION_MODELS:
-        return {"error": "no model"}
-
-    model = SESSION_MODELS[session_id]
+    if session_id not in SESSIONS:
+        return {"error": "session not found"}
 
     path = f"/tmp/{session_id}.stl"
-    cq.exporters.export(model, path)
+    cq.exporters.export(SESSIONS[session_id], path)
 
-    return {"download": path}
+    return {
+        "download": path
+    }
 
 # --------------------------------
 # RUN
