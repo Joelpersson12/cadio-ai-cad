@@ -1,31 +1,30 @@
 import os
-import tempfile
-import traceback
 import uuid
+import traceback
 
 import cadquery as cq
 import uvicorn
-from fastapi import FastAPI, Request as FastAPIRequest
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
-
-# --------------------------------
-# APP
-# --------------------------------
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # --------------------------------
-# PRINTERS (mm)
+# MEMORY STATE (THIS IS THE KEY FIX)
+# --------------------------------
+
+SESSION_MODELS = {}
+
+# --------------------------------
+# PRINTERS
 # --------------------------------
 
 PRINTERS = {
@@ -33,197 +32,106 @@ PRINTERS = {
     "adventurer_5m": (220, 220, 250),
     "creator_pro_2": (200, 148, 150),
     "bambu_x1c": (256, 256, 256),
-    "ender_3": (220, 220, 250),
-    "prusa_mk4": (250, 210, 220),
-}
-
-PRINTER_ALIASES = {
-    "flashforge_adventurer_3": "adventurer_3",
-    "flashforge_adventurer3": "adventurer_3",
-    "flashforge_adventurer_5m": "adventurer_5m",
-    "flashforge_creator_pro_2": "creator_pro_2",
-    "bambu_lab_x1c": "bambu_x1c",
-    "x1c": "bambu_x1c",
-    "ender_3": "ender_3",
-    "prusa_mk4": "prusa_mk4",
 }
 
 DEFAULT_PRINTER = "adventurer_3"
 
 # --------------------------------
-# REQUEST
-# --------------------------------
-
-class GenerateRequest(BaseModel):
-    prompt: str = ""
-    printer: str = None
-    fit: bool = True
-
-# --------------------------------
-# SAFE PRINTER HANDLING
-# --------------------------------
-
-def normalize_printer(p: str):
-
-    if not p:
-        return DEFAULT_PRINTER
-
-    p = str(p).lower().replace(" ", "_")
-
-    if p in PRINTERS:
-        return p
-
-    if p in PRINTER_ALIASES:
-        return PRINTER_ALIASES[p]
-
-    return DEFAULT_PRINTER
-
-# --------------------------------
-# AI DESIGN (SAFE + STABLE SCALE)
+# SIMPLE AI PARSER
 # --------------------------------
 
 def ai_design(prompt: str):
-
     p = (prompt or "").lower()
 
-    if "headset" in p:
-        return {"type": "headset", "w": 120, "h": 240, "d": 120, "t": 8}
-
     if "phone" in p:
-        return {"type": "phone", "w": 80, "h": 120, "d": 70, "t": 8}
-
+        return "phone"
+    if "headset" in p:
+        return "headset"
     if "bracket" in p:
-        return {"type": "bracket", "w": 60, "h": 60, "d": 20, "t": 8}
-
+        return "bracket"
     if "case" in p:
-        return {"type": "case", "w": 100, "h": 30, "d": 60, "t": 3}
+        return "case"
 
-    return {"type": "box", "w": 40, "h": 40, "d": 40, "t": 4}
+    return "box"
 
 # --------------------------------
-# CAD BUILD
+# MODEL GENERATOR (STATEFUL CORE)
 # --------------------------------
 
-def build_model(d):
+def build_model(shape):
 
-    if d["type"] == "headset":
-        base = cq.Workplane("XY").box(d["w"], d["d"], d["t"])
-        stand = cq.Workplane("XY").transformed(offset=(0, 0, d["h"]/2)).box(d["t"], d["t"], d["h"])
-        return base.union(stand)
-
-    if d["type"] == "phone":
-        base = cq.Workplane("XY").box(d["w"], d["d"], d["t"])
-        back = cq.Workplane("XY").transformed(offset=(0, -10, d["h"]/2)).box(d["w"], d["t"], d["h"])
+    if shape == "phone":
+        base = cq.Workplane("XY").box(80, 70, 8)
+        back = cq.Workplane("XY").transformed(offset=(0, -10, 60)).box(80, 8, 120)
         return base.union(back)
 
-    if d["type"] == "bracket":
-        v = cq.Workplane("XY").box(d["d"], d["d"], d["h"])
-        h = cq.Workplane("XY").transformed(offset=(d["w"]/2, 0, d["d"]/2)).box(d["w"], d["d"], d["d"])
+    if shape == "headset":
+        base = cq.Workplane("XY").box(120, 120, 8)
+        arm = cq.Workplane("XY").transformed(offset=(0, 0, 120)).box(8, 8, 240)
+        return base.union(arm)
+
+    if shape == "bracket":
+        v = cq.Workplane("XY").box(60, 60, 80)
+        h = cq.Workplane("XY").transformed(offset=(30, 0, 30)).box(60, 60, 20)
         return v.union(h)
 
-    if d["type"] == "case":
-        outer = cq.Workplane("XY").box(d["w"], d["d"], d["h"])
-        inner = cq.Workplane("XY").box(d["w"]-6, d["d"]-6, d["h"]-4)
+    if shape == "case":
+        outer = cq.Workplane("XY").box(100, 60, 30)
+        inner = cq.Workplane("XY").box(94, 54, 26)
         return outer.cut(inner)
 
-    return cq.Workplane("XY").box(d["w"], d["d"], d["h"])
+    return cq.Workplane("XY").box(40, 40, 40)
 
 # --------------------------------
-# BOUNDING BOX
+# UPDATE ENGINE (FUSION-LIKE CORE)
+# --------------------------------
+
+def update_model(session_id, prompt):
+
+    shape = ai_design(prompt)
+    model = build_model(shape)
+
+    SESSION_MODELS[session_id] = model
+
+    return model
+
+# --------------------------------
+# BBOX
 # --------------------------------
 
 def bbox(model):
     return model.val().BoundingBox()
 
 # --------------------------------
-# AUTO FIT (SAFE)
-# --------------------------------
-
-def auto_fit(model, printer_key):
-
-    printer_key = normalize_printer(printer_key)
-    px, py, pz = PRINTERS[printer_key]
-
-    b = bbox(model)
-
-    if b.xlen <= 0 or b.ylen <= 0 or b.zlen <= 0:
-        return model
-
-    scale = min(
-        px / b.xlen,
-        py / b.ylen,
-        pz / b.zlen,
-        1
-    )
-
-    if scale < 1:
-        model = model.scale(scale)
-
-    return model
-
-# --------------------------------
-# SCORE
-# --------------------------------
-
-def score(model, printer_key):
-
-    printer_key = normalize_printer(printer_key)
-    px, py, pz = PRINTERS[printer_key]
-
-    b = bbox(model)
-
-    fits = b.xlen <= px and b.ylen <= py and b.zlen <= pz
-
-    ratio = (b.xlen * b.ylen * b.zlen) / (px * py * pz)
-
-    s = 100
-    if not fits:
-        s -= 50
-
-    s -= int(ratio * 50)
-
-    return max(0, min(100, s))
-
-# --------------------------------
-# ENDPOINTS
+# API
 # --------------------------------
 
 @app.get("/")
 def home():
-    return {"status": "ok"}
-
-@app.get("/printers")
-def printers():
-    return {"printers": PRINTERS}
+    return {"status": "Fusion AI CAD running"}
 
 @app.post("/generate")
-def generate(data: GenerateRequest):
+async def generate(request: Request):
 
     try:
-        printer = normalize_printer(data.printer)
+        data = await request.json()
 
-        design = ai_design(data.prompt)
-        model = build_model(design)
+        prompt = data.get("prompt", "")
+        session_id = data.get("session_id", str(uuid.uuid4()))
 
-        if data.fit:
-            model = auto_fit(model, printer)
+        model = update_model(session_id, prompt)
 
         b = bbox(model)
-        s = score(model, printer)
-
-        file_id = str(uuid.uuid4())
-        path = os.path.join(tempfile.gettempdir(), f"{file_id}.stl")
-
-        cq.exporters.export(model, path)
 
         return {
             "status": "ok",
-            "printer": printer,
-            "bounds": {"x": b.xlen, "y": b.ylen, "z": b.zlen},
-            "score": s,
+            "session_id": session_id,
 
-            # 🔥 cache-safe unique URL
-            "download": f"/download/{file_id}?t={uuid.uuid4()}"
+            # 🔥 THIS IS THE KEY: FRONTEND SHOULD USE THIS STATE
+            "bounds": {"x": b.xlen, "y": b.ylen, "z": b.zlen},
+
+            "model_ready": True,
+            "view_mode": "live_edit"
         }
 
     except Exception as e:
@@ -233,31 +141,26 @@ def generate(data: GenerateRequest):
             content={"status": "error", "message": str(e)},
         )
 
-@app.get("/download/{file_id}")
-def download(file_id: str):
+# --------------------------------
+# EXPORT (OPTIONAL)
+# --------------------------------
 
-    path = os.path.join(tempfile.gettempdir(), f"{file_id}.stl")
+@app.get("/export/{session_id}")
+def export(session_id: str):
 
-    if not os.path.exists(path):
-        return JSONResponse(
-            {"status": "error", "message": "not found"},
-            status_code=404
-        )
+    if session_id not in SESSION_MODELS:
+        return {"error": "no model"}
 
-    return FileResponse(
-        path,
-        filename="model.stl",
-        media_type="application/octet-stream",
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-            "Pragma": "no-cache"
-        }
-    )
+    model = SESSION_MODELS[session_id]
+
+    path = f"/tmp/{session_id}.stl"
+    cq.exporters.export(model, path)
+
+    return {"download": path}
 
 # --------------------------------
 # RUN
 # --------------------------------
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
