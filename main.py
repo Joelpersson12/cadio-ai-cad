@@ -1,5 +1,4 @@
 import os
-import re
 import tempfile
 import traceback
 import uuid
@@ -74,13 +73,12 @@ async def error_handler(request: FastAPIRequest, exc: Exception):
     )
 
 # --------------------------------
-# AI DESIGN (FIXED SCALE LOGIC)
+# AI DESIGN (MM BASED - NO EXTRA SCALING)
 # --------------------------------
 
 def ai_design(prompt: str):
     p = prompt.lower()
 
-    # IMPORTANT: realistic mm values (NO extra scaling layers)
     if "headset" in p:
         return {"type": "headset", "w": 120, "h": 240, "d": 120, "t": 8}
 
@@ -146,14 +144,14 @@ def bbox(model):
     return model.val().BoundingBox()
 
 # --------------------------------
-# AUTO FIT (FIXED — NO DOUBLE SCALING)
+# AUTO FIT (SAFE SINGLE SCALING ONLY)
 # --------------------------------
 
 def auto_fit(model, printer_key):
 
     printer_key = normalize_printer(printer_key)
-
     px, py, pz = PRINTERS[printer_key]
+
     b = bbox(model)
 
     if b.xlen <= 0 or b.ylen <= 0 or b.zlen <= 0:
@@ -166,7 +164,6 @@ def auto_fit(model, printer_key):
         1
     )
 
-    # ONLY SCALE IF NECESSARY
     if scale < 1:
         model = model.scale(scale)
 
@@ -179,8 +176,8 @@ def auto_fit(model, printer_key):
 def score(model, printer_key):
 
     printer_key = normalize_printer(printer_key)
-
     px, py, pz = PRINTERS[printer_key]
+
     b = bbox(model)
 
     fits = b.xlen <= px and b.ylen <= py and b.zlen <= pz
@@ -216,7 +213,6 @@ def generate(data: GenerateRequest):
         design = ai_design(data.prompt)
         model = build_model(design)
 
-        # 🔥 IMPORTANT FIX: NO PRE-SCALING ANYWHERE
         if data.fit:
             model = auto_fit(model, printer)
 
@@ -233,7 +229,9 @@ def generate(data: GenerateRequest):
             "printer": printer,
             "bounds": {"x": b.xlen, "y": b.ylen, "z": b.zlen},
             "score": s,
-            "download": f"/download/{file_id}"
+
+            # 🔥 CACHE FIX: always unique URL
+            "download": f"/download/{file_id}?v={uuid.uuid4()}"
         }
 
     except Exception as e:
@@ -248,9 +246,20 @@ def download(file_id: str):
     path = os.path.join(tempfile.gettempdir(), f"{file_id}.stl")
 
     if not os.path.exists(path):
-        return JSONResponse({"status": "error", "message": "not found"}, status_code=404)
+        return JSONResponse(
+            {"status": "error", "message": "not found"},
+            status_code=404
+        )
 
-    return FileResponse(path, filename="model.stl")
+    return FileResponse(
+        path,
+        filename="model.stl",
+        media_type="application/octet-stream",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache"
+        }
+    )
 
 # --------------------------------
 # RUN
