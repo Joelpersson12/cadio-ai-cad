@@ -5,9 +5,10 @@ from pydantic import BaseModel
 
 import cadquery as cq
 import uuid
+import os
 
 # --------------------------------
-# FASTAPI
+# APP
 # --------------------------------
 
 app = FastAPI()
@@ -21,237 +22,77 @@ app.add_middleware(
 )
 
 # --------------------------------
-# REQUEST MODELS
+# STANDARD: 1 UNIT = 1 MM
+# --------------------------------
+
+UNIT_SCALE = 1
+
+# --------------------------------
+# REQUEST
 # --------------------------------
 
 class Request(BaseModel):
     prompt: str
 
-
-class UpdateRequest(BaseModel):
-    type: str
-    width: float = 100
-    height: float = 100
-    depth: float = 100
-    thickness: float = 8
-
 # --------------------------------
-# AI DESIGN DETECTION
+# SIMPLE AI RULE ENGINE (STABIL VERSION)
 # --------------------------------
 
 def ai_design(prompt: str):
 
-    prompt_lower = prompt.lower()
+    p = prompt.lower()
 
-    # ----------------------------
-    # HEADSET STAND
-    # ----------------------------
+    if "headset" in p:
+        return {"type": "headset_stand", "width": 120, "height": 240, "depth": 120, "thickness": 8}
 
-    if "headset" in prompt_lower:
+    if "phone" in p:
+        return {"type": "phone_stand", "width": 80, "height": 120, "depth": 70, "thickness": 8}
 
-        return {
-            "type": "headset_stand",
-            "height": 240,
-            "width": 120,
-            "depth": 120,
-            "thickness": 8
-        }
+    if "bracket" in p:
+        return {"type": "bracket", "width": 60, "height": 60, "depth": 20, "thickness": 8}
 
-    # ----------------------------
-    # PHONE STAND
-    # ----------------------------
+    if "case" in p:
+        return {"type": "case", "width": 100, "height": 30, "depth": 60, "thickness": 3}
 
-    elif "phone" in prompt_lower:
-
-        return {
-            "type": "phone_stand",
-            "height": 120,
-            "width": 80,
-            "depth": 70,
-            "thickness": 8
-        }
-
-    # ----------------------------
-    # BRACKET
-    # ----------------------------
-
-    elif "bracket" in prompt_lower:
-
-        return {
-            "type": "bracket",
-            "width": 60,
-            "height": 60,
-            "depth": 20,
-            "thickness": 8
-        }
-
-    # ----------------------------
-    # CASE
-    # ----------------------------
-
-    elif "case" in prompt_lower:
-
-        return {
-            "type": "case",
-            "width": 100,
-            "height": 30,
-            "depth": 60,
-            "thickness": 3
-        }
-
-    # ----------------------------
-    # DEFAULT BOX
-    # ----------------------------
-
-    else:
-
-        return {
-            "type": "box",
-            "width": 40,
-            "height": 40,
-            "depth": 40,
-            "thickness": 4
-        }
+    return {"type": "box", "width": 40, "height": 40, "depth": 40, "thickness": 4}
 
 # --------------------------------
-# CAD MODEL BUILDER
+# CAD BUILDER
 # --------------------------------
 
-def build_model(design):
+def build_model(d):
 
-    try:
+    t = d.get("type")
 
-        model_type = design.get("type")
+    if t == "headset_stand":
 
-        # ----------------------------
-        # HEADSET STAND
-        # ----------------------------
+        base = cq.Workplane("XY").box(d["width"], d["depth"], d["thickness"])
+        stand = cq.Workplane("XY").transformed(offset=(0, 0, d["height"]/2)).box(d["thickness"], d["thickness"], d["height"])
 
-        if model_type == "headset_stand":
+        return base.union(stand)
 
-            height = design.get("height", 240)
-            width = design.get("width", 120)
-            thickness = design.get("thickness", 8)
+    if t == "phone_stand":
 
-            base = (
-                cq.Workplane("XY")
-                .box(width, width, thickness)
-            )
+        base = cq.Workplane("XY").box(d["width"], d["depth"], d["thickness"])
+        back = cq.Workplane("XY").transformed(offset=(0, -10, d["height"]/2)).box(d["width"], d["thickness"], d["height"])
 
-            stand = (
-                cq.Workplane("XY")
-                .transformed(offset=(0, 0, height / 2))
-                .box(thickness, thickness, height)
-            )
+        return base.union(back)
 
-            top_hook = (
-                cq.Workplane("XY")
-                .transformed(offset=(0, 0, height))
-                .box(width / 2, thickness, thickness)
-            )
+    if t == "bracket":
 
-            return (
-                base
-                .union(stand)
-                .union(top_hook)
-            )
+        v = cq.Workplane("XY").box(d["depth"], d["depth"], d["height"])
+        h = cq.Workplane("XY").transformed(offset=(d["width"]/2, 0, d["depth"]/2)).box(d["width"], d["depth"], d["depth"])
 
-        # ----------------------------
-        # PHONE STAND
-        # ----------------------------
+        return v.union(h)
 
-        elif model_type == "phone_stand":
+    if t == "case":
 
-            width = design.get("width", 80)
-            height = design.get("height", 120)
-            depth = design.get("depth", 70)
-            thickness = design.get("thickness", 8)
+        outer = cq.Workplane("XY").box(d["width"], d["depth"], d["height"])
+        inner = cq.Workplane("XY").transformed(offset=(0,0,2)).box(d["width"]-6, d["depth"]-6, d["height"]-4)
 
-            base = (
-                cq.Workplane("XY")
-                .box(width, depth, thickness)
-            )
+        return outer.cut(inner)
 
-            back = (
-                cq.Workplane("XY")
-                .transformed(offset=(0, -20, height / 2))
-                .box(width, thickness, height)
-            )
-
-            return (
-                base
-                .union(back)
-            )
-
-        # ----------------------------
-        # BRACKET
-        # ----------------------------
-
-        elif model_type == "bracket":
-
-            width = design.get("width", 60)
-            height = design.get("height", 60)
-            depth = design.get("depth", 20)
-
-            vertical = (
-                cq.Workplane("XY")
-                .box(depth, depth, height)
-            )
-
-            horizontal = (
-                cq.Workplane("XY")
-                .transformed(offset=(width / 2, 0, depth / 2))
-                .box(width, depth, depth)
-            )
-
-            return (
-                vertical
-                .union(horizontal)
-            )
-
-        # ----------------------------
-        # CASE
-        # ----------------------------
-
-        elif model_type == "case":
-
-            width = design.get("width", 100)
-            depth = design.get("depth", 60)
-            height = design.get("height", 30)
-
-            outer = (
-                cq.Workplane("XY")
-                .box(width, depth, height)
-            )
-
-            inner = (
-                cq.Workplane("XY")
-                .transformed(offset=(0, 0, 2))
-                .box(width - 6, depth - 6, height - 4)
-            )
-
-            return outer.cut(inner)
-
-        # ----------------------------
-        # DEFAULT BOX
-        # ----------------------------
-
-        else:
-
-            width = design.get("width", 40)
-            depth = design.get("depth", 40)
-            height = design.get("height", 40)
-
-            return (
-                cq.Workplane("XY")
-                .box(width, depth, height)
-            )
-
-    except Exception as e:
-
-        print("CAD ERROR:", e)
-
-        return cq.Workplane("XY").box(40, 40, 40)
+    return cq.Workplane("XY").box(d["width"], d["depth"], d["height"])
 
 # --------------------------------
 # HOME
@@ -259,96 +100,37 @@ def build_model(design):
 
 @app.get("/")
 def home():
-
-    return {
-        "status": "Cadio AI CAD running"
-    }
+    return {"status": "Cadio running"}
 
 # --------------------------------
-# GENERATE MODEL
+# GENERATE
 # --------------------------------
 
 @app.post("/generate")
 def generate(data: Request):
 
-    try:
+    design = ai_design(data.prompt)
 
-        # AI design
-        design = ai_design(data.prompt)
+    # enforce mm scale
+    for k in ["width", "height", "depth", "thickness"]:
+        if k in design:
+            design[k] = float(design[k]) * UNIT_SCALE
 
-        print("PROMPT:")
-        print(data.prompt)
+    model = build_model(design)
 
-        print("DESIGN:")
-        print(design)
+    file_id = str(uuid.uuid4())
+    path = f"/tmp/{file_id}.stl"
 
-        # Build model
-        model = build_model(design)
+    cq.exporters.export(model, path)
 
-        # Create file id
-        file_id = str(uuid.uuid4())
-
-        # STL path
-        path = f"/tmp/{file_id}.stl"
-
-        # Export STL
-        cq.exporters.export(model, path)
-
-        return {
-            "status": "generated",
-            "design": design,
-            "download_url": f"/download/{file_id}"
-        }
-
-    except Exception as e:
-
-        print("GENERATE ERROR:", e)
-
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+    return {
+        "status": "ok",
+        "design": design,
+        "download_url": f"/download/{file_id}"
+    }
 
 # --------------------------------
-# LIVE MODEL UPDATE
-# --------------------------------
-
-@app.post("/update-model")
-def update_model(data: UpdateRequest):
-
-    try:
-
-        design = {
-            "type": data.type,
-            "width": data.width,
-            "height": data.height,
-            "depth": data.depth,
-            "thickness": data.thickness
-        }
-
-        model = build_model(design)
-
-        file_id = str(uuid.uuid4())
-
-        path = f"/tmp/{file_id}.stl"
-
-        cq.exporters.export(model, path)
-
-        return {
-            "status": "updated",
-            "design": design,
-            "download_url": f"/download/{file_id}"
-        }
-
-    except Exception as e:
-
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-
-# --------------------------------
-# DOWNLOAD STL
+# DOWNLOAD
 # --------------------------------
 
 @app.get("/download/{file_id}")
