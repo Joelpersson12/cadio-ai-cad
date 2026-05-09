@@ -192,20 +192,18 @@ def bounding_box(model):
 # --------------------------------
 
 def auto_fit(model, printer_key):
-    printer_key = normalize_printer(printer_key)
-    printer_x, printer_y, printer_z = PRINTERS[printer_key]
-    bbox = bounding_box(model)
+
+    max_x, max_y, max_z = PRINTERS.get(printer_key, PRINTERS[DEFAULT_PRINTER])
+
+    # CORRECT CadQuery bbox usage
+    bbox = model.val().BoundingBox()
 
     scale = min(
-        printer_x / bbox.xlen,
-        printer_y / bbox.ylen,
-        printer_z / bbox.zlen,
-        1,
+        max_x / bbox.xlen,
+        max_y / bbox.ylen,
+        max_z / bbox.zlen,
+        1
     )
-
-    print("PRINTER:", printer_key)
-    print("BOUNDS:", bbox.xlen, bbox.ylen, bbox.zlen)
-    print("SCALE:", scale)
 
     if scale < 1:
         model = model.scale(scale)
