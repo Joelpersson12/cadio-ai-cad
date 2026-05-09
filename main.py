@@ -6,7 +6,6 @@ import uuid
 import cadquery as cq
 import uvicorn
 from fastapi import FastAPI, Request as FastAPIRequest
-from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -26,7 +25,7 @@ app.add_middleware(
 )
 
 # --------------------------------
-# PRINTER DATABASE (mm)
+# PRINTERS (mm)
 # --------------------------------
 
 PRINTERS = {
@@ -37,8 +36,6 @@ PRINTERS = {
     "ender_3": (220, 220, 250),
     "prusa_mk4": (250, 210, 220),
 }
-
-DEFAULT_PRINTER = "None"
 
 PRINTER_ALIASES = {
     "flashforge_adventurer_3": "adventurer_3",
@@ -51,33 +48,43 @@ PRINTER_ALIASES = {
     "prusa_mk4": "prusa_mk4",
 }
 
+DEFAULT_PRINTER = "adventurer_3"
+
 # --------------------------------
 # REQUEST
 # --------------------------------
 
 class GenerateRequest(BaseModel):
-    prompt: str
-    printer: str = DEFAULT_PRINTER
+    prompt: str = ""
+    printer: str = None
     fit: bool = True
 
 # --------------------------------
-# ERROR HANDLING
+# SAFE PRINTER HANDLING
 # --------------------------------
 
-@app.exception_handler(Exception)
-async def error_handler(request: FastAPIRequest, exc: Exception):
-    traceback.print_exc()
-    return JSONResponse(
-        status_code=500,
-        content={"status": "error", "message": str(exc)},
-    )
+def normalize_printer(p: str):
+
+    if not p:
+        return DEFAULT_PRINTER
+
+    p = str(p).lower().replace(" ", "_")
+
+    if p in PRINTERS:
+        return p
+
+    if p in PRINTER_ALIASES:
+        return PRINTER_ALIASES[p]
+
+    return DEFAULT_PRINTER
 
 # --------------------------------
-# AI DESIGN (MM BASED - NO EXTRA SCALING)
+# AI DESIGN (SAFE + STABLE SCALE)
 # --------------------------------
 
 def ai_design(prompt: str):
-    p = prompt.lower()
+
+    p = (prompt or "").lower()
 
     if "headset" in p:
         return {"type": "headset", "w": 120, "h": 240, "d": 120, "t": 8}
@@ -94,22 +101,7 @@ def ai_design(prompt: str):
     return {"type": "box", "w": 40, "h": 40, "d": 40, "t": 4}
 
 # --------------------------------
-# PRINTER NORMALIZER
-# --------------------------------
-
-def normalize_printer(p: str):
-    p = (p or "").lower().replace(" ", "_")
-
-    if p in PRINTERS:
-        return p
-
-    if p in PRINTER_ALIASES:
-        return PRINTER_ALIASES[p]
-
-    return DEFAULT_PRINTER
-
-# --------------------------------
-# CAD BUILDER
+# CAD BUILD
 # --------------------------------
 
 def build_model(d):
@@ -144,7 +136,7 @@ def bbox(model):
     return model.val().BoundingBox()
 
 # --------------------------------
-# AUTO FIT (SAFE SINGLE SCALING ONLY)
+# AUTO FIT (SAFE)
 # --------------------------------
 
 def auto_fit(model, printer_key):
@@ -230,11 +222,12 @@ def generate(data: GenerateRequest):
             "bounds": {"x": b.xlen, "y": b.ylen, "z": b.zlen},
             "score": s,
 
-            # 🔥 CACHE FIX: always unique URL
-            "download": f"/download/{file_id}?v={uuid.uuid4()}"
+            # 🔥 cache-safe unique URL
+            "download": f"/download/{file_id}?t={uuid.uuid4()}"
         }
 
     except Exception as e:
+        traceback.print_exc()
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)},
