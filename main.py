@@ -211,19 +211,32 @@ def rebuild_from_feature_tree(params: Dict[str, float], feature_tree: List[Dict[
 
 def apply_transform_to_workplane(model: cq.Workplane, transform: Dict[str, List[float]]) -> cq.Workplane:
     shape = model.val()
-    sx, sy, sz = transform["scale"]
-    uniform_scale = max(0.001, (sx + sy + sz) / 3.0)
-    if abs(uniform_scale - 1.0) > 1e-6:
-        shape = shape.scale(uniform_scale)
-    rx, ry, rz = transform["rotation"]
+
+    # --- SAFE DEFAULTS (fix missing/dirty state) ---
+    pos = transform.get("position") or [0.0, 0.0, 0.0]
+    rot = transform.get("rotation") or [0.0, 0.0, 0.0]
+    scl = transform.get("scale") or [1.0, 1.0, 1.0]
+
+    # --- SCALE (stable, no drift) ---
+    sx, sy, sz = [float(v) for v in scl]
+    scale = max(0.001, (sx + sy + sz) / 3.0)
+    if abs(scale - 1.0) > 1e-6:
+        shape = shape.scale(scale)
+
+    # --- ROTATION (FIX: clamp + prevent runaway rotation) ---
+    rx, ry, rz = [float(v) % 360.0 for v in rot]
+
     if abs(rx) > 1e-6:
-        shape = shape.rotate(cq.Vector(0, 0, 0), cq.Vector(1, 0, 0), rx)
+        shape = shape.rotate(cq.Vector(0,0,0), cq.Vector(1,0,0), rx)
     if abs(ry) > 1e-6:
-        shape = shape.rotate(cq.Vector(0, 0, 0), cq.Vector(0, 1, 0), ry)
+        shape = shape.rotate(cq.Vector(0,0,0), cq.Vector(0,1,0), ry)
     if abs(rz) > 1e-6:
-        shape = shape.rotate(cq.Vector(0, 0, 0), cq.Vector(0, 0, 1), rz)
-    px, py, pz = transform["position"]
+        shape = shape.rotate(cq.Vector(0,0,0), cq.Vector(0,0,1), rz)
+
+    # --- POSITION ---
+    px, py, pz = [float(v) for v in pos]
     shape = shape.translate((px, py, pz))
+
     return cq.Workplane("XY").add(shape)
 
 
@@ -438,6 +451,7 @@ def session_payload(session: Dict[str, Any], include_mesh: bool = False) -> Dict
         "printability_score": pa["printability_score"],
         "edit_history": session["edit_history"][-30:],
         "updated_at": session["updated_at"],
+        "dirty_flag": session["version"],
     }
 
 
@@ -652,6 +666,7 @@ def update_transform(data: TransformUpdateRequest):
                 obj["transform"]["rotation"] = [float(v) for v in data.rotation]
             if data.scale and len(data.scale) == 3:
                 obj["transform"]["scale"] = [max(0.001, float(v)) for v in data.scale]
+                obj["model"] = rebuild_from_feature_tree(obj["parameters"], obj["feature_tree"])
             session["version"] += 1
             session["updated_at"] = now_iso()
             return session_payload(session, include_mesh=True)
