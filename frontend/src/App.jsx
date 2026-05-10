@@ -47,8 +47,9 @@ export default function App() {
     const storedVersion = localStorage.getItem(VERSION_KEY);
     if (storedVersion !== FRONTEND_CACHE_VERSION) {
       localStorage.setItem(VERSION_KEY, FRONTEND_CACHE_VERSION);
-      if (!sessionId) {
-        localStorage.removeItem(SESSION_KEY);
+     localStorage.removeItem(SESSION_KEY);
+      setSessionId("");
+      setModelData(null);
       }
     }
   }, []);
@@ -244,8 +245,8 @@ export default function App() {
         </div>
 
         <h3>Print Assistant</h3>
-        {printAssistant.warnings.map((w) => <p key={w} className="muted">⚠ {w}</p>)}
-        {printAssistant.checks.map((c) => <p key={c} className="muted">✔ {c}</p>)}
+       {printAssistant.warnings.map((w) => <p key={w} className="muted">Warning: {w}</p>)}
+        {printAssistant.checks.map((c) => <p key={c} className="muted">OK: {c}</p>)}
         {printAssistant.hints.map((h) => <p key={h} className="muted">{h}</p>)}
         <p className="muted">Score: {modelData?.printability_score ?? 0}</p>
 
