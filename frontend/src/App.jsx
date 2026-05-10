@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import CadViewport from "./components/CadViewport";
 import {
+  API_BASE,
   exportUrl,
   generate,
   getMesh,
@@ -8,6 +9,10 @@ import {
   toggleFeature,
   updateParameters
 } from "./api";
+
+const FRONTEND_CACHE_VERSION = "cad-frontend-v2";
+const SESSION_KEY = "cad_session_id";
+const VERSION_KEY = "cad_frontend_version";
 
 function NumberInput({ label, value, onChange, step = 1, min = 0 }) {
   return (
@@ -25,12 +30,30 @@ function NumberInput({ label, value, onChange, step = 1, min = 0 }) {
 }
 
 export default function App() {
-  const [sessionId, setSessionId] = useState("");
+  const [sessionId, setSessionId] = useState(() => localStorage.getItem(SESSION_KEY) || "");
   const [prompt, setPrompt] = useState("Create a phone stand");
   const [status, setStatus] = useState("Ready");
   const [modelData, setModelData] = useState(null);
   const [printers, setPrinters] = useState({});
   const [selectedPrinter, setSelectedPrinter] = useState("adventurer_3");
+
+  useEffect(() => {
+    console.log("NEW CAD FRONTEND ACTIVE");
+    console.log("CAD API BASE:", API_BASE);
+    const storedVersion = localStorage.getItem(VERSION_KEY);
+    if (storedVersion !== FRONTEND_CACHE_VERSION) {
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.setItem(VERSION_KEY, FRONTEND_CACHE_VERSION);
+      setSessionId("");
+      setModelData(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (sessionId) {
+      localStorage.setItem(SESSION_KEY, sessionId);
+    }
+  }, [sessionId]);
 
   useEffect(() => {
     listPrinters()
@@ -49,6 +72,8 @@ export default function App() {
       });
       setSessionId(data.session_id);
       setModelData(data);
+      const meshData = await getMesh(data.session_id);
+      setModelData(meshData);
       setStatus(`Updated v${data.version}`);
     } catch (err) {
       setStatus(err.message);
@@ -78,7 +103,7 @@ export default function App() {
         session_id: sessionId,
         parameters: { ...base, [key]: value }
       });
-      setModelData(data);
+      setModelData(data.mesh ? data : await getMesh(sessionId));
       setStatus(`Param updated: ${key}`);
     } catch (err) {
       setStatus(err.message);
@@ -95,7 +120,7 @@ export default function App() {
         feature_id: featureId,
         enabled
       });
-      setModelData(data);
+      setModelData(data.mesh ? data : await getMesh(sessionId));
       setStatus(`Feature ${featureId} ${enabled ? "enabled" : "disabled"}`);
     } catch (err) {
       setStatus(err.message);
@@ -107,6 +132,7 @@ export default function App() {
   const bounds = modelData?.bounds || {};
   const meshData = modelData?.mesh || null;
   const exportStl = sessionId ? exportUrl(sessionId, "stl") : "#";
+  const canExport = Boolean(sessionId);
   const exportObj = sessionId ? exportUrl(sessionId, "obj") : "#";
   const exportStep = sessionId ? exportUrl(sessionId, "step") : "#";
 
@@ -173,9 +199,9 @@ export default function App() {
 
         <h3>Export</h3>
         <div className="exports">
-          <a href={exportStl}>STL</a>
-          <a href={exportObj}>OBJ</a>
-          <a href={exportStep}>STEP</a>
+          <a href={exportStl} aria-disabled={!canExport}>STL</a>
+          <a href={exportObj} aria-disabled={!canExport}>OBJ</a>
+          <a href={exportStep} aria-disabled={!canExport}>STEP</a>
         </div>
       </aside>
     </div>
