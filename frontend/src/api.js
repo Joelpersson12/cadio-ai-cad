@@ -1,4 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const RAW_API_BASE = import.meta.env.VITE_API_BASE || window.location.origin;
+const API_BASE = RAW_API_BASE.replace(/\/+$/, "");
 
 async function api(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -44,3 +45,5 @@ export async function listPrinters() {
 export function exportUrl(sessionId, format) {
   return `${API_BASE}/export/${sessionId}/${format}`;
 }
+
+export { API_BASE };
