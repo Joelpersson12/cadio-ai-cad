@@ -38,6 +38,27 @@ export async function getMesh(sessionId) {
   return api(`/session/${sessionId}/mesh`);
 }
 
+export async function selectObject(payload) {
+  return api("/object/select", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteObject(payload) {
+  return api("/object/delete", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateObjectTransform(payload) {
+  return api("/object/transform", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function listPrinters() {
   return api("/printers");
 }
