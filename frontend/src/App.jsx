@@ -7,10 +7,13 @@ import {
   getMesh,
   listPrinters,
   toggleFeature,
-  updateParameters
+  updateParameters,
+  selectObject,
+  deleteObject,
+  updateObjectTransform
 } from "./api";
 
-const FRONTEND_CACHE_VERSION = "cad-frontend-v2";
+const FRONTEND_CACHE_VERSION = "cad-frontend-v3";
 const SESSION_KEY = "cad_session_id";
 const VERSION_KEY = "cad_frontend_version";
 
@@ -36,16 +39,17 @@ export default function App() {
   const [modelData, setModelData] = useState(null);
   const [printers, setPrinters] = useState({});
   const [selectedPrinter, setSelectedPrinter] = useState("adventurer_3");
+  const [transformMode, setTransformMode] = useState("translate");
 
   useEffect(() => {
     console.log("NEW CAD FRONTEND ACTIVE");
     console.log("CAD API BASE:", API_BASE);
     const storedVersion = localStorage.getItem(VERSION_KEY);
     if (storedVersion !== FRONTEND_CACHE_VERSION) {
-      localStorage.removeItem(SESSION_KEY);
       localStorage.setItem(VERSION_KEY, FRONTEND_CACHE_VERSION);
-      setSessionId("");
-      setModelData(null);
+      if (!sessionId) {
+        localStorage.removeItem(SESSION_KEY);
+      }
     }
   }, []);
 
@@ -56,10 +60,16 @@ export default function App() {
   }, [sessionId]);
 
   useEffect(() => {
-    listPrinters()
-      .then((data) => setPrinters(data.printers || {}))
-      .catch(() => {});
+    listPrinters().then((data) => setPrinters(data.printers || {})).catch(() => {});
   }, []);
+
+  async function syncMesh(targetSessionId = sessionId) {
+    if (!targetSessionId) return;
+    console.log("mesh fetch started");
+    const data = await getMesh(targetSessionId);
+    setModelData(data);
+    console.log("viewport updated successfully");
+  }
 
   async function runPrompt() {
     try {
@@ -71,39 +81,23 @@ export default function App() {
         fit: true
       });
       setSessionId(data.session_id);
-      setModelData(data);
-      const meshData = await getMesh(data.session_id);
-      setModelData(meshData);
+      await syncMesh(data.session_id);
       setStatus(`Updated v${data.version}`);
     } catch (err) {
       setStatus(err.message);
     }
   }
 
-  async function refreshMesh() {
-    if (!sessionId) {
-      return;
-    }
-    try {
-      const data = await getMesh(sessionId);
-      setModelData(data);
-      setStatus(`Synced v${data.version}`);
-    } catch (err) {
-      setStatus(err.message);
-    }
-  }
-
   async function patchParam(key, value) {
-    if (!sessionId) {
-      return;
-    }
-    const base = modelData?.parameters || {};
+    if (!sessionId || !selectedObject) return;
+    const base = selectedObject.parameters || {};
     try {
-      const data = await updateParameters({
+      await updateParameters({
         session_id: sessionId,
+        object_id: selectedObject.id,
         parameters: { ...base, [key]: value }
       });
-      setModelData(data.mesh ? data : await getMesh(sessionId));
+      await syncMesh(sessionId);
       setStatus(`Param updated: ${key}`);
     } catch (err) {
       setStatus(err.message);
@@ -111,30 +105,69 @@ export default function App() {
   }
 
   async function onToggleFeature(featureId, enabled) {
-    if (!sessionId) {
-      return;
-    }
+    if (!sessionId || !selectedObject) return;
     try {
-      const data = await toggleFeature({
+      await toggleFeature({
         session_id: sessionId,
+        object_id: selectedObject.id,
         feature_id: featureId,
         enabled
       });
-      setModelData(data.mesh ? data : await getMesh(sessionId));
+      await syncMesh(sessionId);
       setStatus(`Feature ${featureId} ${enabled ? "enabled" : "disabled"}`);
     } catch (err) {
       setStatus(err.message);
     }
   }
 
-  const params = modelData?.parameters || {};
-  const features = modelData?.feature_tree || [];
+  async function onSelectObject(objectId) {
+    if (!sessionId) return;
+    try {
+      await selectObject({ session_id: sessionId, object_id: objectId });
+      await syncMesh(sessionId);
+      setStatus("Object selected");
+    } catch (err) {
+      setStatus(err.message);
+    }
+  }
+
+  async function onDeleteObject() {
+    if (!sessionId || !selectedObject) return;
+    try {
+      await deleteObject({ session_id: sessionId, object_id: selectedObject.id });
+      await syncMesh(sessionId);
+      setStatus("Object deleted");
+    } catch (err) {
+      setStatus(err.message);
+    }
+  }
+
+  async function onTransformCommit(objectId, transform) {
+    if (!sessionId) return;
+    try {
+      await updateObjectTransform({
+        session_id: sessionId,
+        object_id: objectId,
+        ...transform
+      });
+      await syncMesh(sessionId);
+      setStatus("Transform saved");
+    } catch (err) {
+      setStatus(err.message);
+    }
+  }
+
+  const objects = modelData?.objects || [];
+  const selectedObjectId = modelData?.selected_object_id;
+  const selectedObject = objects.find((o) => o.id === selectedObjectId) || null;
+  const params = selectedObject?.parameters || {};
+  const features = selectedObject?.feature_tree || [];
   const bounds = modelData?.bounds || {};
-  const meshData = modelData?.mesh || null;
   const exportStl = sessionId ? exportUrl(sessionId, "stl") : "#";
-  const canExport = Boolean(sessionId);
   const exportObj = sessionId ? exportUrl(sessionId, "obj") : "#";
   const exportStep = sessionId ? exportUrl(sessionId, "step") : "#";
+  const canExport = Boolean(sessionId);
+  const printAssistant = modelData?.print_assistant || { warnings: [], checks: [], hints: [] };
 
   return (
     <div className="app">
@@ -144,28 +177,51 @@ export default function App() {
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Try: make thicker, add holes, fillet edges, mirror geometry, resize 90 80 140"
+          placeholder="Try: add object, duplicate this part, move object left, rotate 90 degrees, fillet edges"
         />
         <button onClick={runPrompt}>Apply AI Command</button>
-        <button onClick={refreshMesh} className="secondary">
-          Refresh Model
-        </button>
+        <button onClick={() => syncMesh()} className="secondary">Refresh Model</button>
         <div className="status">{status}</div>
       </aside>
 
       <main className="viewport-wrap">
-        <CadViewport meshData={meshData} />
+        <CadViewport
+          objects={objects}
+          selectedObjectId={selectedObjectId}
+          onSelectObject={onSelectObject}
+          transformMode={transformMode}
+          onTransformCommit={onTransformCommit}
+        />
       </main>
 
       <aside className="panel right">
-        <h2>Parameters</h2>
+        <h2>Object Hierarchy</h2>
+        <div className="feature-list">
+          {objects.map((o) => (
+            <button
+              key={o.id}
+              className={o.id === selectedObjectId ? "" : "secondary"}
+              onClick={() => onSelectObject(o.id)}
+            >
+              {o.name}
+            </button>
+          ))}
+        </div>
+
+        <h3>Transform Tools</h3>
+        <div className="exports">
+          <button onClick={() => setTransformMode("translate")}>Move</button>
+          <button onClick={() => setTransformMode("rotate")}>Rotate</button>
+          <button onClick={() => setTransformMode("scale")}>Scale</button>
+        </div>
+        <button className="secondary" onClick={onDeleteObject}>Delete Selected</button>
+
+        <h3>Parameters</h3>
         <label className="field">
           <span>Printer</span>
           <select value={selectedPrinter} onChange={(e) => setSelectedPrinter(e.target.value)}>
             {Object.keys(printers).map((key) => (
-              <option value={key} key={key}>
-                {printers[key].name}
-              </option>
+              <option value={key} key={key}>{printers[key].name}</option>
             ))}
           </select>
         </label>
@@ -173,29 +229,29 @@ export default function App() {
         <NumberInput label="Depth" value={params.depth} onChange={(v) => patchParam("depth", v)} />
         <NumberInput label="Height" value={params.height} onChange={(v) => patchParam("height", v)} />
         <NumberInput label="Thickness" value={params.thickness} onChange={(v) => patchParam("thickness", v)} />
-        <NumberInput label="Angle" value={params.angle} onChange={(v) => patchParam("angle", v)} />
-        <NumberInput label="Fillet" value={params.fillet_radius} onChange={(v) => patchParam("fillet_radius", v)} step={0.5} />
+        <NumberInput label="Fillet Radius" value={params.fillet_radius} onChange={(v) => patchParam("fillet_radius", v)} step={0.5} />
         <NumberInput label="Hole Count" value={params.hole_count} onChange={(v) => patchParam("hole_count", v)} />
-        <NumberInput label="Hole Diameter" value={params.hole_diameter} onChange={(v) => patchParam("hole_diameter", v)} step={0.5} />
+        <NumberInput label="Wall Thickness" value={params.wall_thickness} onChange={(v) => patchParam("wall_thickness", v)} step={0.2} />
 
         <h3>Feature Tree</h3>
         <div className="feature-list">
           {features.map((f) => (
             <label key={f.id} className="feature-item">
-              <input
-                type="checkbox"
-                checked={Boolean(f.enabled)}
-                onChange={(e) => onToggleFeature(f.id, e.target.checked)}
-              />
+              <input type="checkbox" checked={Boolean(f.enabled)} onChange={(e) => onToggleFeature(f.id, e.target.checked)} />
               <span>{f.type}</span>
             </label>
           ))}
         </div>
 
-        <h3>Model Metadata</h3>
-        <p className="muted">Version: {modelData?.version ?? 0}</p>
+        <h3>Print Assistant</h3>
+        {printAssistant.warnings.map((w) => <p key={w} className="muted">⚠ {w}</p>)}
+        {printAssistant.checks.map((c) => <p key={c} className="muted">✔ {c}</p>)}
+        {printAssistant.hints.map((h) => <p key={h} className="muted">{h}</p>)}
+        <p className="muted">Score: {modelData?.printability_score ?? 0}</p>
+
+        <h3>Scene</h3>
+        <p className="muted">Objects: {objects.length}</p>
         <p className="muted">Bounds: {bounds.x?.toFixed?.(1) || 0} x {bounds.y?.toFixed?.(1) || 0} x {bounds.z?.toFixed?.(1) || 0} mm</p>
-        <p className="muted">Printability: {modelData?.printability_score ?? 0}</p>
 
         <h3>Export</h3>
         <div className="exports">
