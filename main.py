@@ -1,5 +1,6 @@
 import math
 import os
+from pathlib import Path
 import re
 import tempfile
 import traceback
@@ -13,7 +14,8 @@ import uvicorn
 from fastapi import FastAPI, Request as FastAPIRequest
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 
@@ -29,6 +31,8 @@ app.add_middleware(
 
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = RLock()
+PROJECT_ROOT = Path(__file__).resolve().parent
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
 
 PRINTERS = {
@@ -327,8 +331,8 @@ async def unhandled_exception_handler(request: FastAPIRequest, exc: Exception):
     return JSONResponse(status_code=500, content={"status": "error", "message": str(exc)})
 
 
-@app.get("/")
-def home():
+@app.get("/health")
+def health():
     return {"status": "ok", "service": "cadio-live-cad", "sessions": len(sessions)}
 
 
@@ -479,6 +483,37 @@ def export_model(session_id: str, fmt: str):
     except Exception as exc:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"status": "error", "message": str(exc)})
+
+
+if (FRONTEND_DIST / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="frontend-assets")
+
+
+@app.get("/", response_class=HTMLResponse)
+def serve_frontend_root():
+    index_path = FRONTEND_DIST / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    return HTMLResponse(
+        "<h1>Cadio API</h1><p>Frontend build not found. Build frontend with: npm run build</p>",
+        status_code=200,
+    )
+
+
+@app.get("/{full_path:path}", response_class=HTMLResponse)
+def serve_frontend_routes(full_path: str):
+    if full_path.startswith("export/") or full_path.startswith("session/") or full_path in {
+        "generate",
+        "parameters",
+        "feature/toggle",
+        "printers",
+        "health",
+    }:
+        return JSONResponse(status_code=404, content={"status": "error", "message": "Not found"})
+    index_path = FRONTEND_DIST / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    return JSONResponse(status_code=404, content={"status": "error", "message": "Not found"})
 
 
 if __name__ == "__main__":
