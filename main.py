@@ -249,13 +249,18 @@ def apply_transform_to_workplane(model: cq.Workplane, transform: Dict[str, List[
 
 def mesh_payload_for_object(model: cq.Workplane, transform: Dict[str, List[float]]) -> Dict[str, List[float]]:
     wp = apply_transform_to_workplane(model, transform)
-   vertices, triangles = model.val().tessellate(0.7, 0.2)
+
+    vertices, triangles = wp.val().tessellate(0.7, 0.2)
+
     pos: List[float] = []
     idx: List[int] = []
+
     for v in vertices:
         pos.extend([float(v.x), float(v.y), float(v.z)])
+
     for tri in triangles:
         idx.extend([int(tri[0]), int(tri[1]), int(tri[2])])
+
     return {"positions": pos, "indices": idx}
 
 
