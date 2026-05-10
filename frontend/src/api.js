@@ -35,7 +35,7 @@ export async function toggleFeature(payload) {
 }
 
 export async function getMesh(sessionId) {
-  return api(`/session/${sessionId}/mesh`);
+ return api(`/session/${sessionId}/mesh?_=${Date.now()}`);
 }
 
 export async function selectObject(payload) {
