@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from threading import RLock
 from typing import Any, Dict, List, Optional
+import time
 
 import cadquery as cq
 import uvicorn
@@ -31,8 +32,12 @@ app.add_middleware(
 
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = RLock()
+def force_scene_refresh(session: Dict[str, Any]):
+    session["scene_token"] = str(uuid.uuid4())
+    session["updated_at"] = time.time()
 PROJECT_ROOT = Path(__file__).resolve().parent
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+
 
 
 PRINTERS = {
@@ -279,6 +284,7 @@ def create_session(session_id: Optional[str]) -> str:
         "fit": True,
         "created_at": now_iso(),
         "updated_at": now_iso(),
+        force_scene_refresh(session)
     }
     return sid
 
@@ -447,6 +453,7 @@ def session_payload(session: Dict[str, Any], include_mesh: bool = False) -> Dict
         "object_order": session["object_order"],
         "bounds": scene_bounds(session),
         "printer": session["printer"],
+        "scene_token": session.get("scene_token", ""),
         "print_assistant": pa,
         "printability_score": pa["printability_score"],
         "edit_history": session["edit_history"][-30:],
