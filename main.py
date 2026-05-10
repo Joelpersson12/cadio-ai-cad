@@ -22,12 +22,15 @@ from pydantic import BaseModel
 
 app = FastAPI(title="Cadio Live CAD Engine")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+@app.middleware("http")
+async def disable_cache_for_live_cad(request: FastAPIRequest, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.startswith("/session/") or path.startswith("/generate") or path.startswith("/parameters") or path.startswith("/feature/") or path.startswith("/object/") or path.startswith("/printers") or path.startswith("/health"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 )
 
 sessions: Dict[str, Dict[str, Any]] = {}
@@ -247,7 +250,7 @@ def apply_transform_to_workplane(model: cq.Workplane, transform: Dict[str, List[
 
 def mesh_payload_for_object(model: cq.Workplane, transform: Dict[str, List[float]]) -> Dict[str, List[float]]:
     wp = apply_transform_to_workplane(model, transform)
-    vertices, triangles = wp.val().tessellate(0.7, 0.2)
+   vertices, triangles = model.val().tessellate(0.7, 0.2)
     pos: List[float] = []
     idx: List[int] = []
     for v in vertices:
@@ -732,7 +735,12 @@ if (FRONTEND_DIST / "assets").exists():
 def serve_frontend_root():
     index_path = FRONTEND_DIST / "index.html"
     if index_path.exists():
-        return FileResponse(str(index_path))
+        return FileResponse(
+            str(index_path),
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
     return HTMLResponse("<h1>Cadio API</h1><p>Frontend build not found. Build frontend with: npm run build</p>", status_code=200)
 
 
@@ -751,8 +759,16 @@ def serve_frontend_routes(full_path: str):
         return JSONResponse(status_code=404, content={"status": "error", "message": "Not found"})
     index_path = FRONTEND_DIST / "index.html"
     if index_path.exists():
-        return FileResponse(str(index_path))
-    return JSONResponse(status_code=404, content={"status": "error", "message": "Not found"})
+        return FileResponse(
+            str(index_path),
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                  return JSONResponse(status_code=404, content={"status": "error", "message": "Not found"})
+            },
+        )
+  
 
 
 if __name__ == "__main__":
