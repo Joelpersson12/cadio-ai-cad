@@ -31,7 +31,6 @@ async def disable_cache_for_live_cad(request: FastAPIRequest, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response
-)
 
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = RLock()
