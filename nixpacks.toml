@@ -2,25 +2,17 @@
 nixPkgs = [
   "python311",
   "nodejs_20",
-
-  # CAD / OpenGL runtime (VIKTIGT)
   "mesa",
-  "mesa.drivers",
   "libGL",
   "glib",
-
-  # X dependencies (OCP/OCCT stabilitet)
   "xorg.libX11",
   "xorg.libXrender",
-  "xorg.libXext",
-  "xorg.libXi",
-  "xorg.libXrandr"
+  "xorg.libXext"
 ]
 
 [phases.install]
 cmds = [
-  "python -m pip install --upgrade pip",
-  "pip install -r requirements.txt",
+  "pip install --no-cache-dir -r requirements.txt",
   "cd frontend && npm install"
 ]
 
