@@ -4,12 +4,11 @@ nixPkgs = [
   "nodejs_20",
   "mesa",
   "mesa.drivers",
+  "libGL",
   "glib",
   "xorg.libX11",
   "xorg.libXrender",
-  "xorg.libXext",
-  "xorg.libXi",
-  "xorg.libXrandr"
+  "xorg.libXext"
 ]
 
 [phases.install]
