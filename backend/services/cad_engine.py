@@ -326,7 +326,29 @@ def rebuild_from_features(
         mesh = mesh.merge(mirrored)
 
     # Fallback
-    if not mesh.verts:
-        mesh = make_box(width, depth, thickness)
+   if not mesh.verts:
+    mesh = make_box(width, depth, thickness)
 
-    return mesh
+mesh = fit_to_build_volume(mesh)
+
+return mesh
+    
+    def fit_to_build_volume(mesh: TriMesh, max_x=150.0, max_y=150.0, max_z=150.0) -> TriMesh:
+    bbox = bounding_box(mesh)
+
+    sx = max_x / max(bbox["x"], 1e-6)
+    sy = max_y / max(bbox["y"], 1e-6)
+    sz = max_z / max(bbox["z"], 1e-6)
+
+    scale = min(sx, sy, sz, 1.0)
+
+    if scale >= 1.0:
+        return mesh
+
+    return mesh.transformed(
+        Transform(
+            position=[0.0, 0.0, 0.0],
+            rotation=[0.0, 0.0, 0.0],
+            scale=[scale, scale, scale],
+        )
+    )
