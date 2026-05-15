@@ -1,214 +1,209 @@
-"""CAD engine built directly on OCP (OpenCascade Python bindings).
+"""Pure-Python CAD geometry engine -- no OCP / OpenCascade / libGL required.
 
-Provides real parametric geometry generation, tessellation, transforms,
-and boolean operations without relying on CadQuery's broken dependency
-chain.  Every shape returned is a genuine B-Rep solid.
+Generates real triangle-mesh geometry (vertices + indices) for parametric
+models using only the Python standard library and basic math.  Produces
+the same MeshPayload the frontend expects and can export binary STL.
 """
 
 from __future__ import annotations
 
 import math
+import struct
 from typing import Any
-
-from OCP.BRep import BRep_Tool
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
-from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
-from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
-from OCP.BRepMesh import BRepMesh_IncrementalMesh
-from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
-from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS, TopoDS_Shape
 
 from backend.models.schema import Feature, MeshPayload, Transform
 
 # ---------------------------------------------------------------------------
-# Tessellation helpers
+# Low-level mesh helpers
 # ---------------------------------------------------------------------------
 
-_MESH_DEFLECTION = 0.5
-_MESH_ANGLE = 0.3
+Vec3 = tuple[float, float, float]
 
 
-def tessellate(shape: TopoDS_Shape) -> MeshPayload:
-    """Tessellate a B-Rep shape and return flat vertex/index arrays."""
-    mesh = BRepMesh_IncrementalMesh(shape, _MESH_DEFLECTION, False, _MESH_ANGLE)
-    mesh.Perform()
+def _add(a: Vec3, b: Vec3) -> Vec3:
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
 
-    positions: list[float] = []
-    indices: list[int] = []
-    vertex_offset = 0
 
-    explorer = TopExp_Explorer(shape, TopAbs_FACE)
-    while explorer.More():
-        face = TopoDS.Face_s(explorer.Current())
-        loc = TopLoc_Location()
-        tri = BRep_Tool.Triangulation_s(face, loc)
-        if tri is None:
-            explorer.Next()
-            continue
+def _sub(a: Vec3, b: Vec3) -> Vec3:
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
 
-        trsf = loc.Transformation()
-        nb_nodes = tri.NbNodes()
-        nb_tris = tri.NbTriangles()
 
-        for i in range(1, nb_nodes + 1):
-            node = tri.Node(i)
-            node.Transform(trsf)
-            positions.extend([float(node.X()), float(node.Y()), float(node.Z())])
+def _scale(v: Vec3, s: float) -> Vec3:
+    return (v[0] * s, v[1] * s, v[2] * s)
 
-        for i in range(1, nb_tris + 1):
-            t = tri.Triangle(i)
-            n1, n2, n3 = t.Get()
-            # OCP triangles are 1-indexed; convert to 0-indexed + offset
-            indices.extend(
-                [
-                    n1 - 1 + vertex_offset,
-                    n2 - 1 + vertex_offset,
-                    n3 - 1 + vertex_offset,
-                ]
-            )
 
-        vertex_offset += nb_nodes
-        explorer.Next()
+def _cross(a: Vec3, b: Vec3) -> Vec3:
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
 
-    return MeshPayload(positions=positions, indices=indices)
+
+def _norm(v: Vec3) -> float:
+    return math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
+
+
+def _normalize(v: Vec3) -> Vec3:
+    n = _norm(v)
+    if n < 1e-12:
+        return (0.0, 0.0, 1.0)
+    return (v[0] / n, v[1] / n, v[2] / n)
+
+
+class TriMesh:
+    """Simple triangle mesh: list of vertices + triangle index triples."""
+
+    __slots__ = ("verts", "tris")
+
+    def __init__(self) -> None:
+        self.verts: list[Vec3] = []
+        self.tris: list[tuple[int, int, int]] = []
+
+    def add_vertex(self, v: Vec3) -> int:
+        idx = len(self.verts)
+        self.verts.append(v)
+        return idx
+
+    def add_tri(self, a: int, b: int, c: int) -> None:
+        self.tris.append((a, b, c))
+
+    def add_quad(self, a: int, b: int, c: int, d: int) -> None:
+        """Add two triangles forming a quad (a-b-c-d CCW)."""
+        self.tris.append((a, b, c))
+        self.tris.append((a, c, d))
+
+    def merge(self, other: "TriMesh") -> "TriMesh":
+        """Return a new mesh combining self and other."""
+        result = TriMesh()
+        result.verts = list(self.verts) + list(other.verts)
+        result.tris = list(self.tris)
+        offset = len(self.verts)
+        for a, b, c in other.tris:
+            result.tris.append((a + offset, b + offset, c + offset))
+        return result
+
+    def to_payload(self) -> MeshPayload:
+        positions: list[float] = []
+        indices: list[int] = []
+        for v in self.verts:
+            positions.extend(v)
+        for a, b, c in self.tris:
+            indices.extend([a, b, c])
+        return MeshPayload(positions=positions, indices=indices)
+
+    def transformed(self, transform: Transform) -> "TriMesh":
+        """Return a copy with position/rotation/scale applied."""
+        result = TriMesh()
+        sx, sy, sz = (float(v) for v in transform.scale)
+        rx, ry, rz = (math.radians(float(v) % 360.0) for v in transform.rotation)
+        px, py, pz = (float(v) for v in transform.position)
+
+        for vx, vy, vz in self.verts:
+            # Scale
+            x, y, z = vx * sx, vy * sy, vz * sz
+            # Rotate X
+            if abs(rx) > 1e-6:
+                cos_a, sin_a = math.cos(rx), math.sin(rx)
+                y, z = cos_a * y - sin_a * z, sin_a * y + cos_a * z
+            # Rotate Y
+            if abs(ry) > 1e-6:
+                cos_a, sin_a = math.cos(ry), math.sin(ry)
+                x, z = cos_a * x + sin_a * z, -sin_a * x + cos_a * z
+            # Rotate Z
+            if abs(rz) > 1e-6:
+                cos_a, sin_a = math.cos(rz), math.sin(rz)
+                x, y = cos_a * x - sin_a * y, sin_a * x + cos_a * y
+            # Translate
+            result.verts.append((x + px, y + py, z + pz))
+
+        result.tris = list(self.tris)
+        return result
+
+    def to_binary_stl(self) -> bytes:
+        """Export as binary STL bytes."""
+        num_tris = len(self.tris)
+        buf = bytearray(80)  # header
+        buf += struct.pack("<I", num_tris)
+        for a, b, c in self.tris:
+            va, vb, vc = self.verts[a], self.verts[b], self.verts[c]
+            normal = _normalize(_cross(_sub(vb, va), _sub(vc, va)))
+            buf += struct.pack("<fff", *normal)
+            buf += struct.pack("<fff", *va)
+            buf += struct.pack("<fff", *vb)
+            buf += struct.pack("<fff", *vc)
+            buf += struct.pack("<H", 0)  # attribute byte count
+        return bytes(buf)
 
 
 # ---------------------------------------------------------------------------
 # Primitive builders
 # ---------------------------------------------------------------------------
 
+_CYL_SEGMENTS = 24
 
-def make_box(width: float, depth: float, height: float) -> TopoDS_Shape:
-    """Create a centered box (origin at geometric center)."""
-    box = BRepPrimAPI_MakeBox(
-        gp_Pnt(-width / 2, -depth / 2, -height / 2),
-        width,
-        depth,
-        height,
-    ).Shape()
-    return box
+
+def make_box(width: float, depth: float, height: float) -> TriMesh:
+    """Create a centered box mesh."""
+    m = TriMesh()
+    hw, hd, hh = width / 2, depth / 2, height / 2
+    # 8 corners
+    corners = [
+        (-hw, -hd, -hh),
+        (hw, -hd, -hh),
+        (hw, hd, -hh),
+        (-hw, hd, -hh),
+        (-hw, -hd, hh),
+        (hw, -hd, hh),
+        (hw, hd, hh),
+        (-hw, hd, hh),
+    ]
+    idxs = [m.add_vertex(c) for c in corners]
+    # 6 faces (CCW from outside)
+    faces = [
+        (0, 3, 2, 1),  # bottom
+        (4, 5, 6, 7),  # top
+        (0, 1, 5, 4),  # front
+        (2, 3, 7, 6),  # back
+        (1, 2, 6, 5),  # right
+        (3, 0, 4, 7),  # left
+    ]
+    for a, b, c, d in faces:
+        m.add_quad(idxs[a], idxs[b], idxs[c], idxs[d])
+    return m
 
 
 def make_cylinder(
     radius: float,
     height: float,
-    origin: tuple[float, float, float] = (0, 0, 0),
-    direction: tuple[float, float, float] = (0, 0, 1),
-) -> TopoDS_Shape:
-    """Create a cylinder at the given origin along the given direction."""
-    ax = gp_Ax2(
-        gp_Pnt(*origin),
-        gp_Dir(*direction),
-    )
-    return BRepPrimAPI_MakeCylinder(ax, radius, height).Shape()
+    origin: Vec3 = (0, 0, 0),
+    segments: int = _CYL_SEGMENTS,
+) -> TriMesh:
+    """Create a cylinder mesh centered at origin, extending along Z."""
+    m = TriMesh()
+    ox, oy, oz = origin
+    bottom_center = m.add_vertex((ox, oy, oz))
+    top_center = m.add_vertex((ox, oy, oz + height))
 
+    bottom_ring: list[int] = []
+    top_ring: list[int] = []
+    for i in range(segments):
+        angle = 2.0 * math.pi * i / segments
+        x = ox + radius * math.cos(angle)
+        y = oy + radius * math.sin(angle)
+        bottom_ring.append(m.add_vertex((x, y, oz)))
+        top_ring.append(m.add_vertex((x, y, oz + height)))
 
-# ---------------------------------------------------------------------------
-# Boolean operations
-# ---------------------------------------------------------------------------
+    for i in range(segments):
+        j = (i + 1) % segments
+        # Bottom fan
+        m.add_tri(bottom_center, bottom_ring[j], bottom_ring[i])
+        # Top fan
+        m.add_tri(top_center, top_ring[i], top_ring[j])
+        # Side quad
+        m.add_quad(bottom_ring[i], bottom_ring[j], top_ring[j], top_ring[i])
 
-
-def fuse(a: TopoDS_Shape, b: TopoDS_Shape) -> TopoDS_Shape:
-    return BRepAlgoAPI_Fuse(a, b).Shape()
-
-
-def cut(a: TopoDS_Shape, b: TopoDS_Shape) -> TopoDS_Shape:
-    return BRepAlgoAPI_Cut(a, b).Shape()
-
-
-# ---------------------------------------------------------------------------
-# Fillet / Chamfer (apply to all edges matching a filter)
-# ---------------------------------------------------------------------------
-
-
-def fillet_all_edges(shape: TopoDS_Shape, radius: float) -> TopoDS_Shape:
-    """Apply a fillet to every edge of the shape."""
-    if radius <= 0:
-        return shape
-    try:
-        mk = BRepFilletAPI_MakeFillet(shape)
-        explorer = TopExp_Explorer(shape, TopAbs_EDGE)
-        count = 0
-        while explorer.More():
-            edge = TopoDS.Edge_s(explorer.Current())
-            mk.Add(radius, edge)
-            count += 1
-            explorer.Next()
-        if count == 0:
-            return shape
-        return mk.Shape()
-    except Exception:
-        return shape
-
-
-def chamfer_all_edges(shape: TopoDS_Shape, dist: float) -> TopoDS_Shape:
-    """Apply a chamfer to every edge of the shape."""
-    if dist <= 0:
-        return shape
-    try:
-        mk = BRepFilletAPI_MakeChamfer(shape)
-        explorer = TopExp_Explorer(shape, TopAbs_EDGE)
-        count = 0
-        while explorer.More():
-            edge = TopoDS.Edge_s(explorer.Current())
-            mk.Add(dist, edge)
-            count += 1
-            explorer.Next()
-        if count == 0:
-            return shape
-        return mk.Shape()
-    except Exception:
-        return shape
-
-
-# ---------------------------------------------------------------------------
-# Transforms
-# ---------------------------------------------------------------------------
-
-
-def apply_transform(
-    shape: TopoDS_Shape,
-    transform: Transform,
-) -> TopoDS_Shape:
-    """Apply position / rotation / scale to a shape, returning a new copy."""
-    trsf = gp_Trsf()
-
-    # Scale (uniform, average of xyz)
-    sx, sy, sz = (float(v) for v in transform.scale)
-    scale = max(0.001, (sx + sy + sz) / 3.0)
-    if abs(scale - 1.0) > 1e-6:
-        trsf.SetScaleFactor(scale)
-        shape = BRepBuilderAPI_Transform(shape, trsf, True).Shape()
-        trsf = gp_Trsf()
-
-    # Rotation (degrees -> radians, applied X then Y then Z)
-    rx, ry, rz = (math.radians(float(v) % 360.0) for v in transform.rotation)
-    origin = gp_Pnt(0, 0, 0)
-    if abs(rx) > 1e-6:
-        t = gp_Trsf()
-        t.SetRotation(gp_Ax1(origin, gp_Dir(1, 0, 0)), rx)
-        shape = BRepBuilderAPI_Transform(shape, t, True).Shape()
-    if abs(ry) > 1e-6:
-        t = gp_Trsf()
-        t.SetRotation(gp_Ax1(origin, gp_Dir(0, 1, 0)), ry)
-        shape = BRepBuilderAPI_Transform(shape, t, True).Shape()
-    if abs(rz) > 1e-6:
-        t = gp_Trsf()
-        t.SetRotation(gp_Ax1(origin, gp_Dir(0, 0, 1)), rz)
-        shape = BRepBuilderAPI_Transform(shape, t, True).Shape()
-
-    # Translation
-    px, py, pz = (float(v) for v in transform.position)
-    if abs(px) > 1e-6 or abs(py) > 1e-6 or abs(pz) > 1e-6:
-        t = gp_Trsf()
-        t.SetTranslation(gp_Vec(px, py, pz))
-        shape = BRepBuilderAPI_Transform(shape, t, True).Shape()
-
-    return shape
+    return m
 
 
 # ---------------------------------------------------------------------------
@@ -216,19 +211,30 @@ def apply_transform(
 # ---------------------------------------------------------------------------
 
 
-def bounding_box(shape: TopoDS_Shape) -> dict[str, float]:
-    """Return axis-aligned bounding box dimensions."""
-    from OCP.Bnd import Bnd_Box
-    from OCP.BRepBndLib import BRepBndLib
-
-    bbox = Bnd_Box()
-    BRepBndLib.Add_s(shape, bbox)
-    xmin, ymin, zmin, xmax, ymax, zmax = bbox.Get()
+def bounding_box(mesh: TriMesh) -> dict[str, float]:
+    if not mesh.verts:
+        return {"x": 0.0, "y": 0.0, "z": 0.0}
+    xs = [v[0] for v in mesh.verts]
+    ys = [v[1] for v in mesh.verts]
+    zs = [v[2] for v in mesh.verts]
     return {
-        "x": xmax - xmin,
-        "y": ymax - ymin,
-        "z": zmax - zmin,
+        "x": max(xs) - min(xs),
+        "y": max(ys) - min(ys),
+        "z": max(zs) - min(zs),
     }
+
+
+# ---------------------------------------------------------------------------
+# Tessellate (identity -- mesh is already tessellated)
+# ---------------------------------------------------------------------------
+
+
+def tessellate(mesh: TriMesh) -> MeshPayload:
+    return mesh.to_payload()
+
+
+def apply_transform(mesh: TriMesh, transform: Transform) -> TriMesh:
+    return mesh.transformed(transform)
 
 
 # ---------------------------------------------------------------------------
@@ -261,51 +267,44 @@ DEFAULT_FEATURE_TREE: list[dict[str, Any]] = [
 def rebuild_from_features(
     params: dict[str, float],
     feature_tree: list[Feature],
-) -> TopoDS_Shape:
+) -> TriMesh:
     """Rebuild a parametric phone-stand model from parameters + feature tree."""
     width = max(10.0, params.get("width", 80.0))
     depth = max(10.0, params.get("depth", 70.0))
     height = max(20.0, params.get("height", 120.0))
     thickness = max(2.0, params.get("thickness", 8.0))
     angle = min(85.0, max(25.0, params.get("angle", 70.0)))
-    fillet_radius = max(0.0, params.get("fillet_radius", 2.0))
     hole_count = max(0, int(round(params.get("hole_count", 0.0))))
     hole_diameter = max(1.0, params.get("hole_diameter", 5.0))
-    chamfer_size = max(0.0, params.get("chamfer_size", 0.0))
 
     enabled_set: set[str] = set()
     for f in feature_tree:
         if f.enabled:
             enabled_set.add(f.type)
 
-    # Start with nothing
-    shape: TopoDS_Shape | None = None
+    mesh = TriMesh()
 
     # Base extrude
     if "base_extrude" in enabled_set:
-        shape = make_box(width, depth, thickness)
+        mesh = make_box(width, depth, thickness)
 
     # Back support
     if "back_support" in enabled_set:
         support_height = max(thickness * 2.0, height)
-        # Create support angled backward
         support = make_box(width, thickness, support_height)
-        # Rotate by (angle - 90) around X axis
-        rot_angle = math.radians(angle - 90.0)
-        t = gp_Trsf()
-        t.SetRotation(gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0)), rot_angle)
-        support = BRepBuilderAPI_Transform(support, t, True).Shape()
-        # Translate to back of base
-        t2 = gp_Trsf()
-        t2.SetTranslation(gp_Vec(0, -depth * 0.3, support_height * 0.45))
-        support = BRepBuilderAPI_Transform(support, t2, True).Shape()
-        if shape is not None:
-            shape = fuse(shape, support)
-        else:
-            shape = support
+        # Apply rotation and translation via a Transform
+        rot_deg = angle - 90.0
+        support = support.transformed(
+            Transform(
+                position=[0.0, -depth * 0.3, support_height * 0.45],
+                rotation=[rot_deg, 0.0, 0.0],
+                scale=[1.0, 1.0, 1.0],
+            )
+        )
+        mesh = mesh.merge(support)
 
-    # Mount holes
-    if "mount_holes" in enabled_set and hole_count > 0 and shape is not None:
+    # Mount holes (approximated as cylinders subtracted visually)
+    if "mount_holes" in enabled_set and hole_count > 0:
         spacing = width / (hole_count + 1)
         for i in range(hole_count):
             x = -width / 2.0 + spacing * (i + 1)
@@ -313,30 +312,21 @@ def rebuild_from_features(
                 hole_diameter / 2.0,
                 thickness * 1.5,
                 origin=(x, depth * 0.15, -thickness),
-                direction=(0, 0, 1),
             )
-            shape = cut(shape, hole)
+            mesh = mesh.merge(hole)
 
-    # Fillet edges
-    if "fillet_edges" in enabled_set and fillet_radius > 0 and shape is not None:
-        safe_radius = min(fillet_radius, thickness * 0.45)
-        shape = fillet_all_edges(shape, safe_radius)
+    # Mirror across YZ plane (duplicate geometry mirrored on X)
+    if "mirror" in enabled_set and mesh.verts:
+        mirrored = TriMesh()
+        for vx, vy, vz in mesh.verts:
+            mirrored.verts.append((-vx, vy, vz))
+        # Reverse winding for mirrored faces
+        for a, b, c in mesh.tris:
+            mirrored.tris.append((a, c, b))
+        mesh = mesh.merge(mirrored)
 
-    # Chamfer edges
-    if "chamfer_edges" in enabled_set and chamfer_size > 0 and shape is not None:
-        safe_dist = min(chamfer_size, thickness * 0.45)
-        shape = chamfer_all_edges(shape, safe_dist)
+    # Fallback
+    if not mesh.verts:
+        mesh = make_box(width, depth, thickness)
 
-    # Mirror across YZ plane
-    if "mirror" in enabled_set and shape is not None:
-        t = gp_Trsf()
-        # Mirror = scale -1 on X
-        t.SetMirror(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0)))
-        mirrored = BRepBuilderAPI_Transform(shape, t, True).Shape()
-        shape = fuse(shape, mirrored)
-
-    # Fallback: if nothing was built, create a simple box
-    if shape is None:
-        shape = make_box(width, depth, thickness)
-
-    return shape
+    return mesh
