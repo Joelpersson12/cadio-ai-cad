@@ -4,23 +4,24 @@
 
 @layer base {
   :root {
-    --background: 0 0% 5%;
+    /* Updated colors - less dark, more visible */
+    --background: 240 6% 10%;
     --foreground: 0 0% 95%;
     
-    --card: 0 0% 8%;
+    --card: 240 5% 13%;
     --card-foreground: 0 0% 95%;
     
-    --popover: 0 0% 8%;
+    --popover: 240 5% 13%;
     --popover-foreground: 0 0% 95%;
     
     --primary: 212 100% 48%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 70%;
+    --secondary: 240 4% 18%;
+    --secondary-foreground: 0 0% 80%;
     
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 55%;
+    --muted: 240 4% 22%;
+    --muted-foreground: 0 0% 60%;
     
     --accent: 212 100% 48%;
     --accent-foreground: 0 0% 100%;
@@ -31,8 +32,8 @@
     --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
     
-    --border: 0 0% 15%;
-    --input: 0 0% 12%;
+    --border: 240 4% 20%;
+    --input: 240 4% 16%;
     --ring: 212 100% 48%;
     
     --radius: 0.75rem;
@@ -53,25 +54,38 @@
     height: 100%;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 /* Custom scrollbar for dark theme */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
-  border-radius: 3px;
+  background: hsl(var(--secondary));
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground));
-  border-radius: 3px;
+  background: hsl(var(--muted-foreground) / 0.5);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--foreground) / 0.4);
+  background: hsl(var(--muted-foreground) / 0.7);
+}
+
+/* Smooth transitions */
+button, a {
+  transition: all 0.15s ease;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
