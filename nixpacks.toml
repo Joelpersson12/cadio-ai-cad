@@ -1,5 +1,17 @@
 [phases.setup]
-nixPkgs = ["python311", "nodejs_20", "libGL", "xorg.libX11", "xorg.libXrender", "xorg.libXext"]
+nixPkgs = [
+  "python311",
+  "nodejs_20",
+  "mesa",
+  "mesa.drivers",
+  "libGL",
+  "glib",
+  "xorg.libX11",
+  "xorg.libXrender",
+  "xorg.libXext",
+  "xorg.libXi",
+  "xorg.libXrandr"
+]
 
 [phases.install]
 cmds = [
