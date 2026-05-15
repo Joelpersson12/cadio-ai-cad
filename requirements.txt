@@ -4,3 +4,4 @@ pydantic>=2.10.0
 websockets>=14.0
 
 cadquery==2.4.0
+gunicorn
