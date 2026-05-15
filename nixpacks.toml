@@ -2,25 +2,32 @@
 nixPkgs = [
   "python311",
   "nodejs_20",
+
+  # CAD / OpenGL runtime (VIKTIGT)
   "mesa",
   "mesa.drivers",
   "libGL",
   "glib",
+
+  # X dependencies (OCP/OCCT stabilitet)
   "xorg.libX11",
   "xorg.libXrender",
-  "xorg.libXext"
+  "xorg.libXext",
+  "xorg.libXi",
+  "xorg.libXrandr"
 ]
 
 [phases.install]
 cmds = [
-  "python -m venv /opt/venv",
-  "/opt/venv/bin/pip install -r requirements.txt",
+  "python -m pip install --upgrade pip",
+  "pip install -r requirements.txt",
   "cd frontend && npm install"
 ]
+
 [phases.build]
 cmds = [
   "cd frontend && npm run build"
 ]
 
 [start]
-cmd = "python main.py"
+cmd = "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1"
