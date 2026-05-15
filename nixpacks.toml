@@ -4,7 +4,6 @@ nixPkgs = [
   "nodejs_20",
   "mesa",
   "mesa.drivers",
-  "libGL",
   "glib",
   "xorg.libX11",
   "xorg.libXrender",
@@ -15,6 +14,7 @@ nixPkgs = [
 
 [phases.install]
 cmds = [
+  "python -m pip install --upgrade pip",
   "pip install -r requirements.txt",
   "cd frontend && npm install"
 ]
@@ -25,4 +25,4 @@ cmds = [
 ]
 
 [start]
-cmd = "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+cmd = "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
