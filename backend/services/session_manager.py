@@ -7,18 +7,16 @@ this module so locking is centralized.
 
 from __future__ import annotations
 
-import time
 import uuid
 from datetime import datetime, timezone
 from threading import RLock
 from typing import Any
 
-from OCP.TopoDS import TopoDS_Shape
-
 from backend.models.schema import Feature, Transform
 from backend.services.cad_engine import (
     DEFAULT_FEATURE_TREE,
     DEFAULT_PARAMETERS,
+    TriMesh,
     rebuild_from_features,
 )
 
@@ -167,7 +165,7 @@ def remove_object(session: Session, object_id: str) -> bool:
 
 
 def rebuild_object(obj: CadObject) -> None:
-    """Rebuild the OCP shape from current parameters + feature tree."""
+    """Rebuild the mesh from current parameters + feature tree."""
     obj["shape"] = rebuild_from_features(obj["parameters"], obj["feature_tree"])
 
 

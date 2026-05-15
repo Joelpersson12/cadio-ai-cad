@@ -1,10 +1,8 @@
 {
-  "include": ["backend"],
-  "venvPath": ".",
-  "venv": ".venv",
+  "include": ["backend", "main.py"],
   "pythonVersion": "3.13",
+  "pythonPlatform": "Linux",
   "typeCheckingMode": "basic",
-  "reportAttributeAccessIssue": "warning",
   "reportMissingTypeStubs": false,
   "reportUnknownMemberType": false,
   "reportUnknownVariableType": false,
