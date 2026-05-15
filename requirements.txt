@@ -1,7 +1,5 @@
-fastapi>=0.115.0
-uvicorn[standard]>=0.34.0
-pydantic>=2.10.0
-websockets>=14.0
-
-cadquery==2.4.0
-gunicorn
+fastapi
+uvicorn[standard]
+pydantic
+websockets
+cadquery-ocp
