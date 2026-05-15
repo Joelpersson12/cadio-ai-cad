@@ -4,6 +4,9 @@ const API_BASE = (
   import.meta.env.VITE_API_BASE || "https://cadio-ai-cad-production.up.railway.app"
 ).replace(/\/+$/, "");
 
+// Generation modes
+export type GenerateMode = "text" | "image" | "hybrid";
+
 // Response format from /generate endpoint
 export interface GenerateResponse {
   mesh: {
@@ -15,8 +18,8 @@ export interface GenerateResponse {
     y: number;
     z: number;
   };
+  source: "text" | "image";
   scaled: boolean;
-  printer: string;
 }
 
 // Health check endpoint
@@ -29,9 +32,11 @@ export async function healthCheck(): Promise<{ status: string; message?: string 
   return data;
 }
 
-// Generate endpoint - creates CAD model from prompt
+// Generate endpoint - creates CAD model from prompt/image
 export async function generate(payload: {
   prompt: string;
+  image?: string; // base64 encoded image
+  mode: GenerateMode;
   printer: string;
   fit: boolean;
 }): Promise<GenerateResponse> {
