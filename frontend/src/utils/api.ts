@@ -3,8 +3,26 @@
 import type { ScenePayload, PrinterProfile } from "./types";
 
 const API_BASE = (
-  import.meta.env.VITE_API_BASE || window.location.origin
+  import.meta.env.VITE_API_BASE || "https://cadio-ai-cad-production.up.railway.app"
 ).replace(/\/+$/, "");
+
+// Health check endpoint
+export async function healthCheck(): Promise<{ status: string; message?: string }> {
+  const res = await fetch(`${API_BASE}/health`);
+  const data = await res.json();
+  return data;
+}
+
+// Simple generate endpoint for basic prompts
+export async function generateSimple(prompt: string): Promise<unknown> {
+  const res = await fetch(`${API_BASE}/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = await res.json();
+  return data;
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
