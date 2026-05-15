@@ -44,14 +44,12 @@ export default function LandingPage() {
 
           {/* Title */}
           <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-balance leading-tight">
-            Design CAD models
-            <br />
-            <span className="text-primary">with AI</span>
+            Cadio AI CAD
           </h1>
 
           {/* Subtitle */}
           <p className="text-xl text-muted-foreground max-w-xl mx-auto text-balance leading-relaxed">
-            Create printable 3D models from text or images. Generate, iterate, and export production-ready designs in minutes.
+            Generate printable 3D models from text or images. Design, iterate, and export production-ready CAD in minutes.
           </p>
 
           {/* CTA Buttons */}

@@ -1,30 +1,63 @@
-/** AI command panel - left sidebar for natural language CAD editing. */
+/** AI command panel - left sidebar for CAD generation controls. */
 
 import { useState } from "react";
-import { useCadStore } from "../stores/cadStore";
-import { healthCheck, generateSimple } from "../utils/api";
+import { healthCheck, generate, type GenerateResponse } from "../utils/api";
+
+// Printer definitions with build volumes (in mm)
+const PRINTERS = {
+  "flashforge_adventurer_3": {
+    name: "Flashforge Adventurer 3",
+    volume: { x: 150, y: 150, z: 150 },
+  },
+  "ender_3": {
+    name: "Ender 3",
+    volume: { x: 220, y: 220, z: 250 },
+  },
+  "prusa_mk3s": {
+    name: "Prusa MK3S",
+    volume: { x: 250, y: 210, z: 210 },
+  },
+  "bambu_a1": {
+    name: "Bambu A1",
+    volume: { x: 256, y: 256, z: 256 },
+  },
+} as const;
+
+type PrinterKey = keyof typeof PRINTERS;
 
 interface AiPanelProps {
-  onApiResponse: (response: unknown) => void;
+  onApiResponse: (response: GenerateResponse | { error: string } | { status: string; message?: string }) => void;
+  onMeshGenerated: (response: GenerateResponse) => void;
 }
 
-export default function AiPanel({ onApiResponse }: AiPanelProps) {
+export default function AiPanel({ onApiResponse, onMeshGenerated }: AiPanelProps) {
   const [prompt, setPrompt] = useState("");
+  const [printer, setPrinter] = useState<PrinterKey>("flashforge_adventurer_3");
+  const [fitToPrinter, setFitToPrinter] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [healthStatus, setHealthStatus] = useState<string | null>(null);
-  const { status, runPrompt } = useCadStore();
+  const [healthStatus, setHealthStatus] = useState<"healthy" | "unhealthy" | "error" | null>(null);
+  const [status, setStatus] = useState<string>("Ready");
+
+  const selectedPrinter = PRINTERS[printer];
 
   const handleGenerate = async () => {
     if (!prompt.trim() || isLoading) return;
     
     setIsLoading(true);
+    setStatus("Generating model...");
     try {
-      const response = await generateSimple(prompt);
+      const response = await generate({
+        prompt: prompt.trim(),
+        printer,
+        fit: fitToPrinter,
+      });
       onApiResponse(response);
-      // Also run through the store for 3D updates
-      void runPrompt(prompt);
+      onMeshGenerated(response);
+      setStatus(response.scaled ? "Model generated (scaled to fit)" : "Model generated");
     } catch (error) {
-      onApiResponse({ error: error instanceof Error ? error.message : "Unknown error" });
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      onApiResponse({ error: errorMessage });
+      setStatus(`Error: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -33,13 +66,17 @@ export default function AiPanel({ onApiResponse }: AiPanelProps) {
   const handleHealthCheck = async () => {
     setIsLoading(true);
     setHealthStatus(null);
+    setStatus("Checking health...");
     try {
       const response = await healthCheck();
       onApiResponse(response);
       setHealthStatus(response.status === "ok" ? "healthy" : "unhealthy");
+      setStatus("Backend is healthy");
     } catch (error) {
-      onApiResponse({ error: error instanceof Error ? error.message : "Connection failed" });
+      const errorMessage = error instanceof Error ? error.message : "Connection failed";
+      onApiResponse({ error: errorMessage });
       setHealthStatus("error");
+      setStatus(`Health check failed: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -56,26 +93,71 @@ export default function AiPanel({ onApiResponse }: AiPanelProps) {
     <div className="flex flex-col h-full">
       {/* Panel Header */}
       <div className="px-5 py-4 border-b border-border">
-        <h2 className="text-base font-semibold text-foreground">AI Copilot</h2>
+        <h2 className="text-base font-semibold text-foreground">Controls</h2>
         <p className="text-xs text-muted-foreground mt-1">
-          Describe what you want to create
+          Configure and generate 3D models
         </p>
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-5 flex flex-col gap-4 overflow-y-auto">
+      <div className="flex-1 p-5 flex flex-col gap-5 overflow-y-auto">
         {/* Prompt Input */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Prompt
+            CAD Prompt
           </label>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Create a phone stand with rounded edges..."
-            className="w-full min-h-[140px] rounded-lg border border-border bg-input text-foreground p-4 text-sm resize-none placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
+            className="w-full min-h-[120px] rounded-lg border border-border bg-input text-foreground p-4 text-sm resize-none placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
           />
+        </div>
+
+        {/* Printer Selection */}
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Printer
+          </label>
+          <select
+            value={printer}
+            onChange={(e) => setPrinter(e.target.value as PrinterKey)}
+            className="w-full rounded-lg border border-border bg-input text-foreground p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all appearance-none cursor-pointer"
+          >
+            {Object.entries(PRINTERS).map(([key, { name, volume }]) => (
+              <option key={key} value={key}>
+                {name} ({volume.x} x {volume.y} x {volume.z} mm)
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Build volume: {selectedPrinter.volume.x} x {selectedPrinter.volume.y} x {selectedPrinter.volume.z} mm
+          </p>
+        </div>
+
+        {/* Fit to Printer Toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="text-sm font-medium text-foreground">
+              Fit to printer volume
+            </label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Auto-scale model to fit build plate
+            </p>
+          </div>
+          <button
+            onClick={() => setFitToPrinter(!fitToPrinter)}
+            className={`relative w-12 h-6 rounded-full transition-colors ${
+              fitToPrinter ? "bg-primary" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                fitToPrinter ? "left-7" : "left-1"
+              }`}
+            />
+          </button>
         </div>
 
         {/* Action Buttons */}
@@ -91,14 +173,14 @@ export default function AiPanel({ onApiResponse }: AiPanelProps) {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Processing...
+                Generating...
               </span>
             ) : (
               <>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                   <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                 </svg>
-                Generate CAD
+                Generate Model
               </>
             )}
           </button>
@@ -114,7 +196,7 @@ export default function AiPanel({ onApiResponse }: AiPanelProps) {
             Health Check
             {healthStatus && (
               <span className={`ml-1 w-2 h-2 rounded-full ${
-                healthStatus === "healthy" ? "bg-success" : "bg-destructive"
+                healthStatus === "healthy" ? "bg-green-500" : "bg-red-500"
               }`} />
             )}
           </button>
@@ -123,7 +205,7 @@ export default function AiPanel({ onApiResponse }: AiPanelProps) {
         {/* Quick Commands */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Quick Commands
+            Quick Prompts
           </label>
           <div className="flex flex-wrap gap-2">
             {[
@@ -146,13 +228,11 @@ export default function AiPanel({ onApiResponse }: AiPanelProps) {
         </div>
 
         {/* Status */}
-        {status && (
-          <div className="mt-auto pt-4 border-t border-border">
-            <p className="text-xs text-muted-foreground">
-              Status: <span className="text-foreground">{status}</span>
-            </p>
-          </div>
-        )}
+        <div className="mt-auto pt-4 border-t border-border">
+          <p className="text-xs text-muted-foreground">
+            Status: <span className="text-foreground">{status}</span>
+          </p>
+        </div>
       </div>
     </div>
   );

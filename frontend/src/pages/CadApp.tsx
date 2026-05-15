@@ -1,34 +1,21 @@
 /** CAD App page - Main tool with 3-panel layout */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useCadStore } from "../stores/cadStore";
-import { useWebSocket } from "../hooks/useWebSocket";
 import CadViewport from "../components/CadViewport";
 import AiPanel from "../components/AiPanel";
 import ResponsePanel from "../components/ResponsePanel";
+import type { GenerateResponse } from "../utils/api";
+
+type ApiResponse = GenerateResponse | { error: string } | { status: string; message?: string };
 
 export default function CadApp() {
-  const {
-    sessionId,
-    objects,
-    selectedObjectId,
-    transformMode,
-    loadPrinters,
-    applyScenePayload,
-    onSelectObject,
-    onTransformCommit,
-  } = useCadStore();
+  const [apiResponse, setApiResponse] = useState<ApiResponse | null>(null);
+  const [meshData, setMeshData] = useState<GenerateResponse | null>(null);
 
-  const [apiResponse, setApiResponse] = useState<unknown>(null);
-
-  // Load printers on mount
-  useEffect(() => {
-    void loadPrinters();
-  }, [loadPrinters]);
-
-  // WebSocket for real-time sync
-  useWebSocket(sessionId || null, applyScenePayload);
+  const handleMeshGenerated = (response: GenerateResponse) => {
+    setMeshData(response);
+  };
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
@@ -58,9 +45,11 @@ export default function CadApp() {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <p className="text-sm text-muted-foreground">
-            {sessionId ? `Session: ${sessionId.slice(0, 8)}...` : "Ready"}
-          </p>
+          {meshData && (
+            <p className="text-sm text-muted-foreground">
+              {meshData.mesh.vertices.length} vertices | {meshData.mesh.faces.length} faces
+            </p>
+          )}
           <Link
             to="/"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -72,23 +61,20 @@ export default function CadApp() {
 
       {/* Main content */}
       <div className="flex-1 grid grid-cols-[320px_1fr_380px] gap-3 p-3 overflow-hidden min-h-0">
-        {/* Left panel - AI Copilot */}
+        {/* Left panel - Controls */}
         <aside className="bg-card rounded-xl border border-border overflow-hidden flex flex-col">
-          <AiPanel onApiResponse={setApiResponse} />
+          <AiPanel 
+            onApiResponse={setApiResponse} 
+            onMeshGenerated={handleMeshGenerated}
+          />
         </aside>
 
         {/* Center - 3D Viewport */}
         <main className="rounded-xl overflow-hidden border border-border min-h-0">
-          <CadViewport
-            objects={objects}
-            selectedObjectId={selectedObjectId}
-            onSelectObject={(id) => void onSelectObject(id)}
-            transformMode={transformMode}
-            onTransformCommit={(id, t) => void onTransformCommit(id, t)}
-          />
+          <CadViewport meshData={meshData} />
         </main>
 
-        {/* Right panel - Response */}
+        {/* Right panel - Inspector */}
         <aside className="bg-card rounded-xl border border-border overflow-hidden flex flex-col">
           <ResponsePanel response={apiResponse} />
         </aside>

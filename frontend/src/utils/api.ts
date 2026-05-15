@@ -1,129 +1,53 @@
 /** HTTP API client for the Cadio backend. */
 
-import type { ScenePayload, PrinterProfile } from "./types";
-
 const API_BASE = (
   import.meta.env.VITE_API_BASE || "https://cadio-ai-cad-production.up.railway.app"
 ).replace(/\/+$/, "");
 
+// Response format from /generate endpoint
+export interface GenerateResponse {
+  mesh: {
+    vertices: [number, number, number][];
+    faces: [number, number, number][];
+  };
+  bbox: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  scaled: boolean;
+  printer: string;
+}
+
 // Health check endpoint
 export async function healthCheck(): Promise<{ status: string; message?: string }> {
   const res = await fetch(`${API_BASE}/health`);
-  const data = await res.json();
-  return data;
-}
-
-// Simple generate endpoint for basic prompts
-export async function generateSimple(prompt: string): Promise<unknown> {
-  const res = await fetch(`${API_BASE}/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
-  });
-  const data = await res.json();
-  return data;
-}
-
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const data = await res.json();
-  if (!res.ok || data.status === "error") {
-    throw new Error(data.message || "API request failed");
+  if (!res.ok) {
+    throw new Error(`Health check failed: ${res.status}`);
   }
-  return data as T;
+  const data = await res.json();
+  return data;
 }
 
-// ---------------------------------------------------------------------------
-// API methods
-// ---------------------------------------------------------------------------
-
+// Generate endpoint - creates CAD model from prompt
 export async function generate(payload: {
-  session_id?: string;
   prompt: string;
   printer: string;
   fit: boolean;
-}): Promise<ScenePayload> {
-  return request<ScenePayload>("/api/generate", {
+}): Promise<GenerateResponse> {
+  const res = await fetch(`${API_BASE}/generate`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-}
-
-export async function updateParameters(payload: {
-  session_id: string;
-  object_id?: string;
-  parameters: Record<string, number>;
-}): Promise<ScenePayload> {
-  return request<ScenePayload>("/api/parameters", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function toggleFeature(payload: {
-  session_id: string;
-  object_id?: string;
-  feature_id: string;
-  enabled: boolean;
-}): Promise<ScenePayload> {
-  return request<ScenePayload>("/api/feature/toggle", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function getMesh(sessionId: string): Promise<ScenePayload> {
-  return request<ScenePayload>(
-    `/api/session/${sessionId}/mesh?_=${Date.now()}`,
-  );
-}
-
-export async function selectObject(payload: {
-  session_id: string;
-  object_id: string;
-}): Promise<ScenePayload> {
-  return request<ScenePayload>("/api/object/select", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function deleteObject(payload: {
-  session_id: string;
-  object_id: string;
-}): Promise<ScenePayload> {
-  return request<ScenePayload>("/api/object/delete", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function updateObjectTransform(payload: {
-  session_id: string;
-  object_id: string;
-  position?: [number, number, number];
-  rotation?: [number, number, number];
-  scale?: [number, number, number];
-}): Promise<ScenePayload> {
-  return request<ScenePayload>("/api/object/transform", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function listPrinters(): Promise<{
-  status: string;
-  default: string;
-  printers: Record<string, PrinterProfile>;
-}> {
-  return request("/api/printers");
-}
-
-export function exportUrl(sessionId: string, format: string): string {
-  return `${API_BASE}/api/export/${sessionId}/${format}`;
+  
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  const data = await res.json();
+  return data;
 }
 
 export { API_BASE };
