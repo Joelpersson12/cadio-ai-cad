@@ -325,13 +325,11 @@ def rebuild_from_features(
             mirrored.tris.append((a, c, b))
         mesh = mesh.merge(mirrored)
 
-    # Fallback
-   if not mesh.verts:
-    mesh = make_box(width, depth, thickness)
+        # Fallback
+    if not mesh.verts:
+        mesh = make_box(width, depth, thickness)
 
-mesh = fit_to_build_volume(mesh)
-
-return mesh
+    return mesh
     
     def fit_to_build_volume(mesh: TriMesh, max_x=150.0, max_y=150.0, max_z=150.0) -> TriMesh:
     bbox = bounding_box(mesh)
