@@ -329,9 +329,10 @@ def rebuild_from_features(
     if not mesh.verts:
         mesh = make_box(width, depth, thickness)
 
-    return mesh
-    
-    def fit_to_build_volume(mesh: TriMesh, max_x=150.0, max_y=150.0, max_z=150.0) -> TriMesh:
+     return mesh
+
+
+def fit_to_build_volume(mesh: TriMesh, max_x=150.0, max_y=150.0, max_z=150.0) -> TriMesh:
     bbox = bounding_box(mesh)
 
     sx = max_x / max(bbox["x"], 1e-6)
