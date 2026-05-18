@@ -315,24 +315,32 @@ def rebuild_from_features(
             )
             mesh = mesh.merge(hole)
 
-    # Mirror across YZ plane (duplicate geometry mirrored on X)
+       # Mirror across YZ plane (duplicate geometry mirrored on X)
     if "mirror" in enabled_set and mesh.verts:
         mirrored = TriMesh()
+
         for vx, vy, vz in mesh.verts:
             mirrored.verts.append((-vx, vy, vz))
+
         # Reverse winding for mirrored faces
         for a, b, c in mesh.tris:
             mirrored.tris.append((a, c, b))
+
         mesh = mesh.merge(mirrored)
 
-        # Fallback
+    # Fallback
     if not mesh.verts:
         mesh = make_box(width, depth, thickness)
 
-     return mesh
+    return mesh
 
 
-def fit_to_build_volume(mesh: TriMesh, max_x=150.0, max_y=150.0, max_z=150.0) -> TriMesh:
+def fit_to_build_volume(
+    mesh: TriMesh,
+    max_x: float = 150.0,
+    max_y: float = 150.0,
+    max_z: float = 150.0,
+) -> TriMesh:
     bbox = bounding_box(mesh)
 
     sx = max_x / max(bbox["x"], 1e-6)
@@ -344,10 +352,15 @@ def fit_to_build_volume(mesh: TriMesh, max_x=150.0, max_y=150.0, max_z=150.0) ->
     if scale >= 1.0:
         return mesh
 
-    return mesh.transformed(
-        Transform(
-            position=[0.0, 0.0, 0.0],
-            rotation=[0.0, 0.0, 0.0],
-            scale=[scale, scale, scale],
-        )
-    )
+    scaled = TriMesh()
+
+    for vx, vy, vz in mesh.verts:
+        scaled.verts.append((
+            vx * scale,
+            vy * scale,
+            vz * scale,
+        ))
+
+    scaled.tris = list(mesh.tris)
+
+    return scaled
