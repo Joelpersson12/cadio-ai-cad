@@ -11,7 +11,7 @@ import re
 import traceback
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 
 from backend.models.schema import (
@@ -51,6 +51,7 @@ from backend.services.session_manager import (
 )
 from backend.services.geometry_validator import GeometryValidator
 from backend.services.example_discovery import ExampleDiscovery
+from backend.services.ws_manager import broadcast, connect, disconnect
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,23 @@ def health() -> dict[str, Any]:
 @router.get("/api/printers")
 def list_printers() -> dict[str, Any]:
     return {"status": "ok", "default": DEFAULT_PRINTER, "printers": PRINTERS}
+
+
+@router.get("/api/examples/search")
+def search_examples(
+    prompt: str = Query(..., min_length=1),
+    external: bool = False,
+) -> dict[str, Any] | JSONResponse:
+    """Find template and external inspiration examples for a prompt."""
+    try:
+        examples = ExampleDiscovery.discover_examples(
+            prompt,
+            include_external=external,
+        )
+        return {"status": "ok", "prompt": prompt, **examples}
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
 
 
 # ---------------------------------------------------------------------------

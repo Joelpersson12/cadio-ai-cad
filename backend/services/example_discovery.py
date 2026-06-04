@@ -37,7 +37,11 @@ class ExampleDiscovery:
         
         # Find matching template
         matching_template = ExampleDiscovery._find_template(prompt)
-        result["template"] = matching_template
+        result["template"] = (
+            ExampleDiscovery._template_to_dict(matching_template)
+            if matching_template
+            else None
+        )
         
         # Generate template-based examples
         if matching_template:
@@ -56,6 +60,17 @@ class ExampleDiscovery:
             result["external_examples"] = [ex.to_dict() for ex in external]
         
         return result
+
+    @staticmethod
+    def _template_to_dict(template: ProductTemplate) -> dict[str, Any]:
+        """Serialize a product template without its geometry function."""
+        return {
+            "name": template.name,
+            "category": template.category,
+            "description": template.description,
+            "default_params": template.default_params,
+            "default_features": template.default_features,
+        }
     
     @staticmethod
     def _find_template(prompt: str) -> ProductTemplate | None:
