@@ -12,23 +12,28 @@ import type { CadObject, TransformMode } from "../utils/types";
  
 function CameraController({ bounds }: { bounds: { x: number; y: number; z: number } }) {
   const { camera, controls } = useThree();
- 
+
   useEffect(() => {
+    // Calculate appropriate distance to frame the entire model
     const size = Math.max(bounds.x, bounds.y, bounds.z, 50);
-    const distance = size * 2.2;
-    camera.position.set(distance, distance * 0.8, distance);
+    const distance = Math.max(size * 2.5, 200);
+    
+    // Better camera positioning for isometric-like view
+    camera.position.set(distance * 0.7, distance * 0.7, distance * 0.7);
     camera.near = 0.1;
-    camera.far = distance * 20;
+    camera.far = distance * 30;
     (camera as THREE.PerspectiveCamera).updateProjectionMatrix?.();
+    
+    // Center on the build plate
     // @ts-ignore
-    controls?.target?.set(0, size * 0.2, 0);
+    controls?.target?.set(0, size * 0.15, 0);
     // @ts-ignore
     controls?.update?.();
   }, [bounds, camera, controls]);
- 
+
   return null;
 }
- 
+
 // ---------------------------------------------------------------------------
 // Mesh renderer with client-side scaling fix
 // ---------------------------------------------------------------------------
@@ -116,15 +121,31 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
   const [px, , pz] = volume;
   return (
     <group>
-      {/* Base plate */}
+      {/* Base plate - visible and textured */}
       <mesh position={[0, -0.5, 0]} receiveShadow>
         <boxGeometry args={[px, 1, pz]} />
-        <meshStandardMaterial color="#1a2030" roughness={0.9} />
+        <meshStandardMaterial 
+          color="#1a2a3a" 
+          roughness={0.95}
+          metalness={0.05}
+        />
       </mesh>
-      {/* Border lines */}
+      {/* Corner markers for orientation */}
+      {[
+        [-px / 2, 0, -pz / 2],
+        [px / 2, 0, -pz / 2],
+        [-px / 2, 0, pz / 2],
+        [px / 2, 0, pz / 2],
+      ].map((pos, i) => (
+        <mesh key={i} position={[pos[0], pos[1], pos[2]]}>
+          <sphereGeometry args={[2, 8, 8]} />
+          <meshStandardMaterial color="#4fc3f7" emissive="#2a7f99" />
+        </mesh>
+      ))}
+      {/* Border frame - enhanced visibility */}
       <lineSegments>
         <edgesGeometry args={[new THREE.BoxGeometry(px, 0.5, pz)]} />
-        <lineBasicMaterial color="#4fc3f7" opacity={0.6} transparent />
+        <lineBasicMaterial color="#5fd6ff" linewidth={2} />
       </lineSegments>
     </group>
   );
@@ -168,35 +189,35 @@ export default function CadViewport({
     >
       <color attach="background" args={["#1e1e22"]} />
  
-      {/* Lighting - much brighter */}
-      <ambientLight intensity={0.9} />
+      {/* Lighting - enhanced for clarity */}
+      <ambientLight intensity={1.2} color="#ffffff" />
       <directionalLight
-        position={[150, 200, 100]}
-        intensity={1.6}
+        position={[200, 250, 150]}
+        intensity={2.0}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
         shadow-camera-near={1}
         shadow-camera-far={2000}
-        shadow-camera-left={-300}
-        shadow-camera-right={300}
-        shadow-camera-top={300}
-        shadow-camera-bottom={-300}
+        shadow-camera-left={-400}
+        shadow-camera-right={400}
+        shadow-camera-top={400}
+        shadow-camera-bottom={-400}
       />
-      <directionalLight position={[-100, 80, -100]} intensity={0.5} color="#a0c4ff" />
-      <pointLight position={[0, 200, 0]} intensity={0.4} color="#ffffff" />
+      <directionalLight position={[-150, 120, -120]} intensity={0.8} color="#c0d9ff" />
+      <pointLight position={[0, 250, 0]} intensity={0.6} color="#ffffff" />
  
-      {/* Grid */}
+      {/* Grid - improved visibility */}
       <Grid
-        args={[printerVolume[0] * 2, printerVolume[2] * 2]}
+        args={[printerVolume[0] * 2.2, printerVolume[2] * 2.2]}
         cellSize={10}
-        cellThickness={0.5}
-        cellColor="#2a3a4a"
+        cellThickness={0.6}
+        cellColor="#1a3a4a"
         sectionSize={50}
-        sectionThickness={1.5}
-        sectionColor="#3a5a7a"
-        fadeDistance={800}
-        fadeStrength={1.5}
+        sectionThickness={1.8}
+        sectionColor="#2a5a7a"
+        fadeDistance={1000}
+        fadeStrength={2.0}
         position={[0, 0, 0]}
       />
  

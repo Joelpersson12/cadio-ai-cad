@@ -6,6 +6,63 @@ import { useWebSocket } from "./hooks/useWebSocket";
 import CadViewport from "./components/CadViewport";
 import AiPanel from "./components/AiPanel";
 import ObjectInspector from "./components/ObjectInspector";
+import ExampleBrowser from "./components/ExampleBrowser";
+import type { ExampleObject } from "./components/ExampleBrowser";
+
+// Mobile examples sheet for inspiration
+function MobileExamplesSheet({
+  open,
+  onClose,
+  onSelectExample,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSelectExample: (example: ExampleObject) => Promise<void>;
+}) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSelect = async (example: ExampleObject) => {
+    setIsLoading(true);
+    try {
+      await onSelectExample(example);
+      onClose();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onClose}
+        />
+      )}
+      {/* Sheet */}
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-50 md:hidden bg-[#16202e] border-t border-cadio-border rounded-t-2xl transition-transform duration-300 ${
+          open ? "translate-y-0" : "translate-y-full"
+        }`}
+        style={{ maxHeight: "80vh", overflowY: "auto" }}
+      >
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-2">
+          <div className="w-10 h-1 rounded-full bg-cadio-border" />
+        </div>
+
+        <div className="px-4 pb-8 flex flex-col gap-4">
+          <h3 className="text-sm font-semibold text-cadio-text">Get Inspired</h3>
+          <ExampleBrowser
+            onSelectExample={handleSelect}
+            isLoading={isLoading}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
 
 // Mobile bottom sheet for editing
 function MobileEditSheet({
@@ -111,9 +168,15 @@ export default function App() {
     applyScenePayload,
     onSelectObject,
     onTransformCommit,
+    runPrompt,
   } = useCadStore();
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
+  const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
+
+  const handleMobileExampleSelect = async (example: ExampleObject) => {
+    await runPrompt(example.prompt);
+  };
 
   useEffect(() => {
     void loadPrinters();
@@ -166,6 +229,12 @@ export default function App() {
           <span className="text-sm font-bold text-cadio-text tracking-widest">CADIO</span>
           <div className="flex gap-2">
             <button
+              onClick={() => setMobileExamplesOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-[#1a2535] text-cadio-accent text-xs font-semibold hover:bg-[#243048]"
+            >
+              Ideas
+            </button>
+            <button
               onClick={() => setMobileEditOpen(true)}
               className="px-3 py-1.5 rounded-lg bg-cadio-accent text-[#081225] text-xs font-semibold"
             >
@@ -192,6 +261,13 @@ export default function App() {
           <MobileAiBar />
         </div>
       </div>
+
+      {/* Mobile examples sheet */}
+      <MobileExamplesSheet
+        open={mobileExamplesOpen}
+        onClose={() => setMobileExamplesOpen(false)}
+        onSelectExample={handleMobileExampleSelect}
+      />
 
       {/* Mobile edit sheet */}
       <MobileEditSheet

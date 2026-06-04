@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCadStore } from "../stores/cadStore";
+import ExampleBrowser from "./ExampleBrowser";
+import type { ExampleObject } from "./ExampleBrowser";
 
 const QUICK_COMMANDS = [
   "Make it taller",
@@ -16,19 +18,11 @@ const QUICK_COMMANDS = [
   "Duplicate object",
 ];
 
-const EXAMPLE_OBJECTS = [
-  "Create a phone stand",
-  "Create a headphone stand",
-  "Create a pen holder",
-  "Create a monitor stand",
-  "Create a cable organizer",
-  "Create a tablet stand",
-];
-
 export default function AiPanel() {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
+  const [showExamples, setShowExamples] = useState(true);
   const { status, runPrompt } = useCadStore();
 
   const handleSubmit = async (e?: FormEvent<HTMLFormElement>) => {
@@ -56,6 +50,18 @@ export default function AiPanel() {
     }
   };
 
+  const handleExampleSelect = async (example: ExampleObject) => {
+    if (isLoading) return;
+    setIsLoading(true);
+    setHistory((h) => [example.prompt, ...h.slice(0, 9)]);
+    try {
+      await runPrompt(example.prompt);
+      setShowExamples(false); // Hide examples after selection
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -73,22 +79,21 @@ export default function AiPanel() {
         </h2>
       </div>
 
-      {/* Example objects */}
-      <div>
-        <p className="text-xs text-cadio-muted mb-2 uppercase tracking-wider">Start with</p>
-        <div className="flex flex-col gap-1">
-          {EXAMPLE_OBJECTS.map((ex) => (
-            <button
-              key={ex}
-              onClick={() => void handleQuick(ex)}
-              disabled={isLoading}
-              className="text-left px-3 py-2 rounded-lg bg-[#1a2535] text-cadio-text text-xs hover:bg-[#243048] hover:text-cadio-accent transition-all disabled:opacity-40"
-            >
-              {ex}
-            </button>
-          ))}
+      {/* Example objects browser */}
+      {showExamples && (
+        <div>
+          <p className="text-xs text-cadio-muted mb-2 uppercase tracking-wider">
+            Get Inspired
+          </p>
+          <ExampleBrowser onSelectExample={handleExampleSelect} isLoading={isLoading} />
+          <button
+            onClick={() => setShowExamples(false)}
+            className="w-full mt-2 text-xs px-2 py-1 rounded text-cadio-muted hover:text-cadio-text bg-[#1a2535] hover:bg-[#243048] transition-all"
+          >
+            Hide Examples
+          </button>
         </div>
-      </div>
+      )}
 
       {/* Divider */}
       <div className="border-t border-cadio-border" />

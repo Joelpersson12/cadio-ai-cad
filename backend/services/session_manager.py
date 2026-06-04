@@ -17,6 +17,7 @@ from backend.services.cad_engine import (
     DEFAULT_FEATURE_TREE,
     DEFAULT_PARAMETERS,
     TriMesh,
+    auto_adjust_z_position,
     rebuild_from_features,
 )
 
@@ -167,6 +168,8 @@ def remove_object(session: Session, object_id: str) -> bool:
 def rebuild_object(obj: CadObject) -> None:
     """Rebuild the mesh from current parameters + feature tree."""
     obj["shape"] = rebuild_from_features(obj["parameters"], obj["feature_tree"])
+    # Auto-adjust Z position so the model sits on the build plate
+    auto_adjust_z_position(obj["transform"], obj["shape"])
 
 
 def acquire_lock() -> RLock:

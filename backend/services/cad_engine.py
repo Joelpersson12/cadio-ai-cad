@@ -224,6 +224,13 @@ def bounding_box(mesh: TriMesh) -> dict[str, float]:
     }
 
 
+def min_z(mesh: TriMesh) -> float:
+    """Compute the minimum Z value (lowest point) of the mesh."""
+    if not mesh.verts:
+        return 0.0
+    return min(v[2] for v in mesh.verts)
+
+
 # ---------------------------------------------------------------------------
 # Tessellate (identity -- mesh is already tessellated)
 # ---------------------------------------------------------------------------
@@ -235,6 +242,18 @@ def tessellate(mesh: TriMesh) -> MeshPayload:
 
 def apply_transform(mesh: TriMesh, transform: Transform) -> TriMesh:
     return mesh.transformed(transform)
+
+
+def auto_adjust_z_position(transform: Transform, mesh: TriMesh) -> None:
+    """Adjust the Z position so the mesh bottom sits on the build plate (Z=0).
+    
+    This modifies the transform in-place, shifting it up if the minimum Z
+    coordinate is below zero (below the build plate).
+    """
+    min_z_val = min_z(mesh)
+    if min_z_val < 0:
+        # Shift the object up by the amount it's below the plate
+        transform.position[2] -= min_z_val
 
 
 # ---------------------------------------------------------------------------
