@@ -50,11 +50,6 @@ export default function ObjectInspector() {
     patchAppearance,
     onToggleFeature,
     onTransformCommit,
-    applyExpertOperation,
-    operationAmount,
-    setOperationAmount,
-    selectionMode,
-    setSelectionMode,
     setPrinter,
   } = useCadStore();
 
@@ -97,15 +92,15 @@ export default function ObjectInspector() {
 
       {/* Transform tools */}
       <h3 className="text-sm font-semibold text-cadio-text mt-2">Transform</h3>
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-4 gap-1.5">
         {(["off", "translate", "rotate", "scale"] as TransformMode[]).map((mode) => (
           <button
             key={mode}
             onClick={() => setTransformMode(mode)}
             className={`px-2 py-1.5 rounded-lg text-xs capitalize transition-colors ${
               transformMode === mode
-                ? "bg-cadio-accent text-[#081225] font-semibold"
-                : "bg-[#1e2536] text-cadio-muted hover:bg-[#2a3347]"
+                ? "bg-cadio-accent text-[#111] font-semibold"
+                : "bg-[#333336] text-cadio-muted hover:bg-[#44454a]"
             }`}
           >
             {mode === "translate" ? "Move" : mode}
@@ -114,13 +109,13 @@ export default function ObjectInspector() {
       </div>
       <button
         onClick={() => void onDeleteObject()}
-        className="w-full rounded-lg bg-[#2a3347] text-cadio-danger py-1.5 text-xs hover:bg-[#3a2030] transition-colors"
+        className="w-full rounded-lg bg-[#333336] text-cadio-danger py-1.5 text-xs hover:bg-[#403033] transition-colors"
       >
         Delete Selected
       </button>
 
       {transform && (
-        <div className="flex flex-col gap-2 rounded-lg border border-cadio-border bg-[#101622] p-2">
+        <div className="flex flex-col gap-2 rounded-lg border border-cadio-border bg-[#202023] p-2">
           <p className="text-xs text-cadio-muted uppercase tracking-wider">Position</p>
           <div className="grid grid-cols-3 gap-1.5">
             {["X", "Y", "Z"].map((axis, i) => (
@@ -163,43 +158,6 @@ export default function ObjectInspector() {
         </div>
       )}
 
-      <h3 className="text-sm font-semibold text-cadio-text mt-2">Expert Operations</h3>
-      <div className="rounded-lg border border-cadio-border bg-[#101622] p-2 flex flex-col gap-2">
-        <div className="grid grid-cols-3 gap-1.5">
-          {(["body", "face", "edge"] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setSelectionMode(mode)}
-              className={`rounded-md px-2 py-1.5 text-xs capitalize ${
-                selectionMode === mode
-                  ? "bg-cadio-accent text-[#081225] font-semibold"
-                  : "bg-[#1e2536] text-cadio-muted hover:text-cadio-text"
-              }`}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-        <NumberInput
-          label="Amount (mm)"
-          value={operationAmount}
-          onChange={(v) => setOperationAmount(v)}
-          step={0.5}
-          min={0}
-        />
-        <div className="grid grid-cols-2 gap-1.5">
-          {["extrude", "fillet", "chamfer", "shell"].map((op) => (
-            <button
-              key={op}
-              onClick={() => void applyExpertOperation(op)}
-              className="rounded-md bg-[#243048] px-2 py-1.5 text-xs capitalize text-cadio-muted hover:text-cadio-text"
-            >
-              {op}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Parameters */}
       <h3 className="text-sm font-semibold text-cadio-text mt-2">Parameters</h3>
       <label className="flex flex-col gap-1">
@@ -230,7 +188,7 @@ export default function ObjectInspector() {
         <select
           value={selectedObject?.material ?? "PLA"}
           onChange={(e) => void patchAppearance({ material: e.target.value })}
-          className="rounded-lg border border-cadio-border bg-[#121723] text-cadio-text px-3 py-1.5 text-sm focus:outline-none"
+          className="rounded-lg border border-cadio-border bg-[#202023] text-cadio-text px-3 py-1.5 text-sm focus:outline-none"
         >
           {["PLA", "PETG", "ABS", "ASA", "TPU", "Nylon", "PC", "PVA", "Resin"].map((material) => (
             <option key={material} value={material}>{material}</option>

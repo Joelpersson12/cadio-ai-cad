@@ -149,7 +149,7 @@ function ScaledMesh({
         if (e.button !== 0) return;
         e.stopPropagation();
         onSelect();
-        if (expertMode && selected && selectionMode === "edge") {
+        if (expertMode && selectionMode === "edge") {
           onEdgeAmount(e.nativeEvent.clientX, e.nativeEvent.clientY, edgeOperation);
         }
       }}
@@ -157,11 +157,11 @@ function ScaledMesh({
       receiveShadow
     >
       <meshStandardMaterial
-        color={selected ? obj.color || "#4fc3f7" : obj.color || "#b0bec5"}
+        color={selected ? "#28c4ea" : obj.color || "#aeb0b3"}
         roughness={0.4}
         metalness={0.3}
-        emissive={selected ? "#1a4a6e" : "#000000"}
-        emissiveIntensity={selected ? 0.3 : 0}
+        emissive={selected ? "#0b6c84" : "#000000"}
+        emissiveIntensity={selected ? 0.22 : 0}
       />
     </mesh>
     {selected && (
@@ -219,10 +219,10 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
   return (
     <group>
       {/* Base plate - visible and textured */}
-      <mesh position={[0, -0.5, 0]} receiveShadow>
-        <boxGeometry args={[px, 1, py]} />
+      <mesh position={[0, -0.08, 0]} receiveShadow>
+        <boxGeometry args={[px, 0.12, py]} />
         <meshStandardMaterial 
-          color="#1a2a3a" 
+          color="#252528" 
           roughness={0.95}
           metalness={0.05}
         />
@@ -242,7 +242,7 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       {/* Border frame - enhanced visibility */}
       <lineSegments>
         <edgesGeometry args={[new THREE.BoxGeometry(px, 0.5, py)]} />
-        <lineBasicMaterial color="#5fd6ff" linewidth={2} />
+        <lineBasicMaterial color="#4a4b50" linewidth={2} />
       </lineSegments>
     </group>
   );
@@ -418,44 +418,45 @@ export default function CadViewport({
   } | null>(null);
 
   return (
-    <div className="relative w-full h-full" onContextMenu={(e) => e.preventDefault()}>
-      <div className="hidden md:flex absolute left-3 top-3 z-10 items-center gap-2 rounded-lg border border-cadio-border bg-[#101622]/90 p-2 backdrop-blur">
+    <div className="relative w-full h-full bg-cadio-bg" onContextMenu={(e) => e.preventDefault()}>
+      <div className="hidden md:flex absolute left-3 top-4 z-10 w-44 flex-col gap-1.5 rounded-lg border border-cadio-border bg-[#2b2b2e]/92 p-2 shadow-xl backdrop-blur">
         <button
           onClick={() => onSetExpertMode?.(!expertMode)}
-          className={`px-3 py-1.5 rounded-md text-xs font-semibold ${expertMode ? "bg-cadio-accent text-[#081225]" : "bg-[#1e2536] text-cadio-muted"}`}
+          className={`px-3 py-2 rounded-md text-left text-xs font-semibold ${expertMode ? "bg-cadio-accent text-[#111]" : "bg-[#38383b] text-cadio-text"}`}
         >
-          Expert
+          Modeling
         </button>
         {(["select", "rectangle", "circle", "hole"] as ExpertTool[]).map((tool) => (
           <button
             key={tool}
             disabled={!expertMode}
             onClick={() => onSetExpertTool?.(tool)}
-            className={`px-2.5 py-1.5 rounded-md text-xs capitalize transition-colors ${
+            className={`px-3 py-2 rounded-md text-left text-xs capitalize transition-colors ${
               expertMode && expertTool === tool
-                ? "bg-[#5aa1ff] text-[#081225] font-semibold"
-                : "bg-[#1e2536] text-cadio-muted hover:text-cadio-text disabled:opacity-40"
+                ? "bg-[#55565b] text-white font-semibold"
+                : "bg-transparent text-cadio-muted hover:bg-[#38383b] hover:text-cadio-text disabled:opacity-40"
             }`}
           >
             {tool}
           </button>
         ))}
-        <div className="h-6 w-px bg-cadio-border" />
+        <div className="my-1 h-px bg-cadio-border" />
         {(["body", "face", "edge"] as SelectionMode[]).map((mode) => (
           <button
             key={mode}
             disabled={!expertMode}
             onClick={() => onSetSelectionMode?.(mode)}
-            className={`px-2.5 py-1.5 rounded-md text-xs capitalize transition-colors ${
+            className={`px-3 py-2 rounded-md text-left text-xs capitalize transition-colors ${
               expertMode && selectionMode === mode
-                ? "bg-[#facc15] text-[#1f2937] font-semibold"
-                : "bg-[#1e2536] text-cadio-muted hover:text-cadio-text disabled:opacity-40"
+                ? "bg-cadio-accent text-[#111] font-semibold"
+                : "bg-transparent text-cadio-muted hover:bg-[#38383b] hover:text-cadio-text disabled:opacity-40"
             }`}
           >
             {mode}
           </button>
         ))}
-        <label className="flex items-center gap-1 text-xs text-cadio-muted">
+        <div className="my-1 h-px bg-cadio-border" />
+        <label className="flex items-center justify-between gap-2 px-1 text-xs text-cadio-muted">
           H
           <input
             type="number"
@@ -463,10 +464,10 @@ export default function CadViewport({
             step={0.5}
             value={sketchHeight}
             onChange={(e) => onSetSketchHeight?.(Number(e.target.value))}
-            className="w-16 rounded border border-cadio-border bg-[#111827] px-2 py-1 text-cadio-text"
+            className="w-20 rounded border border-cadio-border bg-[#202023] px-2 py-1 text-cadio-text"
           />
         </label>
-        <label className="flex items-center gap-1 text-xs text-cadio-muted">
+        <label className="flex items-center justify-between gap-2 px-1 text-xs text-cadio-muted">
           A
           <input
             type="number"
@@ -474,7 +475,7 @@ export default function CadViewport({
             step={0.5}
             value={operationAmount}
             onChange={(e) => onSetOperationAmount?.(Number(e.target.value))}
-            className="w-16 rounded border border-cadio-border bg-[#111827] px-2 py-1 text-cadio-text"
+            className="w-20 rounded border border-cadio-border bg-[#202023] px-2 py-1 text-cadio-text"
           />
         </label>
         {["extrude", "fillet", "chamfer", "shell"].map((op) => (
@@ -488,7 +489,9 @@ export default function CadViewport({
               }
               onApplyExpertOperation?.(op);
             }}
-            className="rounded-md bg-[#243048] px-2.5 py-1.5 text-xs capitalize text-cadio-muted hover:text-cadio-text disabled:opacity-40"
+            className={`rounded-md px-3 py-2 text-left text-xs capitalize disabled:opacity-40 ${
+              edgeOperation === op ? "bg-[#55565b] text-white" : "bg-transparent text-cadio-muted hover:bg-[#38383b] hover:text-cadio-text"
+            }`}
           >
             {op}
           </button>
@@ -499,7 +502,7 @@ export default function CadViewport({
         camera={{ position: [300, 220, 300], fov: 42, near: 0.1, far: 10000 }}
         gl={{ antialias: true, alpha: false }}
       >
-      <color attach="background" args={["#1e1e22"]} />
+      <color attach="background" args={["#1c1c1f"]} />
  
       {/* Lighting - enhanced for clarity */}
       <ambientLight intensity={1.2} color="#ffffff" />
@@ -524,13 +527,13 @@ export default function CadViewport({
         args={[printerVolume[0] * 2.2, printerVolume[1] * 2.2]}
         cellSize={10}
         cellThickness={0.6}
-        cellColor="#1a3a4a"
+        cellColor="#2f3033"
         sectionSize={50}
         sectionThickness={1.8}
-        sectionColor="#2a5a7a"
+        sectionColor="#45464a"
         fadeDistance={1000}
         fadeStrength={2.0}
-        position={[0, 0, 0]}
+        position={[0, -0.035, 0]}
       />
  
       {/* Build plate */}
@@ -568,14 +571,14 @@ export default function CadViewport({
       <OrbitControls
         makeDefault
         enableDamping
-        enablePan={false}
+        enablePan
         dampingFactor={0.07}
         minDistance={20}
         maxDistance={2000}
         maxPolarAngle={Math.PI / 2 + 0.1}
         mouseButtons={{
           LEFT: undefined,
-          MIDDLE: THREE.MOUSE.ROTATE,
+          MIDDLE: THREE.MOUSE.PAN,
           RIGHT: THREE.MOUSE.ROTATE,
         }}
       />
@@ -589,8 +592,18 @@ export default function CadViewport({
       </GizmoHelper>
       </Canvas>
       {edgeInput && (
-        <div
-          className="absolute z-20 flex items-center gap-1 rounded-md border border-cadio-border bg-[#101622] p-1 shadow-xl"
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const amount = Number(edgeInput.value.replace("mm", "").trim());
+            if (Number.isFinite(amount) && amount >= 0) {
+              onSetOperationAmount?.(amount);
+              onApplyExpertOperation?.(edgeInput.operation, amount);
+            }
+            setEdgeInput(null);
+          }}
+          className="absolute z-20 flex items-center gap-1 rounded-md border border-cadio-border bg-[#2b2b2e] p-1 shadow-xl"
           style={{ left: edgeInput.x + 10, top: edgeInput.y + 10 }}
         >
           <span className="px-1 text-[11px] capitalize text-cadio-muted">{edgeInput.operation}</span>
@@ -599,19 +612,12 @@ export default function CadViewport({
             value={edgeInput.value}
             onChange={(e) => setEdgeInput({ ...edgeInput, value: e.target.value })}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const amount = Number(edgeInput.value.replace("mm", "").trim());
-                if (Number.isFinite(amount) && amount >= 0) {
-                  onSetOperationAmount?.(amount);
-                  onApplyExpertOperation?.(edgeInput.operation, amount);
-                }
-                setEdgeInput(null);
-              }
+              e.stopPropagation();
               if (e.key === "Escape") setEdgeInput(null);
             }}
-            className="w-16 rounded border border-cadio-border bg-[#121723] px-2 py-1 text-xs text-cadio-text outline-none"
+            className="w-16 rounded border border-cadio-border bg-[#202023] px-2 py-1 text-xs text-cadio-text outline-none"
           />
-        </div>
+        </form>
       )}
     </div>
   );

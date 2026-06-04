@@ -207,16 +207,16 @@ export default function App() {
     : [220, 220, 250];
 
   return (
-    <div className="w-full h-full relative">
+    <div className="w-full h-full relative bg-cadio-bg text-cadio-text">
       {/* Desktop layout */}
-      <div className="hidden md:grid w-full h-full grid-cols-[300px_1fr_320px] gap-3 p-3 overflow-hidden">
+      <div className="hidden md:grid w-full h-full grid-cols-[270px_1fr_300px] gap-2 p-2 overflow-hidden">
         {/* Left - AI Panel */}
-        <aside className="bg-cadio-panel/80 border border-cadio-border rounded-xl p-4 backdrop-blur-sm overflow-y-auto">
+        <aside className="bg-cadio-panel/95 border border-cadio-border rounded-lg p-3 backdrop-blur-sm overflow-y-auto shadow-xl">
           <AiPanel />
         </aside>
 
         {/* Center - Viewport */}
-        <main className="rounded-xl overflow-hidden border border-cadio-border min-h-0">
+        <main className="rounded-lg overflow-hidden border border-[#2f3033] min-h-0 bg-cadio-bg">
           <CadViewport
             objects={objects}
             selectedObjectId={selectedObjectId}
@@ -241,7 +241,7 @@ export default function App() {
         </main>
 
         {/* Right - Inspector */}
-        <aside className="bg-cadio-panel/80 border border-cadio-border rounded-xl p-4 backdrop-blur-sm overflow-y-auto">
+        <aside className="bg-cadio-panel/95 border border-cadio-border rounded-lg p-3 backdrop-blur-sm overflow-y-auto shadow-xl">
           <ObjectInspector />
         </aside>
       </div>
