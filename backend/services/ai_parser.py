@@ -84,6 +84,24 @@ MUST NOT:
 """
 
 
+def _coerce_feature(feature: Any) -> Feature:
+    """Normalize template/GPT feature values into the API schema."""
+    if isinstance(feature, Feature):
+        return feature
+    if isinstance(feature, str):
+        return Feature(id=feature, type=feature, enabled=True)
+    if isinstance(feature, dict):
+        feature_type = str(feature.get("type") or feature.get("id") or "")
+        return Feature(
+            id=str(feature.get("id") or feature_type),
+            type=feature_type,
+            enabled=bool(feature.get("enabled", True)),
+        )
+    if hasattr(feature, "model_dump"):
+        return _coerce_feature(feature.model_dump())
+    raise TypeError(f"Unsupported feature value: {feature!r}")
+
+
 def _ensure_feature(
     features: list[Feature],
     feature_type: str,
@@ -154,15 +172,12 @@ def parse_ai_command(
             if key not in ["width", "depth", "height", "thickness", "angle", "hole_count"]:
                 params[key] = obj["parameters"][key]
         
-        features = [Feature(**f.model_dump() if hasattr(f, 'model_dump') else f) 
-                   for f in template.default_features]
+        features = [_coerce_feature(f) for f in template.default_features]
         
         obj["template_hint"] = template.name
     else:
         params = dict(obj["parameters"])
-        features = [
-            f if isinstance(f, Feature) else Feature(**f) for f in obj["feature_tree"]
-        ]
+        features = [_coerce_feature(f) for f in obj["feature_tree"]]
     
     src_transform: Transform = obj["transform"]
     transform = Transform(
@@ -193,13 +208,7 @@ def parse_ai_command(
         # Apply feature changes
         feat_list = result.get("features", [])
         if feat_list:
-            features = []
-            for feat in feat_list:
-                features.append(Feature(
-                    id=feat.get("id", feat.get("type", "")),
-                    type=feat.get("type", ""),
-                    enabled=bool(feat.get("enabled", True)),
-                ))
+            features = [_coerce_feature(feat) for feat in feat_list]
         
         # Apply transform changes
         t = result.get("transform", {})
