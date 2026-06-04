@@ -52,6 +52,8 @@ IMPORTANT REFERENCE DIMENSIONS (realistic printable objects):
 - AirPod holder: w=60, d=50, h=40, thickness=4, angle=90
 - Watch stand: w=70, d=70, h=50, thickness=4, angle=75
 - Keyboard tilt: w=350, d=150, h=80, thickness=8, angle=15
+- Power-tool battery holder: w=104, d=92, h=46, thickness=7, 2 mounting holes, slide rails
+- CDI/ECU/electronics holder: w=86, d=68, h=38, thickness=5, 2 mounting holes, low tray walls
 
 QUALITY RULES for realistic objects:
 1. Always enable base_extrude for stability
@@ -129,6 +131,17 @@ def _external_design_signals(prompt: str, params: dict[str, float]) -> list[str]
     if any(word in title_text for word in ("magsafe", "charging", "charger", "dock")):
         params["depth"] = max(params.get("depth", 75.0), 85.0)
         params["angle"] = min(params.get("angle", 68.0), 68.0)
+    if any(word in title_text for word in ("dewalt", "makita", "milwaukee", "ryobi", "battery", "batteries")):
+        params["width"] = max(params.get("width", 90.0), 104.0)
+        params["depth"] = max(params.get("depth", 80.0), 92.0)
+        params["height"] = max(params.get("height", 35.0), 46.0)
+        params["thickness"] = max(params.get("thickness", 6.0), 7.0)
+        params["hole_count"] = max(params.get("hole_count", 0.0), 2.0)
+    if any(word in title_text for word in ("cdi", "ecu", "ecm", "ignition", "module", "bracket")):
+        params["width"] = max(params.get("width", 70.0), 86.0)
+        params["depth"] = max(params.get("depth", 55.0), 68.0)
+        params["height"] = max(params.get("height", 28.0), 38.0)
+        params["hole_count"] = max(params.get("hole_count", 0.0), 2.0)
 
     top = examples[:3]
     return [
@@ -206,6 +219,26 @@ def _apply_deterministic_edit(
     if rotate_match:
         transform.rotation[2] += float(rotate_match.group(1))
         actions.append(f"rotated {rotate_match.group(1)} degrees")
+
+    if any(word in text for word in ("dewalt", "makita", "milwaukee", "ryobi", "battery holder", "battery mount")):
+        params["width"] = max(float(params.get("width", 104.0)), 104.0)
+        params["depth"] = max(float(params.get("depth", 92.0)), 92.0)
+        params["height"] = max(float(params.get("height", 46.0)), 46.0)
+        params["thickness"] = max(float(params.get("thickness", 7.0)), 7.0)
+        params["hole_count"] = max(float(params.get("hole_count", 0.0)), 2.0)
+        params["hole_diameter"] = max(float(params.get("hole_diameter", 5.0)), 5.0)
+        _ensure_feature(features, "mount_holes", True)
+        actions.append("matched power-tool battery holder proportions")
+
+    if any(word in text for word in ("cdi", "ecu", "ecm", "ignition module", "cr250r", "crf")):
+        params["width"] = max(float(params.get("width", 86.0)), 86.0)
+        params["depth"] = max(float(params.get("depth", 68.0)), 68.0)
+        params["height"] = max(float(params.get("height", 38.0)), 38.0)
+        params["thickness"] = max(float(params.get("thickness", 5.0)), 5.0)
+        params["hole_count"] = max(float(params.get("hole_count", 0.0)), 2.0)
+        params["hole_diameter"] = max(float(params.get("hole_diameter", 5.0)), 5.0)
+        _ensure_feature(features, "mount_holes", True)
+        actions.append("matched electronics holder proportions")
 
     return actions
 

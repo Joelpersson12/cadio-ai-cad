@@ -96,6 +96,7 @@ function ScaledMesh({
     geo.setIndex(new THREE.BufferAttribute(indices, 1));
     geo.computeVertexNormals();
     geo.computeBoundingBox();
+    geo.normalizeNormals();
     return geo;
   }, [obj.mesh]);
  
@@ -159,12 +160,17 @@ function ScaledMesh({
       castShadow
       receiveShadow
     >
-      <meshStandardMaterial
-        color={selected ? "#28c4ea" : obj.color || "#aeb0b3"}
-        roughness={0.4}
-        metalness={0.3}
-        emissive={selected ? "#0b6c84" : "#000000"}
-        emissiveIntensity={selected ? 0.22 : 0}
+      <meshPhysicalMaterial
+        color={selected ? "#27bfe6" : obj.color || "#b9bab8"}
+        roughness={0.62}
+        metalness={0.02}
+        clearcoat={0.16}
+        clearcoatRoughness={0.72}
+        emissive={selected ? "#0a5265" : "#000000"}
+        emissiveIntensity={selected ? 0.12 : 0}
+        polygonOffset
+        polygonOffsetFactor={1}
+        polygonOffsetUnits={1}
       />
     </mesh>
     {(selected || (hovered && expertMode && selectionMode === "edge")) && (
@@ -225,9 +231,9 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       <mesh position={[0, -0.24, 0]} receiveShadow>
         <boxGeometry args={[px, 0.08, py]} />
         <meshStandardMaterial 
-          color="#252528" 
+          color="#202124" 
           roughness={0.95}
-          metalness={0.05}
+          metalness={0.02}
         />
       </mesh>
       {/* Corner markers for orientation */}
@@ -245,7 +251,7 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       {/* Border frame - enhanced visibility */}
       <lineSegments>
         <edgesGeometry args={[new THREE.BoxGeometry(px, 0.5, py)]} />
-        <lineBasicMaterial color="#4a4b50" linewidth={2} />
+        <lineBasicMaterial color="#3b3d42" linewidth={2} />
       </lineSegments>
     </group>
   );
@@ -514,19 +520,26 @@ export default function CadViewport({
       </div>
       <Canvas
         shadows
+        dpr={[1, 2.5]}
         camera={{ position: [300, 220, 300], fov: 42, near: 0.1, far: 10000 }}
-        gl={{ antialias: true, alpha: false }}
+        gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
+        onCreated={({ gl }) => {
+          gl.outputColorSpace = THREE.SRGBColorSpace;
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.0;
+        }}
       >
-      <color attach="background" args={["#1c1c1f"]} />
+      <color attach="background" args={["#1d1d20"]} />
  
       {/* Lighting - enhanced for clarity */}
-      <ambientLight intensity={1.2} color="#ffffff" />
+      <hemisphereLight intensity={0.75} color="#ffffff" groundColor="#323238" />
+      <ambientLight intensity={0.55} color="#ffffff" />
       <directionalLight
-        position={[200, 250, 150]}
-        intensity={2.0}
+        position={[220, 280, 180]}
+        intensity={2.6}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={4096}
+        shadow-mapSize-height={4096}
         shadow-camera-near={1}
         shadow-camera-far={2000}
         shadow-camera-left={-400}
@@ -534,21 +547,21 @@ export default function CadViewport({
         shadow-camera-top={400}
         shadow-camera-bottom={-400}
       />
-      <directionalLight position={[-150, 120, -120]} intensity={0.8} color="#c0d9ff" />
-      <pointLight position={[0, 250, 0]} intensity={0.6} color="#ffffff" />
+      <directionalLight position={[-180, 150, -140]} intensity={0.65} color="#d7e7ff" />
+      <pointLight position={[0, 260, 0]} intensity={0.35} color="#ffffff" />
  
       {/* Grid - improved visibility */}
       <Grid
         args={[printerVolume[0] * 2.2, printerVolume[1] * 2.2]}
         cellSize={10}
-        cellThickness={0.6}
-        cellColor="#2f3033"
+        cellThickness={0.35}
+        cellColor="#2a2b2e"
         sectionSize={50}
-        sectionThickness={1.8}
-        sectionColor="#45464a"
+        sectionThickness={1.05}
+        sectionColor="#3e4045"
         fadeDistance={1000}
         fadeStrength={2.0}
-        position={[0, -0.11, 0]}
+        position={[0, -0.36, 0]}
       />
  
       {/* Build plate */}

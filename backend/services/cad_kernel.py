@@ -34,7 +34,7 @@ def _solid_from(value: Any):
     return value
 
 
-def to_trimesh(value: Any, tolerance: float = 0.25) -> TriMesh | None:
+def to_trimesh(value: Any, tolerance: float = 0.08) -> TriMesh | None:
     """Tessellate a CadQuery object into Cadio's TriMesh format."""
     solid = _solid_from(value)
     if solid is None:
@@ -191,30 +191,40 @@ def make_phone_stand_body(params: dict[str, float]) -> TriMesh | None:
         chamfer = max(0.0, min(params.get("chamfer_size", 0.0), thickness * 0.45))
 
         base = _box_solid(width, depth, thickness, (0.0, 0.0, 0.0))
-        lip_depth = max(thickness * 1.4, 9.0)
-        lip_height = max(thickness * 2.2, 14.0)
+        lip_depth = max(thickness * 1.45, 10.0)
+        lip_height = max(thickness * 2.0, 13.0)
         lip = _box_solid(
-            width * 0.92,
+            width * 0.78,
             lip_depth,
             lip_height,
             (0.0, -depth / 2.0 + lip_depth / 2.0, thickness),
         )
 
         lean = math.tan(math.radians(90.0 - angle)) * height
-        bottom_y = -depth * 0.22
-        top_y = min(depth * 0.34, bottom_y + lean)
+        bottom_y = -depth * 0.12
+        top_y = min(depth * 0.36, bottom_y + lean)
         support_length = math.hypot(top_y - bottom_y, height - thickness)
         support_angle = math.degrees(math.atan2(height - thickness, top_y - bottom_y)) - 90.0
         support = (
             cq.Workplane("XY")
-            .box(width * 0.84, thickness, support_length, centered=(True, True, False))
+            .box(width * 0.70, thickness, support_length, centered=(True, True, False))
             .rotate((0, 0, 0), (1, 0, 0), -support_angle)
             .translate((0.0, bottom_y, thickness))
         )
 
         solid = base.union(lip).union(support)
-        for x in (-width * 0.34, width * 0.34):
-            solid = solid.union(_side_rib_solid(x, bottom_y, top_y, thickness, height * 0.72, max(thickness * 0.8, 4.5)))
+        for x in (-width * 0.41, width * 0.41):
+            solid = solid.union(_side_rib_solid(x, bottom_y, top_y, thickness, height * 0.66, max(thickness * 0.75, 4.2)))
+            solid = solid.union(_box_solid(max(thickness * 0.65, 4.5), depth * 0.54, thickness * 1.25, (x, -depth * 0.02, thickness)))
+
+        cable_slot = (
+            cq.Workplane("XY")
+            .center(0, -depth / 2.0 + lip_depth * 0.52)
+            .rect(max(width * 0.18, 14.0), lip_depth * 1.6)
+            .extrude(lip_height + thickness + 6.0)
+            .translate((0.0, 0.0, -2.0))
+        )
+        solid = solid.cut(cable_slot)
 
         solid = _cut_vertical_holes(solid, params, height + thickness + lip_height)
 

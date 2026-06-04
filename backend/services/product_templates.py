@@ -167,34 +167,41 @@ def generate_phone_stand(params: dict[str, float]) -> TriMesh:
     except Exception:
         pass
 
-    width = max(72.0, min(125.0, params.get("width", 88.0)))
-    depth = max(65.0, min(120.0, params.get("depth", 82.0)))
-    height = max(85.0, min(165.0, params.get("height", 118.0)))
+    width = max(78.0, min(130.0, params.get("width", 92.0)))
+    depth = max(75.0, min(130.0, params.get("depth", 92.0)))
+    height = max(92.0, min(170.0, params.get("height", 122.0)))
     thickness = max(5.0, min(12.0, params.get("thickness", 7.0)))
-    angle = max(58.0, min(75.0, params.get("angle", 68.0)))
+    angle = max(60.0, min(74.0, params.get("angle", 68.0)))
 
     import math
 
     mesh = TriMesh()
 
-    # Stable footprint with a small front retaining lip.
+    # Stable footprint with two side rails and a cable relief.
     mesh = mesh.merge(_make_box_with_rect_holes(width, depth, thickness, params))
-    lip_height = max(thickness * 2.2, 14.0)
-    lip_depth = max(thickness * 1.4, 9.0)
+    lip_height = max(thickness * 2.0, 13.0)
+    lip_depth = max(thickness * 1.45, 10.0)
     mesh = _add_box(
         mesh,
-        width * 0.92,
+        width * 0.36,
         lip_depth,
         lip_height,
-        [0.0, -depth / 2.0 + lip_depth / 2.0, thickness + lip_height / 2.0],
+        [-width * 0.26, -depth / 2.0 + lip_depth / 2.0, thickness + lip_height / 2.0],
+    )
+    mesh = _add_box(
+        mesh,
+        width * 0.36,
+        lip_depth,
+        lip_height,
+        [width * 0.26, -depth / 2.0 + lip_depth / 2.0, thickness + lip_height / 2.0],
     )
 
     # Angled back support: a real slab from base to top, not a floating box.
     lean = math.tan(math.radians(90.0 - angle)) * height
-    bottom_y = -depth * 0.24
-    top_y = min(depth * 0.35, bottom_y + lean)
+    bottom_y = -depth * 0.12
+    top_y = min(depth * 0.36, bottom_y + lean)
     back = _make_slanted_slab(
-        width * 0.86,
+        width * 0.70,
         bottom_y,
         thickness,
         top_y,
@@ -204,7 +211,7 @@ def generate_phone_stand(params: dict[str, float]) -> TriMesh:
     mesh = mesh.merge(back)
 
     # Two triangular gussets make the stand look and print like a real design.
-    rib_offset = width * 0.34
+    rib_offset = width * 0.41
     for x in (-rib_offset, rib_offset):
         mesh = mesh.merge(
             _make_side_rib(
@@ -212,10 +219,11 @@ def generate_phone_stand(params: dict[str, float]) -> TriMesh:
                 bottom_y,
                 top_y,
                 thickness,
-                height * 0.72,
-                max(thickness * 0.8, 4.5),
+                height * 0.66,
+                max(thickness * 0.75, 4.2),
             )
         )
+        mesh = _add_box(mesh, max(thickness * 0.65, 4.5), depth * 0.54, thickness * 1.25, [x, -depth * 0.02, thickness * 1.15])
 
     # Small rear foot improves stability for taller phones.
     mesh = _add_box(
@@ -226,6 +234,60 @@ def generate_phone_stand(params: dict[str, float]) -> TriMesh:
         [0.0, depth / 2.0 - thickness * 0.7, thickness * 0.6],
     )
 
+    return mesh
+
+
+def generate_battery_holder(params: dict[str, float]) -> TriMesh:
+    """Generate a wall/bench battery holder with slide rails and screw holes."""
+    width = max(70.0, min(150.0, params.get("width", 104.0)))
+    depth = max(55.0, min(150.0, params.get("depth", 92.0)))
+    height = max(28.0, min(90.0, params.get("height", 46.0)))
+    thickness = max(4.0, min(14.0, params.get("thickness", 7.0)))
+
+    params = dict(params)
+    params["hole_count"] = max(2.0, float(params.get("hole_count", 2.0)))
+    params["hole_diameter"] = max(4.0, float(params.get("hole_diameter", 5.0)))
+
+    mesh = TriMesh()
+    back_plate = _make_box_with_rect_holes(width, depth, thickness, params)
+    mesh = mesh.merge(back_plate)
+
+    rail_width = max(thickness * 1.15, 7.0)
+    rail_height = max(height * 0.52, 18.0)
+    rail_depth = depth * 0.72
+    for x in (-width * 0.30, width * 0.30):
+        mesh = _add_box(mesh, rail_width, rail_depth, rail_height, [x, -depth * 0.02, thickness + rail_height / 2.0])
+        mesh = _add_box(mesh, rail_width * 1.8, rail_depth * 0.78, thickness * 0.8, [x, -depth * 0.02, thickness + rail_height + thickness * 0.4])
+
+    # Front stop and rear registration wall for battery tabs.
+    mesh = _add_box(mesh, width * 0.72, thickness * 1.4, height * 0.45, [0.0, -depth / 2.0 + thickness * 0.7, thickness + height * 0.22])
+    mesh = _add_box(mesh, width * 0.56, thickness, height * 0.32, [0.0, depth * 0.36, thickness + height * 0.16])
+
+    # Side gussets for wall-mounted strength.
+    for x in (-width * 0.44, width * 0.44):
+        mesh = mesh.merge(_make_side_rib(x, -depth * 0.42, depth * 0.22, thickness, thickness + height * 0.58, thickness * 0.9))
+
+    return mesh
+
+
+def generate_electronics_holder(params: dict[str, float]) -> TriMesh:
+    """Generate a generic electronics/CDI/ECU holder with tabs and strap rails."""
+    width = max(55.0, min(180.0, params.get("width", 86.0)))
+    depth = max(45.0, min(150.0, params.get("depth", 68.0)))
+    height = max(20.0, min(100.0, params.get("height", 38.0)))
+    thickness = max(3.0, min(12.0, params.get("thickness", 5.0)))
+
+    params = dict(params)
+    params["hole_count"] = max(2.0, float(params.get("hole_count", 2.0)))
+    params["hole_diameter"] = max(4.0, float(params.get("hole_diameter", 5.0)))
+
+    mesh = TriMesh()
+    mesh = mesh.merge(_make_box_with_rect_holes(width * 1.18, depth, thickness, params))
+    mesh = _add_box(mesh, width, thickness, height, [0.0, -depth / 2.0 + thickness / 2.0, thickness + height / 2.0])
+    mesh = _add_box(mesh, width, thickness, height, [0.0, depth / 2.0 - thickness / 2.0, thickness + height / 2.0])
+    mesh = _add_box(mesh, thickness, depth, height * 0.72, [-width / 2.0 + thickness / 2.0, 0.0, thickness + height * 0.36])
+    mesh = _add_box(mesh, thickness, depth, height * 0.72, [width / 2.0 - thickness / 2.0, 0.0, thickness + height * 0.36])
+    mesh = _add_box(mesh, width * 0.72, thickness * 0.8, thickness * 1.2, [0.0, 0.0, thickness + height + thickness * 0.6])
     return mesh
 
 
@@ -499,6 +561,42 @@ PRODUCT_TEMPLATES: dict[str, ProductTemplate] = {
         default_features=["base_extrude", "fillet_edges"],
         geometry_fn=generate_headphone_stand,
     ),
+    "battery_holder": ProductTemplate(
+        name="Battery Holder",
+        category="Tool Storage",
+        description="Wall or bench mount battery holder with slide rails and screw holes",
+        default_params={
+            "width": 104.0,
+            "depth": 92.0,
+            "height": 46.0,
+            "thickness": 7.0,
+            "fillet_radius": 2.5,
+            "hole_count": 2.0,
+            "hole_diameter": 5.0,
+            "wall_thickness": 3.0,
+            "chamfer_size": 0.0,
+        },
+        default_features=["base_extrude", "mount_holes", "fillet_edges"],
+        geometry_fn=generate_battery_holder,
+    ),
+    "electronics_holder": ProductTemplate(
+        name="Electronics Holder",
+        category="Mounting",
+        description="Generic CDI/ECU/electronics bracket with tray walls and mounting holes",
+        default_params={
+            "width": 86.0,
+            "depth": 68.0,
+            "height": 38.0,
+            "thickness": 5.0,
+            "fillet_radius": 2.0,
+            "hole_count": 2.0,
+            "hole_diameter": 5.0,
+            "wall_thickness": 3.0,
+            "chamfer_size": 0.0,
+        },
+        default_features=["base_extrude", "mount_holes", "fillet_edges"],
+        geometry_fn=generate_electronics_holder,
+    ),
     "cable_organizer": ProductTemplate(
         name="Cable Organizer",
         category="Storage",
@@ -564,6 +662,8 @@ def get_template_for_prompt(prompt: str) -> ProductTemplate | None:
         "phone_stand": {"phone", "smartphone", "mobile", "iphone", "android", "dock"},
         "tablet_stand": {"tablet", "ipad", "kindle"},
         "headphone_stand": {"headphone", "headphones", "headset", "headsets", "gaming", "earphone"},
+        "battery_holder": {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch", "holder", "charger"},
+        "electronics_holder": {"cdi", "ecu", "ecm", "electronics", "module", "ignition", "honda", "cr250r", "crf", "holder", "bracket", "mount"},
         "cable_organizer": {"cable", "cord", "wire", "organizer", "organiser"},
         "storage_bin": {"storage", "bin", "box", "container", "drawer"},
         "wall_hook": {"hook", "hanger", "wall"},
