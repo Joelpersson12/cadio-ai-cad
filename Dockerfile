@@ -10,8 +10,8 @@ RUN npm run build
 FROM python:3.11-slim AS runtime
 WORKDIR /app
 
-# No system dependencies needed -- pure-Python geometry engine
-# (no libGL, no OCP, no X11)
+# CadQuery brings OpenCascade/OCP binary wheels for real CAD operations.
+# The app still has a mesh fallback if the optional kernel import fails.
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt

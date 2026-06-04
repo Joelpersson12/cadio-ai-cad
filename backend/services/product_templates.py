@@ -102,6 +102,15 @@ def _make_side_rib(x: float, y0: float, y1: float, z0: float, z1: float, thickne
 
 def generate_phone_stand(params: dict[str, float]) -> TriMesh:
     """Generate a realistic phone stand."""
+    try:
+        from backend.services.cad_kernel import make_phone_stand_body
+
+        kernel_mesh = make_phone_stand_body(params)
+        if kernel_mesh and kernel_mesh.verts:
+            return kernel_mesh
+    except Exception:
+        pass
+
     width = max(72.0, min(125.0, params.get("width", 88.0)))
     depth = max(65.0, min(120.0, params.get("depth", 82.0)))
     height = max(85.0, min(165.0, params.get("height", 118.0)))

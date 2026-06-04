@@ -1,7 +1,7 @@
 /** Main 3D viewport - fixed scaling, camera auto-fit, better lighting. */
  
 import { useEffect, useRef, useMemo, useState } from "react";
-import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, GizmoHelper, GizmoViewport, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
@@ -248,6 +248,7 @@ function SketchPlane({
         position={[0, 0.04, 0]}
         visible={false}
         onPointerDown={(e) => {
+          if (e.button !== 0) return;
           if (!enabled) return;
           e.stopPropagation();
           setStart(e.point.clone());
@@ -259,6 +260,7 @@ function SketchPlane({
           setEnd(e.point.clone());
         }}
         onPointerUp={(e) => {
+          if (e.button !== 0) return;
           if (!enabled || !start) return;
           e.stopPropagation();
           const finish = e.point.clone();
@@ -329,7 +331,7 @@ export default function CadViewport({
   onApplyExpertOperation,
 }: CadViewportProps) {
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full" onContextMenu={(e) => e.preventDefault()}>
       <div className="hidden md:flex absolute left-3 top-3 z-10 items-center gap-2 rounded-lg border border-cadio-border bg-[#101622]/90 p-2 backdrop-blur">
         <button
           onClick={() => onSetExpertMode?.(!expertMode)}
@@ -466,10 +468,16 @@ export default function CadViewport({
       <OrbitControls
         makeDefault
         enableDamping
+        enablePan={false}
         dampingFactor={0.07}
         minDistance={20}
         maxDistance={2000}
         maxPolarAngle={Math.PI / 2 + 0.1}
+        mouseButtons={{
+          LEFT: undefined,
+          MIDDLE: THREE.MOUSE.ROTATE,
+          RIGHT: THREE.MOUSE.ROTATE,
+        }}
       />
  
       {/* Orientation gizmo */}

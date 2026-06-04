@@ -22,7 +22,9 @@ from backend.services.cad_engine import (
     make_cylinder,
     make_rounded_box,
     rebuild_from_features,
+    shift_mesh_to_buildplate,
 )
+from backend.services.cad_kernel import make_box_body, make_cylinder_body
 
 # ---------------------------------------------------------------------------
 # Internal types
@@ -73,6 +75,7 @@ def create_manual_object(
     parameters: dict[str, float] | None = None,
 ) -> CadObject:
     """Create an object from an explicitly sketched mesh."""
+    shape = shift_mesh_to_buildplate(shape)
     params = dict(DEFAULT_PARAMETERS)
     if parameters:
         params.update(parameters)
@@ -89,7 +92,6 @@ def create_manual_object(
         "primitive": "manual",
         "operation_history": [],
     }
-    auto_adjust_z_position(obj["transform"], shape)
     return obj
 
 
@@ -111,7 +113,7 @@ def create_primitive_object(
     kind = primitive.strip().lower()
     if kind in {"circle", "cylinder", "hole"}:
         r = max(0.5, float(radius) if radius is not None else max(width, depth) / 2.0)
-        shape = make_cylinder(r, h, origin=(0.0, 0.0, 0.0))
+        shape = make_cylinder_body(r, h) or make_cylinder(r, h, origin=(0.0, 0.0, 0.0))
         params = {
             "width": r * 2.0,
             "depth": r * 2.0,
@@ -123,7 +125,7 @@ def create_primitive_object(
         }
         obj_name = name or ("hole_guide" if kind == "hole" else "cylinder")
     else:
-        shape = make_box(width, depth, h)
+        shape = make_box_body(width, depth, h) or make_box(width, depth, h)
         params = {
             "width": width,
             "depth": depth,
@@ -144,6 +146,29 @@ def create_primitive_object(
     return obj
 
 
+def _make_open_shell_box(width: float, depth: float, height: float, wall: float) -> TriMesh:
+    """Create a simple open-top shell from box primitives."""
+    wall = max(0.5, min(wall, width / 3.0, depth / 3.0, height / 2.0))
+    mesh = TriMesh()
+
+    parts = [
+        (width, depth, wall, [0.0, 0.0, wall / 2.0]),
+        (width, wall, height, [0.0, -depth / 2.0 + wall / 2.0, height / 2.0]),
+        (width, wall, height, [0.0, depth / 2.0 - wall / 2.0, height / 2.0]),
+        (wall, max(wall, depth - wall * 2.0), height, [-width / 2.0 + wall / 2.0, 0.0, height / 2.0]),
+        (wall, max(wall, depth - wall * 2.0), height, [width / 2.0 - wall / 2.0, 0.0, height / 2.0]),
+    ]
+
+    for part_width, part_depth, part_height, position in parts:
+        mesh = mesh.merge(
+            make_box(part_width, part_depth, part_height).transformed(
+                Transform(position=position, rotation=[0.0, 0.0, 0.0], scale=[1.0, 1.0, 1.0])
+            )
+        )
+
+    return mesh
+
+
 def rebuild_manual_object(obj: CadObject) -> None:
     """Rebuild an expert-mode primitive from its parameters and operations."""
     params = obj["parameters"]
@@ -154,21 +179,47 @@ def rebuild_manual_object(obj: CadObject) -> None:
 
     if primitive in {"circle", "cylinder"}:
         radius = max(width, depth) / 2.0
-        obj["shape"] = make_cylinder(radius, height)
+        obj["shape"] = make_cylinder_body(radius, height) or make_cylinder(radius, height)
     elif primitive == "hole":
         radius = max(float(params.get("hole_diameter", max(width, depth))) / 2.0, 0.5)
-        obj["shape"] = make_cylinder(radius, height)
+        obj["shape"] = make_cylinder_body(radius, height) or make_cylinder(radius, height)
     else:
         fillet = max(0.0, float(params.get("fillet_radius", 0.0)))
         chamfer = max(0.0, float(params.get("chamfer_size", 0.0)))
-        if fillet > 0.0:
+        shell = bool(float(params.get("shell_enabled", 0.0)))
+        kernel_shape = make_box_body(
+            width,
+            depth,
+            height,
+            fillet=fillet,
+            chamfer=chamfer,
+            shell_wall=max(0.0, float(params.get("wall_thickness", 0.0))) if shell else 0.0,
+        )
+        if kernel_shape:
+            obj["shape"] = kernel_shape
+        elif shell:
+            obj["shape"] = _make_open_shell_box(
+                width,
+                depth,
+                height,
+                max(0.5, float(params.get("wall_thickness", 2.0))),
+            )
+        elif fillet > 0.0:
             obj["shape"] = make_rounded_box(width, depth, height, fillet, segments=8)
         elif chamfer > 0.0:
             obj["shape"] = make_rounded_box(width, depth, height, chamfer, segments=1)
         else:
             obj["shape"] = make_box(width, depth, height)
 
-    auto_adjust_z_position(obj["transform"], obj["shape"])
+    obj["shape"] = shift_mesh_to_buildplate(obj["shape"])
+
+
+def _set_feature_enabled(features: list[Feature], feature_type: str, enabled: bool) -> None:
+    for feature in features:
+        if feature.type == feature_type:
+            feature.enabled = enabled
+            return
+    features.append(Feature(id=feature_type, type=feature_type, enabled=enabled))
 
 
 def apply_expert_operation(
@@ -177,22 +228,24 @@ def apply_expert_operation(
     amount: float,
     target: str = "body",
 ) -> list[str]:
-    """Apply an expert-mode operation to a manual primitive."""
-    if not obj.get("manual"):
-        return ["operation skipped: selected object is not an expert primitive"]
-
+    """Apply an expert-mode operation and rebuild the selected object."""
     op = operation.strip().lower()
     amt = max(0.0, float(amount))
     params = obj["parameters"]
+    features = obj["feature_tree"]
     actions: list[str] = []
 
     if op == "fillet":
         params["fillet_radius"] = amt
         params["chamfer_size"] = 0.0
+        _set_feature_enabled(features, "fillet_edges", True)
+        _set_feature_enabled(features, "chamfer_edges", False)
         actions.append(f"fillet {target} radius {amt}mm")
     elif op == "chamfer":
         params["chamfer_size"] = amt
         params["fillet_radius"] = 0.0
+        _set_feature_enabled(features, "chamfer_edges", True)
+        _set_feature_enabled(features, "fillet_edges", False)
         actions.append(f"chamfer {target} size {amt}mm")
     elif op == "extrude":
         params["height"] = max(0.5, float(params.get("height", 8.0)) + amount)
@@ -200,6 +253,7 @@ def apply_expert_operation(
         actions.append(f"extruded {target} by {amount}mm")
     elif op == "shell":
         params["wall_thickness"] = max(0.5, amt)
+        params["shell_enabled"] = 1.0
         actions.append(f"set shell wall thickness to {amt}mm")
     else:
         actions.append(f"unsupported expert operation: {operation}")
@@ -208,7 +262,10 @@ def apply_expert_operation(
     obj.setdefault("operation_history", []).append(
         {"operation": op, "target": target, "amount": amount}
     )
-    rebuild_manual_object(obj)
+    if obj.get("manual"):
+        rebuild_manual_object(obj)
+    else:
+        rebuild_object(obj)
     return actions
 
 
