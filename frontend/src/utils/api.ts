@@ -154,6 +154,20 @@ export async function updatePrinter(payload: {
   });
 }
 
+export async function undo(payload: { session_id: string }): Promise<ScenePayload> {
+  return request<ScenePayload>("/api/undo", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function redo(payload: { session_id: string }): Promise<ScenePayload> {
+  return request<ScenePayload>("/api/redo", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function exportUrl(sessionId: string, format: string): string {
   return `${API_BASE}/api/export/${sessionId}/${format}`;
 }

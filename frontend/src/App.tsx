@@ -160,6 +160,7 @@ export default function App() {
     sessionId,
     objects,
     selectedObjectId,
+    selectedObjectIds,
     transformMode,
     bounds,
     printers,
@@ -220,6 +221,7 @@ export default function App() {
           <CadViewport
             objects={objects}
             selectedObjectId={selectedObjectId}
+            selectedObjectIds={selectedObjectIds}
             onSelectObject={(id) => void onSelectObject(id)}
             transformMode={transformMode}
             onTransformCommit={(id, t) => void onTransformCommit(id, t)}
@@ -272,6 +274,7 @@ export default function App() {
           <CadViewport
             objects={objects}
             selectedObjectId={selectedObjectId}
+            selectedObjectIds={selectedObjectIds}
             onSelectObject={(id) => void onSelectObject(id)}
             transformMode={transformMode}
             onTransformCommit={(id, t) => void onTransformCommit(id, t)}

@@ -217,7 +217,7 @@ def build_scene_payload(
                     scale=list(t.scale),
                 ),
                 material=str(obj.get("material", "PLA")),
-                color=str(obj.get("color", "#4fc3f7")),
+                color=str(obj.get("color", "#a9aaad")),
                 mesh=mesh,
             )
         )

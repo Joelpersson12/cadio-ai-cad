@@ -239,7 +239,8 @@ def generate_phone_stand(params: dict[str, float]) -> TriMesh:
 
 def generate_battery_holder(params: dict[str, float]) -> TriMesh:
     """Generate a wall/bench battery holder with slide rails and screw holes."""
-    width = max(70.0, min(150.0, params.get("width", 104.0)))
+    slots = max(1, min(4, int(round(params.get("battery_slots", 1.0)))))
+    width = max(70.0, min(260.0, params.get("width", 104.0) * (1.0 + (slots - 1) * 0.82)))
     depth = max(55.0, min(150.0, params.get("depth", 92.0)))
     height = max(28.0, min(90.0, params.get("height", 46.0)))
     thickness = max(4.0, min(14.0, params.get("thickness", 7.0)))
@@ -252,16 +253,19 @@ def generate_battery_holder(params: dict[str, float]) -> TriMesh:
     back_plate = _make_box_with_rect_holes(width, depth, thickness, params)
     mesh = mesh.merge(back_plate)
 
+    slot_width = width / slots
     rail_width = max(thickness * 1.15, 7.0)
     rail_height = max(height * 0.52, 18.0)
     rail_depth = depth * 0.72
-    for x in (-width * 0.30, width * 0.30):
-        mesh = _add_box(mesh, rail_width, rail_depth, rail_height, [x, -depth * 0.02, thickness + rail_height / 2.0])
-        mesh = _add_box(mesh, rail_width * 1.8, rail_depth * 0.78, thickness * 0.8, [x, -depth * 0.02, thickness + rail_height + thickness * 0.4])
+    for slot in range(slots):
+        slot_center = -width / 2.0 + slot_width * (slot + 0.5)
+        for x in (slot_center - slot_width * 0.26, slot_center + slot_width * 0.26):
+            mesh = _add_box(mesh, rail_width, rail_depth, rail_height, [x, -depth * 0.02, thickness + rail_height / 2.0])
+            mesh = _add_box(mesh, rail_width * 1.8, rail_depth * 0.78, thickness * 0.8, [x, -depth * 0.02, thickness + rail_height + thickness * 0.4])
 
     # Front stop and rear registration wall for battery tabs.
-    mesh = _add_box(mesh, width * 0.72, thickness * 1.4, height * 0.45, [0.0, -depth / 2.0 + thickness * 0.7, thickness + height * 0.22])
-    mesh = _add_box(mesh, width * 0.56, thickness, height * 0.32, [0.0, depth * 0.36, thickness + height * 0.16])
+    mesh = _add_box(mesh, width * 0.88, thickness * 1.4, height * 0.45, [0.0, -depth / 2.0 + thickness * 0.7, thickness + height * 0.22])
+    mesh = _add_box(mesh, width * 0.76, thickness, height * 0.32, [0.0, depth * 0.36, thickness + height * 0.16])
 
     # Side gussets for wall-mounted strength.
     for x in (-width * 0.44, width * 0.44):

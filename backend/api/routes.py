@@ -57,6 +57,9 @@ from backend.services.session_manager import (
     add_object,
     split_object_by_line,
     replace_object_with_template_assembly,
+    save_undo_snapshot,
+    undo_session,
+    redo_session,
 )
 from backend.services.geometry_validator import GeometryValidator
 from backend.services.example_discovery import ExampleDiscovery
@@ -122,6 +125,7 @@ async def update_printer(data: PrinterUpdateRequest) -> ScenePayload | JSONRespo
         lock = acquire_lock()
         with lock:
             session = get_or_create_session(data.session_id)
+            save_undo_snapshot(session)
             session["printer"] = normalize_printer(data.printer)
             bump_version(session)
             payload = build_scene_payload(session, include_mesh=True)
@@ -162,6 +166,7 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
         lock = acquire_lock()
         with lock:
             session = get_or_create_session(data.session_id)
+            save_undo_snapshot(session)
             session["printer"] = normalize_printer(data.printer)
             session["fit"] = bool(data.fit)
 
@@ -255,6 +260,7 @@ async def update_parameters(
             if obj is None:
                 return _error(404, "Object not found")
 
+            save_undo_snapshot(session)
             allowed_params = set(DEFAULT_PARAMETERS) | set(obj["parameters"])
             for key, value in data.parameters.items():
                 if key in allowed_params:
@@ -299,6 +305,7 @@ async def toggle_feature(data: FeatureToggleRequest) -> ScenePayload | JSONRespo
             if obj is None:
                 return _error(404, "Object not found")
 
+            save_undo_snapshot(session)
             found = False
             for feature in obj["feature_tree"]:
                 fid = feature.id if hasattr(feature, "id") else feature.get("id")
@@ -342,6 +349,7 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
         lock = acquire_lock()
         with lock:
             session = get_or_create_session(data.session_id)
+            save_undo_snapshot(session)
             if data.primitive.strip().lower() == "hole" and session.get("selected_object_id") and session["object_order"]:
                 obj = get_selected_object(session)
                 diameter = max(0.5, float(data.radius or max(data.size or [5.0]) / 2.0) * 2.0)
@@ -409,6 +417,7 @@ async def update_appearance(
             if obj is None:
                 return _error(404, "Object not found")
 
+            save_undo_snapshot(session)
             if data.material is not None:
                 obj["material"] = str(data.material)[:64]
             if data.color is not None and re.fullmatch(r"#[0-9a-fA-F]{6}", data.color):
@@ -438,6 +447,7 @@ async def apply_operation(data: ExpertOperationRequest) -> ScenePayload | JSONRe
             if obj is None:
                 return _error(404, "Object not found")
 
+            save_undo_snapshot(session)
             actions = apply_expert_operation(
                 obj,
                 operation=data.operation,
@@ -488,6 +498,7 @@ async def delete_object(data: ObjectDeleteRequest) -> ScenePayload | JSONRespons
             session = get_session(data.session_id)
             if session is None:
                 return _error(404, "Session not found")
+            save_undo_snapshot(session)
             if not remove_object(session, data.object_id):
                 return _error(400, "Cannot delete last object")
             bump_version(session)
@@ -518,6 +529,7 @@ async def update_transform(
             if obj is None:
                 return _error(404, "Object not found")
 
+            save_undo_snapshot(session)
             t = obj["transform"]
             if data.position and len(data.position) == 3:
                 t.position = [float(v) for v in data.position]
@@ -532,6 +544,44 @@ async def update_transform(
         await broadcast(session["session_id"], payload.model_dump())
         return payload
 
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.post("/api/undo", response_model=None)
+async def undo(data: dict[str, str]) -> ScenePayload | JSONResponse:
+    try:
+        lock = acquire_lock()
+        with lock:
+            session = get_session(data.get("session_id", ""))
+            if session is None:
+                return _error(404, "Session not found")
+            if not undo_session(session):
+                return _error(400, "Nothing to undo")
+            payload = build_scene_payload(session, include_mesh=True, model_updated=True)
+
+        await broadcast(session["session_id"], payload.model_dump())
+        return payload
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.post("/api/redo", response_model=None)
+async def redo(data: dict[str, str]) -> ScenePayload | JSONResponse:
+    try:
+        lock = acquire_lock()
+        with lock:
+            session = get_session(data.get("session_id", ""))
+            if session is None:
+                return _error(404, "Session not found")
+            if not redo_session(session):
+                return _error(400, "Nothing to redo")
+            payload = build_scene_payload(session, include_mesh=True, model_updated=True)
+
+        await broadcast(session["session_id"], payload.model_dump())
+        return payload
     except Exception as exc:
         traceback.print_exc()
         return _error(500, str(exc))

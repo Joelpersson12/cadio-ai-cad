@@ -8,6 +8,7 @@ this module so locking is centralized.
 from __future__ import annotations
 
 import uuid
+from copy import deepcopy
 from datetime import datetime, timezone
 from threading import RLock
 from typing import Any
@@ -67,7 +68,7 @@ def create_object(name: str = "part") -> CadObject:
         "transform": Transform(),
         "shape": shape,
         "material": "PLA",
-        "color": "#b8babd",
+        "color": "#a9aaad",
     }
 
 
@@ -90,7 +91,7 @@ def create_manual_object(
         "transform": Transform(),
         "shape": shape,
         "material": "PLA",
-        "color": "#b8babd",
+        "color": "#a9aaad",
         "template_hint": None,
         "manual": True,
         "primitive": "manual",
@@ -159,7 +160,7 @@ def _create_box_component(
     params: dict[str, float],
     *,
     rotation: list[float] | None = None,
-    color: str = "#b8babd",
+    color: str = "#a9aaad",
 ) -> CadObject:
     part_params = dict(DEFAULT_PARAMETERS)
     part_params.update(params)
@@ -236,7 +237,8 @@ def replace_object_with_template_assembly(
             _create_box_component("phone_right_rail", max(thickness * 0.65, 4.5), depth * 0.54, thickness * 1.25, [width * 0.41, -depth * 0.02, thickness], params, color=color),
         ]
     elif name == "battery holder":
-        width = max(70.0, min(150.0, float(params.get("width", 104.0))))
+        slots = max(1, min(4, int(round(float(params.get("battery_slots", 1.0))))))
+        width = max(70.0, min(260.0, float(params.get("width", 104.0)) * (1.0 + (slots - 1) * 0.82)))
         depth = max(55.0, min(150.0, float(params.get("depth", 92.0))))
         height = max(28.0, min(90.0, float(params.get("height", 46.0))))
         thickness = max(4.0, min(14.0, float(params.get("thickness", 7.0))))
@@ -244,11 +246,16 @@ def replace_object_with_template_assembly(
         rail_height = max(height * 0.52, 18.0)
         parts = [
             _create_box_component("battery_back_plate", width, depth, thickness, [0.0, 0.0, 0.0], params, color=color),
-            _create_box_component("battery_left_slide", rail_width, depth * 0.72, rail_height, [-width * 0.30, -depth * 0.02, thickness], params, color=color),
-            _create_box_component("battery_right_slide", rail_width, depth * 0.72, rail_height, [width * 0.30, -depth * 0.02, thickness], params, color=color),
-            _create_box_component("battery_front_stop", width * 0.72, thickness * 1.4, height * 0.45, [0.0, -depth / 2.0 + thickness, thickness], params, color=color),
-            _create_box_component("battery_rear_register", width * 0.56, thickness, height * 0.32, [0.0, depth * 0.36, thickness], params, color=color),
+            _create_box_component("battery_front_stop", width * 0.88, thickness * 1.4, height * 0.45, [0.0, -depth / 2.0 + thickness, thickness], params, color=color),
+            _create_box_component("battery_rear_register", width * 0.76, thickness, height * 0.32, [0.0, depth * 0.36, thickness], params, color=color),
         ]
+        slot_width = width / slots
+        for slot in range(slots):
+            slot_center = -width / 2.0 + slot_width * (slot + 0.5)
+            parts.extend([
+                _create_box_component(f"battery_{slot + 1}_left_slide", rail_width, depth * 0.72, rail_height, [slot_center - slot_width * 0.26, -depth * 0.02, thickness], params, color=color),
+                _create_box_component(f"battery_{slot + 1}_right_slide", rail_width, depth * 0.72, rail_height, [slot_center + slot_width * 0.26, -depth * 0.02, thickness], params, color=color),
+            ])
     elif name == "electronics holder":
         width = max(55.0, min(180.0, float(params.get("width", 86.0))))
         depth = max(45.0, min(150.0, float(params.get("depth", 68.0))))
@@ -571,6 +578,8 @@ def create_session(session_id: str | None = None) -> str:
             "created_at": _now_iso(),
             "updated_at": _now_iso(),
             "scene_token": _new_scene_token(),
+            "undo_stack": [],
+            "redo_stack": [],
         }
     return sid
 
@@ -598,6 +607,52 @@ def bump_version(session: Session) -> None:
     session["version"] += 1
     session["updated_at"] = _now_iso()
     session["scene_token"] = _new_scene_token()
+
+
+def _snapshot(session: Session) -> dict[str, Any]:
+    return {
+        "objects": deepcopy(session["objects"]),
+        "object_order": list(session["object_order"]),
+        "selected_object_id": session.get("selected_object_id", ""),
+        "printer": session.get("printer"),
+        "fit": session.get("fit"),
+    }
+
+
+def _restore_snapshot(session: Session, snapshot: dict[str, Any]) -> None:
+    session["objects"] = deepcopy(snapshot["objects"])
+    session["object_order"] = list(snapshot["object_order"])
+    session["selected_object_id"] = snapshot.get("selected_object_id", "")
+    if snapshot.get("printer"):
+        session["printer"] = snapshot["printer"]
+    if snapshot.get("fit") is not None:
+        session["fit"] = snapshot["fit"]
+
+
+def save_undo_snapshot(session: Session) -> None:
+    session.setdefault("undo_stack", []).append(_snapshot(session))
+    session["undo_stack"] = session["undo_stack"][-50:]
+    session["redo_stack"] = []
+
+
+def undo_session(session: Session) -> bool:
+    undo_stack = session.setdefault("undo_stack", [])
+    if not undo_stack:
+        return False
+    session.setdefault("redo_stack", []).append(_snapshot(session))
+    _restore_snapshot(session, undo_stack.pop())
+    bump_version(session)
+    return True
+
+
+def redo_session(session: Session) -> bool:
+    redo_stack = session.setdefault("redo_stack", [])
+    if not redo_stack:
+        return False
+    session.setdefault("undo_stack", []).append(_snapshot(session))
+    _restore_snapshot(session, redo_stack.pop())
+    bump_version(session)
+    return True
 
 
 def add_history(

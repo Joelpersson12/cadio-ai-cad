@@ -161,7 +161,7 @@ function ScaledMesh({
       receiveShadow={false}
     >
       <meshPhysicalMaterial
-        color={selected ? "#27bfe6" : obj.color || "#b9bab8"}
+        color={selected ? "#27bfe6" : obj.color || "#a9aaad"}
         roughness={0.62}
         metalness={0.02}
         clearcoat={0.16}
@@ -286,6 +286,7 @@ function snapSketchPoint(start: THREE.Vector3, point: THREE.Vector3, tool: Exper
 interface CadViewportProps {
   objects: CadObject[];
   selectedObjectId: string;
+  selectedObjectIds?: string[];
   onSelectObject: (id: string) => void;
   transformMode: TransformMode;
   onTransformCommit: (
@@ -433,6 +434,7 @@ function SketchPlane({
 export default function CadViewport({
   objects,
   selectedObjectId,
+  selectedObjectIds = [],
   onSelectObject,
   transformMode,
   onTransformCommit,
@@ -542,7 +544,7 @@ export default function CadViewport({
       </div>
       <Canvas
         shadows
-        dpr={[1, 2.5]}
+        dpr={[1, 2]}
         camera={{ position: [300, 220, 300], fov: 42, near: 0.1, far: 10000 }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl }) => {
@@ -560,8 +562,8 @@ export default function CadViewport({
         position={[220, 280, 180]}
         intensity={2.6}
         castShadow
-        shadow-mapSize-width={4096}
-        shadow-mapSize-height={4096}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
         shadow-camera-near={1}
         shadow-camera-far={2000}
         shadow-camera-left={-400}
@@ -602,7 +604,7 @@ export default function CadViewport({
         <ScaledMesh
           key={obj.id}
           obj={obj}
-          selected={obj.id === selectedObjectId}
+          selected={obj.id === selectedObjectId || selectedObjectIds.includes(obj.id)}
           onSelect={() => onSelectObject(obj.id)}
           transformMode={transformMode}
           onTransformCommit={onTransformCommit}
@@ -627,7 +629,8 @@ export default function CadViewport({
         dampingFactor={0.07}
         minDistance={20}
         maxDistance={2000}
-        maxPolarAngle={Math.PI / 2 + 0.1}
+        minPolarAngle={0}
+        maxPolarAngle={Math.PI}
         mouseButtons={{
           LEFT: undefined,
           MIDDLE: THREE.MOUSE.PAN,

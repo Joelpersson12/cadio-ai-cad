@@ -70,6 +70,7 @@ export default function ObjectInspector() {
   const {
     objects,
     selectedObjectId,
+    selectedObjectIds,
     bounds,
     printer,
     printers,
@@ -77,6 +78,7 @@ export default function ObjectInspector() {
     sessionId,
     transformMode,
     setTransformMode,
+    selectAllObjects,
     onSelectObject,
     onDeleteObject,
     patchParam,
@@ -84,7 +86,11 @@ export default function ObjectInspector() {
     onToggleFeature,
     onTransformCommit,
     setPrinter,
+    undo,
+    redo,
   } = useCadStore();
+  const [partsOpen, setPartsOpen] = useState(true);
+  const [positionOpen, setPositionOpen] = useState(false);
 
   const selectedObject = objects.find((o) => o.id === selectedObjectId);
   const selectedPrinter = printers[printer] as PrinterProfile | undefined;
@@ -105,24 +111,55 @@ export default function ObjectInspector() {
 
   return (
     <div className="flex flex-col gap-3 text-sm">
-      {/* Object hierarchy */}
-      <h2 className="text-lg font-semibold text-cadio-text">Scene</h2>
-      <div className="flex flex-col gap-1">
-        {objects.map((o) => (
-          <motion.button
-            key={o.id}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => void onSelectObject(o.id)}
-            className={`w-full text-left px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              o.id === selectedObjectId
-                ? "bg-cadio-accent text-[#081225] font-semibold"
-                : "bg-[#1e2536] text-cadio-muted hover:bg-[#2a3347]"
-            }`}
-          >
-            {o.name}
-          </motion.button>
-        ))}
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => void undo()}
+          className="rounded-md bg-[#333336] px-3 py-1.5 text-sm text-cadio-text hover:bg-[#44454a]"
+          title="Undo"
+        >
+          ←
+        </button>
+        <button
+          onClick={() => void redo()}
+          className="rounded-md bg-[#333336] px-3 py-1.5 text-sm text-cadio-text hover:bg-[#44454a]"
+          title="Redo"
+        >
+          →
+        </button>
       </div>
+
+      {/* Object hierarchy */}
+      <button
+        onClick={() => setPartsOpen((open) => !open)}
+        className="flex items-center justify-between rounded-md bg-[#2b2b2e] px-3 py-2 text-left text-sm font-semibold text-cadio-text"
+      >
+        <span>Parts</span>
+        <span>{partsOpen ? "^" : "v"}</span>
+      </button>
+      {partsOpen && (
+        <div className="flex flex-col gap-1">
+          <button
+            onClick={selectAllObjects}
+            className="w-full rounded-md bg-[#333336] px-3 py-1.5 text-left text-xs text-cadio-muted hover:bg-[#44454a] hover:text-cadio-text"
+          >
+            Select all parts
+          </button>
+          {objects.map((o) => (
+            <motion.button
+              key={o.id}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => void onSelectObject(o.id)}
+              className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${
+                selectedObjectIds.includes(o.id)
+                  ? "bg-cadio-accent text-[#081225] font-semibold"
+                  : "bg-[#2b2b2e] text-cadio-muted hover:bg-[#3a3a3d]"
+              }`}
+            >
+              {o.name}
+            </motion.button>
+          ))}
+        </div>
+      )}
 
       {/* Transform tools */}
       <h3 className="text-sm font-semibold text-cadio-text mt-2">Transform</h3>
@@ -150,19 +187,27 @@ export default function ObjectInspector() {
 
       {transform && (
         <div className="flex flex-col gap-2 rounded-lg border border-cadio-border bg-[#202023] p-2">
-          <p className="text-xs text-cadio-muted uppercase tracking-wider">Position</p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {["X", "Y", "Z"].map((axis, i) => (
-              <NumberInput
-                key={`pos-${axis}`}
-                label={axis}
-                value={transform.position[i] ?? 0}
-                onChange={(v) => patchTransformVector("position", i, v)}
-                step={1}
-                min={-500}
-              />
-            ))}
-          </div>
+          <button
+            onClick={() => setPositionOpen((open) => !open)}
+            className="flex items-center justify-between text-xs uppercase tracking-wider text-cadio-muted"
+          >
+            <span>Position</span>
+            <span>{positionOpen ? "^" : "v"}</span>
+          </button>
+          {positionOpen && (
+            <div className="grid grid-cols-3 gap-1.5">
+              {["X", "Y", "Z"].map((axis, i) => (
+                <NumberInput
+                  key={`pos-${axis}`}
+                  label={axis}
+                  value={transform.position[i] ?? 0}
+                  onChange={(v) => patchTransformVector("position", i, v)}
+                  step={1}
+                  min={-500}
+                />
+              ))}
+            </div>
+          )}
           <p className="text-xs text-cadio-muted uppercase tracking-wider">Rotation</p>
           <div className="grid grid-cols-3 gap-1.5">
             {["X", "Y", "Z"].map((axis, i) => (

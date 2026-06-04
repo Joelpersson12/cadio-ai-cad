@@ -221,6 +221,10 @@ def _apply_deterministic_edit(
         actions.append(f"rotated {rotate_match.group(1)} degrees")
 
     if any(word in text for word in ("dewalt", "makita", "milwaukee", "ryobi", "battery holder", "battery mount")):
+        if any(word in text for word in ("dual", "double", "two", "2x", "2 ")):
+            params["battery_slots"] = 2.0
+        else:
+            params["battery_slots"] = max(float(params.get("battery_slots", 1.0)), 1.0)
         params["width"] = max(float(params.get("width", 104.0)), 104.0)
         params["depth"] = max(float(params.get("depth", 92.0)), 92.0)
         params["height"] = max(float(params.get("height", 46.0)), 46.0)

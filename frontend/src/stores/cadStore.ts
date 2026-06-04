@@ -23,6 +23,8 @@ import {
   applyExpertOperation as apiApplyExpertOperation,
   listPrinters as apiListPrinters,
   updatePrinter as apiUpdatePrinter,
+  undo as apiUndo,
+  redo as apiRedo,
 } from "../utils/api";
 
 const SESSION_KEY = "cadio_session_id";
@@ -37,6 +39,7 @@ interface CadState {
   objects: CadObject[];
   objectOrder: string[];
   selectedObjectId: string;
+  selectedObjectIds: string[];
   bounds: { x: number; y: number; z: number };
 
   // Print
@@ -69,6 +72,7 @@ interface CadState {
   patchAppearance: (appearance: { material?: string; color?: string }) => Promise<void>;
   onToggleFeature: (featureId: string, enabled: boolean) => Promise<void>;
   onSelectObject: (objectId: string) => Promise<void>;
+  selectAllObjects: () => void;
   onDeleteObject: () => Promise<void>;
   onTransformCommit: (
     objectId: string,
@@ -86,6 +90,8 @@ interface CadState {
   }) => Promise<void>;
   applyExpertOperation: (operation: string, amountOverride?: number, objectIdOverride?: string) => Promise<void>;
   setPrinter: (printer: string) => Promise<void>;
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
 }
 
 export const useCadStore = create<CadState>((set, get) => ({
@@ -96,6 +102,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   objects: [],
   objectOrder: [],
   selectedObjectId: "",
+  selectedObjectIds: [],
   bounds: { x: 0, y: 0, z: 0 },
   printer: "adventurer_3",
   printers: {},
@@ -136,6 +143,11 @@ export const useCadStore = create<CadState>((set, get) => ({
     }
   },
 
+  selectAllObjects: () => {
+    const ids = get().objects.map((object) => object.id);
+    set({ selectedObjectIds: ids, selectedObjectId: ids[0] || "" });
+  },
+
   applyScenePayload: (payload) => {
     if (payload.session_id) {
       localStorage.setItem(SESSION_KEY, payload.session_id);
@@ -147,6 +159,7 @@ export const useCadStore = create<CadState>((set, get) => ({
       objects: payload.objects,
       objectOrder: payload.object_order,
       selectedObjectId: payload.selected_object_id,
+      selectedObjectIds: payload.selected_object_id ? [payload.selected_object_id] : [],
       bounds: payload.bounds,
       printer: payload.printer,
       printAssistant: payload.print_assistant,
@@ -237,6 +250,7 @@ export const useCadStore = create<CadState>((set, get) => ({
         object_id: objectId,
       });
       get().applyScenePayload(data);
+      set({ selectedObjectIds: [objectId] });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });
     }
@@ -325,6 +339,30 @@ export const useCadStore = create<CadState>((set, get) => ({
       set({ status: `${operation} applied` });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });
+    }
+  },
+
+  undo: async () => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    try {
+      const data = await apiUndo({ session_id: sessionId });
+      get().applyScenePayload(data);
+      set({ status: "Undo" });
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Nothing to undo" });
+    }
+  },
+
+  redo: async () => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    try {
+      const data = await apiRedo({ session_id: sessionId });
+      get().applyScenePayload(data);
+      set({ status: "Redo" });
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Nothing to redo" });
     }
   },
 }));
