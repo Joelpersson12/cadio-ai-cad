@@ -23,6 +23,8 @@ export interface CadObject {
   parameters: Record<string, number>;
   feature_tree: Feature[];
   transform: Transform;
+  material: string;
+  color: string;
   mesh?: MeshPayload | null;
 }
 

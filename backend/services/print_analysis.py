@@ -33,6 +33,15 @@ def analyze_printability(session: Session) -> PrintAssistantResult:
         checks.append(f"Fits {printer['name']} build volume")
 
     # Selected object checks
+    if not session.get("selected_object_id") or not session.get("object_order"):
+        hints.append("No model selected")
+        return PrintAssistantResult(
+            warnings=warnings,
+            checks=checks,
+            hints=hints,
+            printability_score=100,
+        )
+
     selected = get_selected_object(session)
     params = selected["parameters"]
 

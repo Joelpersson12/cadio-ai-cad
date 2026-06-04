@@ -44,6 +44,8 @@ class CadObjectOut(BaseModel):
     parameters: dict[str, float]
     feature_tree: list[Feature]
     transform: Transform
+    material: str = "PLA"
+    color: str = "#4fc3f7"
     mesh: MeshPayload | None = None
 
 
@@ -97,6 +99,13 @@ class ParameterUpdateRequest(BaseModel):
     session_id: str
     object_id: str | None = None
     parameters: dict[str, float]
+
+
+class AppearanceUpdateRequest(BaseModel):
+    session_id: str
+    object_id: str | None = None
+    material: str | None = None
+    color: str | None = None
 
 
 class FeatureToggleRequest(BaseModel):

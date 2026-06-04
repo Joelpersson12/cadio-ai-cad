@@ -56,6 +56,9 @@ function ScaledMesh({
   onTransformCommit,
   printerVolume,
   selectionMode,
+  expertMode,
+  edgeOperation,
+  onEdgeAmount,
 }: {
   obj: CadObject;
   selected: boolean;
@@ -71,6 +74,9 @@ function ScaledMesh({
   ) => void;
   printerVolume: [number, number, number];
   selectionMode: SelectionMode;
+  expertMode: boolean;
+  edgeOperation: string;
+  onEdgeAmount: (x: number, y: number, operation: string) => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
  
@@ -143,12 +149,15 @@ function ScaledMesh({
         if (e.button !== 0) return;
         e.stopPropagation();
         onSelect();
+        if (expertMode && selected && selectionMode === "edge") {
+          onEdgeAmount(e.nativeEvent.clientX, e.nativeEvent.clientY, edgeOperation);
+        }
       }}
       castShadow
       receiveShadow
     >
       <meshStandardMaterial
-        color={selected ? "#4fc3f7" : "#b0bec5"}
+        color={selected ? obj.color || "#4fc3f7" : obj.color || "#b0bec5"}
         roughness={0.4}
         metalness={0.3}
         emissive={selected ? "#1a4a6e" : "#000000"}
@@ -171,9 +180,9 @@ function ScaledMesh({
         object={groupRef.current}
         mode={transformMode}
         size={0.85}
-        translationSnap={5}
-        rotationSnap={THREE.MathUtils.degToRad(15)}
-        scaleSnap={0.1}
+        translationSnap={2}
+        rotationSnap={THREE.MathUtils.degToRad(5)}
+        scaleSnap={0.05}
         onMouseUp={() => {
           const group = groupRef.current;
           if (!group) return;
@@ -274,7 +283,7 @@ interface CadViewportProps {
   onSetSelectionMode?: (mode: SelectionMode) => void;
   onSetSketchHeight?: (height: number) => void;
   onSetOperationAmount?: (amount: number) => void;
-  onApplyExpertOperation?: (operation: string) => void;
+  onApplyExpertOperation?: (operation: string, amountOverride?: number) => void;
 }
 
 function SketchPlane({
@@ -400,6 +409,14 @@ export default function CadViewport({
   onSetOperationAmount,
   onApplyExpertOperation,
 }: CadViewportProps) {
+  const [edgeOperation, setEdgeOperation] = useState("chamfer");
+  const [edgeInput, setEdgeInput] = useState<{
+    x: number;
+    y: number;
+    operation: string;
+    value: string;
+  } | null>(null);
+
   return (
     <div className="relative w-full h-full" onContextMenu={(e) => e.preventDefault()}>
       <div className="hidden md:flex absolute left-3 top-3 z-10 items-center gap-2 rounded-lg border border-cadio-border bg-[#101622]/90 p-2 backdrop-blur">
@@ -464,7 +481,13 @@ export default function CadViewport({
           <button
             key={op}
             disabled={!expertMode}
-            onClick={() => onApplyExpertOperation?.(op)}
+            onClick={() => {
+              if (selectionMode === "edge" && (op === "fillet" || op === "chamfer")) {
+                setEdgeOperation(op);
+                return;
+              }
+              onApplyExpertOperation?.(op);
+            }}
             className="rounded-md bg-[#243048] px-2.5 py-1.5 text-xs capitalize text-cadio-muted hover:text-cadio-text disabled:opacity-40"
           >
             {op}
@@ -530,6 +553,11 @@ export default function CadViewport({
           onTransformCommit={onTransformCommit}
           printerVolume={printerVolume}
           selectionMode={selectionMode}
+          expertMode={expertMode}
+          edgeOperation={edgeOperation}
+          onEdgeAmount={(x, y, operation) => {
+            setEdgeInput({ x, y, operation, value: String(operationAmount || 3) });
+          }}
         />
       ))}
  
@@ -560,6 +588,31 @@ export default function CadViewport({
         />
       </GizmoHelper>
       </Canvas>
+      {edgeInput && (
+        <div
+          className="absolute z-20 flex items-center gap-1 rounded-md border border-cadio-border bg-[#101622] p-1 shadow-xl"
+          style={{ left: edgeInput.x + 10, top: edgeInput.y + 10 }}
+        >
+          <span className="px-1 text-[11px] capitalize text-cadio-muted">{edgeInput.operation}</span>
+          <input
+            autoFocus
+            value={edgeInput.value}
+            onChange={(e) => setEdgeInput({ ...edgeInput, value: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const amount = Number(edgeInput.value.replace("mm", "").trim());
+                if (Number.isFinite(amount) && amount >= 0) {
+                  onSetOperationAmount?.(amount);
+                  onApplyExpertOperation?.(edgeInput.operation, amount);
+                }
+                setEdgeInput(null);
+              }
+              if (e.key === "Escape") setEdgeInput(null);
+            }}
+            className="w-16 rounded border border-cadio-border bg-[#121723] px-2 py-1 text-xs text-cadio-text outline-none"
+          />
+        </div>
+      )}
     </div>
   );
 }

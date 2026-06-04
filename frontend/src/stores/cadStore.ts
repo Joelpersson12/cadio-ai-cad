@@ -14,6 +14,7 @@ import {
   generate as apiGenerate,
   getMesh,
   updateParameters as apiUpdateParams,
+  updateAppearance as apiUpdateAppearance,
   toggleFeature as apiToggleFeature,
   selectObject as apiSelectObject,
   deleteObject as apiDeleteObject,
@@ -64,6 +65,7 @@ interface CadState {
   syncMesh: (sid?: string) => Promise<void>;
   runPrompt: (prompt: string) => Promise<void>;
   patchParam: (key: string, value: number) => Promise<void>;
+  patchAppearance: (appearance: { material?: string; color?: string }) => Promise<void>;
   onToggleFeature: (featureId: string, enabled: boolean) => Promise<void>;
   onSelectObject: (objectId: string) => Promise<void>;
   onDeleteObject: () => Promise<void>;
@@ -81,7 +83,7 @@ interface CadState {
     size: [number, number];
     radius?: number;
   }) => Promise<void>;
-  applyExpertOperation: (operation: string) => Promise<void>;
+  applyExpertOperation: (operation: string, amountOverride?: number) => Promise<void>;
   setPrinter: (printer: string) => void;
 }
 
@@ -259,6 +261,22 @@ export const useCadStore = create<CadState>((set, get) => ({
     }
   },
 
+  patchAppearance: async (appearance) => {
+    const { sessionId, selectedObjectId } = get();
+    if (!sessionId || !selectedObjectId) return;
+    try {
+      const data = await apiUpdateAppearance({
+        session_id: sessionId,
+        object_id: selectedObjectId,
+        ...appearance,
+      });
+      get().applyScenePayload(data);
+      set({ status: "Appearance updated" });
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Error" });
+    }
+  },
+
   createPrimitive: async ({ primitive, center, size, radius }) => {
     const { sessionId, sketchHeight } = get();
     set({ status: `Sketching ${primitive}...` });
@@ -279,7 +297,7 @@ export const useCadStore = create<CadState>((set, get) => ({
     }
   },
 
-  applyExpertOperation: async (operation) => {
+  applyExpertOperation: async (operation, amountOverride) => {
     const { sessionId, selectedObjectId, selectionMode, operationAmount } = get();
     if (!sessionId || !selectedObjectId) return;
     set({ status: `Applying ${operation}...` });
@@ -288,7 +306,7 @@ export const useCadStore = create<CadState>((set, get) => ({
         session_id: sessionId,
         object_id: selectedObjectId,
         operation,
-        amount: operationAmount,
+        amount: amountOverride ?? operationAmount,
         target: selectionMode,
       });
       get().applyScenePayload(data);

@@ -66,6 +66,8 @@ def create_object(name: str = "part") -> CadObject:
         "feature_tree": features,
         "transform": Transform(),
         "shape": shape,
+        "material": "PLA",
+        "color": "#4fc3f7",
     }
 
 
@@ -87,6 +89,8 @@ def create_manual_object(
         "feature_tree": features,
         "transform": Transform(),
         "shape": shape,
+        "material": "PLA",
+        "color": "#4fc3f7",
         "template_hint": None,
         "manual": True,
         "primitive": "manual",
@@ -394,10 +398,8 @@ def remove_object(session: Session, object_id: str) -> bool:
         return False
     if len(session["object_order"]) <= 1:
         del session["objects"][object_id]
-        base = create_object("part_1")
-        session["objects"][base["id"]] = base
-        session["object_order"] = [base["id"]]
-        session["selected_object_id"] = base["id"]
+        session["object_order"] = []
+        session["selected_object_id"] = ""
         return True
     del session["objects"][object_id]
     session["object_order"] = [

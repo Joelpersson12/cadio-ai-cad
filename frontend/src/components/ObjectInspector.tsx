@@ -47,6 +47,7 @@ export default function ObjectInspector() {
     onSelectObject,
     onDeleteObject,
     patchParam,
+    patchAppearance,
     onToggleFeature,
     onTransformCommit,
     applyExpertOperation,
@@ -223,6 +224,29 @@ export default function ObjectInspector() {
       <NumberInput label="Hole Count" value={params.hole_count ?? 0} onChange={(v) => void patchParam("hole_count", v)} />
       <NumberInput label="Wall Thickness" value={params.wall_thickness ?? 0} onChange={(v) => void patchParam("wall_thickness", v)} step={0.2} />
 
+      <h3 className="text-sm font-semibold text-cadio-text mt-2">Material</h3>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-cadio-muted">Material</span>
+        <select
+          value={selectedObject?.material ?? "PLA"}
+          onChange={(e) => void patchAppearance({ material: e.target.value })}
+          className="rounded-lg border border-cadio-border bg-[#121723] text-cadio-text px-3 py-1.5 text-sm focus:outline-none"
+        >
+          {["PLA", "PETG", "ABS", "ASA", "TPU", "Nylon", "PC", "PVA", "Resin"].map((material) => (
+            <option key={material} value={material}>{material}</option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-cadio-muted">Color</span>
+        <input
+          type="color"
+          value={selectedObject?.color ?? "#4fc3f7"}
+          onChange={(e) => void patchAppearance({ color: e.target.value })}
+          className="h-10 rounded-lg border border-cadio-border bg-[#121723] px-2 py-1"
+        />
+      </label>
+
       {/* Feature tree */}
       <h3 className="text-sm font-semibold text-cadio-text mt-2">Features</h3>
       <div className="flex flex-col gap-1.5">
@@ -265,7 +289,7 @@ export default function ObjectInspector() {
       {/* Export */}
       <h3 className="text-sm font-semibold text-cadio-text mt-2">Export</h3>
       <div className="grid grid-cols-2 gap-1.5">
-        {["stl", "step"].map((fmt) => (
+        {["stl", "3mf", "obj", "amf"].map((fmt) => (
           <a
             key={fmt}
             href={sessionId ? exportUrl(sessionId, fmt) : "#"}

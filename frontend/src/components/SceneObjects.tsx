@@ -58,9 +58,9 @@ export default function SceneObjects({
             key={`tc-${obj.id}`}
             mode={transformMode}
             size={0.8}
-            translationSnap={5}
-            rotationSnap={THREE.MathUtils.degToRad(15)}
-            scaleSnap={0.1}
+            translationSnap={2}
+            rotationSnap={THREE.MathUtils.degToRad(5)}
+            scaleSnap={0.05}
             onMouseDown={() => setDragging(true)}
             onMouseUp={(e) => {
               setDragging(false);

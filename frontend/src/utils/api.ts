@@ -96,6 +96,18 @@ export async function updateObjectTransform(payload: {
   });
 }
 
+export async function updateAppearance(payload: {
+  session_id: string;
+  object_id?: string;
+  material?: string;
+  color?: string;
+}): Promise<ScenePayload> {
+  return request<ScenePayload>("/api/appearance", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function createPrimitive(payload: {
   session_id?: string;
   primitive: string;

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 
 from backend.models.schema import (
+    AppearanceUpdateRequest,
     FeatureToggleRequest,
     ExpertOperationRequest,
     GenerateRequest,
@@ -161,7 +162,12 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                 session["selected_object_id"] = obj["id"]
                 actions = ["create new object"]
             else:
-                obj = get_selected_object(session)
+                if not session["object_order"] or not session.get("selected_object_id"):
+                    obj = create_object("part_1")
+                    add_object(session, obj)
+                    session["selected_object_id"] = obj["id"]
+                else:
+                    obj = get_selected_object(session)
                 parsed = parse_ai_command(data.prompt, session, obj)
                 obj["parameters"] = parsed["parameters"]
                 obj["feature_tree"] = parsed["feature_tree"]
@@ -302,7 +308,7 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
         lock = acquire_lock()
         with lock:
             session = get_or_create_session(data.session_id)
-            if data.primitive.strip().lower() == "hole" and session.get("selected_object_id"):
+            if data.primitive.strip().lower() == "hole" and session.get("selected_object_id") and session["object_order"]:
                 obj = get_selected_object(session)
                 diameter = max(0.5, float(data.radius or max(data.size or [5.0]) / 2.0) * 2.0)
                 actions = add_hole_to_object(obj, data.center, diameter)
@@ -335,6 +341,37 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
             payload = build_scene_payload(
                 session, include_mesh=True, model_updated=True
             )
+
+        await broadcast(session["session_id"], payload.model_dump())
+        return payload
+
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.post("/api/appearance", response_model=None)
+async def update_appearance(
+    data: AppearanceUpdateRequest,
+) -> ScenePayload | JSONResponse:
+    try:
+        lock = acquire_lock()
+        with lock:
+            session = get_session(data.session_id)
+            if session is None:
+                return _error(404, "Session not found")
+            obj = get_object(session, data.object_id)
+            if obj is None:
+                return _error(404, "Object not found")
+
+            if data.material is not None:
+                obj["material"] = str(data.material)[:64]
+            if data.color is not None and re.fullmatch(r"#[0-9a-fA-F]{6}", data.color):
+                obj["color"] = data.color
+
+            bump_version(session)
+            add_history(session, "appearance-update", [obj.get("material", ""), obj.get("color", "")])
+            payload = build_scene_payload(session, include_mesh=True)
 
         await broadcast(session["session_id"], payload.model_dump())
         return payload

@@ -54,6 +54,26 @@ PRINTERS: dict[str, dict[str, Any]] = {
     "ender_3": {"name": "Creality Ender 3", "build_volume": (220, 220, 250)},
     "creality_k1": {"name": "Creality K1", "build_volume": (220, 220, 250)},
     "prusa_mk4": {"name": "Prusa MK4", "build_volume": (250, 210, 220)},
+    "prusa_xl": {"name": "Prusa XL", "build_volume": (360, 360, 360)},
+    "prusa_mini": {"name": "Prusa Mini+", "build_volume": (180, 180, 180)},
+    "bambu_a1_mini": {"name": "Bambu Lab A1 Mini", "build_volume": (180, 180, 180)},
+    "bambu_p1p": {"name": "Bambu Lab P1P", "build_volume": (256, 256, 256)},
+    "creality_k1_max": {"name": "Creality K1 Max", "build_volume": (300, 300, 300)},
+    "creality_ender_3_v3": {"name": "Creality Ender-3 V3", "build_volume": (220, 220, 250)},
+    "creality_ender_5_plus": {"name": "Creality Ender-5 Plus", "build_volume": (350, 350, 400)},
+    "anycubic_kobra_2": {"name": "Anycubic Kobra 2", "build_volume": (220, 220, 250)},
+    "anycubic_kobra_2_max": {"name": "Anycubic Kobra 2 Max", "build_volume": (420, 420, 500)},
+    "anycubic_vyper": {"name": "Anycubic Vyper", "build_volume": (245, 245, 260)},
+    "elegoo_neptune_4": {"name": "Elegoo Neptune 4", "build_volume": (225, 225, 265)},
+    "elegoo_neptune_4_max": {"name": "Elegoo Neptune 4 Max", "build_volume": (420, 420, 480)},
+    "qidi_x_plus_3": {"name": "QIDI X-Plus 3", "build_volume": (280, 280, 270)},
+    "qidi_x_max_3": {"name": "QIDI X-Max 3", "build_volume": (325, 325, 315)},
+    "flashforge_ad5m_pro": {"name": "Flashforge Adventurer 5M Pro", "build_volume": (220, 220, 220)},
+    "raise3d_pro3": {"name": "Raise3D Pro3", "build_volume": (300, 300, 300)},
+    "ultimaker_s5": {"name": "UltiMaker S5", "build_volume": (330, 240, 300)},
+    "snapmaker_j1": {"name": "Snapmaker J1", "build_volume": (300, 200, 200)},
+    "voron_24_300": {"name": "Voron 2.4 300", "build_volume": (300, 300, 280)},
+    "voron_24_350": {"name": "Voron 2.4 350", "build_volume": (350, 350, 330)},
 }
 
 DEFAULT_PRINTER = "adventurer_3"
@@ -196,6 +216,8 @@ def build_scene_payload(
                     rotation=list(t.rotation),
                     scale=list(t.scale),
                 ),
+                material=str(obj.get("material", "PLA")),
+                color=str(obj.get("color", "#4fc3f7")),
                 mesh=mesh,
             )
         )

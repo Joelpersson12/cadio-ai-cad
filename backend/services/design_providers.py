@@ -134,6 +134,51 @@ def _popularity(likes: int, downloads: int, rating: float) -> int:
     return int(round(score))
 
 
+
+
+def _generic_link_results(
+    page: str,
+    source: str,
+    base_url: str,
+    limit: int,
+) -> list[ExampleDesign]:
+    seen: set[str] = set()
+    results: list[ExampleDesign] = []
+    for href, text in re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', page, re.DOTALL | re.I):
+        title = re.sub(r"<[^>]+>", " ", html.unescape(text))
+        title = re.sub(r"\s+", " ", title).strip()
+        if len(title) < 4:
+            continue
+        if any(skip in title.lower() for skip in ("login", "sign up", "privacy", "terms", "advertise")):
+            continue
+        if href.startswith("/"):
+            url = base_url.rstrip("/") + href
+        elif href.startswith("http"):
+            url = href
+        else:
+            continue
+        if url in seen:
+            continue
+        seen.add(url)
+        results.append(
+            ExampleDesign(
+                id=_stable_id(source, url),
+                title=title[:120],
+                source=source,
+                url=url,
+                image_url=None,
+                category="3D Model",
+                tags=_title_tags(title),
+                popularity=max(10, 80 - len(results) * 8),
+                description=None,
+                created_at=None,
+            )
+        )
+        if len(results) >= limit:
+            break
+    return results
+
+
 class MakerworldProvider(DesignProvider):
     """MakerWorld design provider.
 
@@ -325,6 +370,60 @@ class ThangsProvider(DesignProvider):
         return "Thangs"
 
 
+class StlFinderProvider(DesignProvider):
+    """STLFinder meta-search provider for broad 3D model discovery."""
+
+    def search(self, query: str, limit: int = 5) -> list[ExampleDesign]:
+        cache_key = ("stlfinder", query.strip().lower(), limit)
+        cached = _SEARCH_CACHE.get(cache_key)
+        if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+            return list(cached[1])
+        try:
+            page = _fetch_text(f"https://www.stlfinder.com/search/?query={quote_plus(query)}")
+        except Exception:
+            return []
+        results = _generic_link_results(page, "stlfinder", "https://www.stlfinder.com", limit)
+        _SEARCH_CACHE[cache_key] = (time.time(), results)
+        return list(results)
+
+    def get_popular(self, category: str, limit: int = 5) -> list[ExampleDesign]:
+        return self.search(category, limit)
+
+    def is_available(self) -> bool:
+        return True
+
+    @property
+    def provider_name(self) -> str:
+        return "STLFinder"
+
+
+class YeggiProvider(DesignProvider):
+    """Yeggi meta-search provider for additional printable model signals."""
+
+    def search(self, query: str, limit: int = 5) -> list[ExampleDesign]:
+        cache_key = ("yeggi", query.strip().lower(), limit)
+        cached = _SEARCH_CACHE.get(cache_key)
+        if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+            return list(cached[1])
+        try:
+            page = _fetch_text(f"https://www.yeggi.com/q/{quote_plus(query).replace('+', '+')}/")
+        except Exception:
+            return []
+        results = _generic_link_results(page, "yeggi", "https://www.yeggi.com", limit)
+        _SEARCH_CACHE[cache_key] = (time.time(), results)
+        return list(results)
+
+    def get_popular(self, category: str, limit: int = 5) -> list[ExampleDesign]:
+        return self.search(category, limit)
+
+    def is_available(self) -> bool:
+        return True
+
+    @property
+    def provider_name(self) -> str:
+        return "Yeggi"
+
+
 class ProviderRegistry:
     """Central registry for design providers."""
     
@@ -334,6 +433,8 @@ class ProviderRegistry:
             "printables": PrintablesProvider(),
             "thingiverse": ThingiverseProvider(),
             "thangs": ThangsProvider(),
+            "stlfinder": StlFinderProvider(),
+            "yeggi": YeggiProvider(),
         }
     
     def search_all(self, query: str, limit: int = 5) -> list[ExampleDesign]:
@@ -343,9 +444,15 @@ class ProviderRegistry:
             if provider.is_available():
                 results.extend(provider.search(query, limit))
         
-        # Sort by popularity descending
-        results.sort(key=lambda d: d.popularity, reverse=True)
-        return results[:limit]
+        filtered = [
+            d for d in results
+            if _query_relevance(query, d.title, d.tags) > 0
+        ] or results
+        filtered.sort(
+            key=lambda d: (_query_relevance(query, d.title, d.tags), d.popularity),
+            reverse=True,
+        )
+        return filtered[:limit]
     
     def get_popular_all(self, category: str, limit: int = 5) -> list[ExampleDesign]:
         """Get popular designs from all available providers."""
@@ -401,3 +508,11 @@ def _title_tags(title: str) -> list[str]:
         if len(word) > 2 and word not in {"the", "and", "for", "with", "stand"}
     ]
     return useful[:12]
+
+
+def _query_relevance(query: str, title: str, tags: list[str]) -> int:
+    words = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2]
+    haystack = set(re.findall(r"[a-z0-9]+", title.lower()) + tags)
+    if not words:
+        return 0
+    return sum(1 for word in words if word in haystack)
