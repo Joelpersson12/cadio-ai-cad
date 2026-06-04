@@ -2,5 +2,4 @@ fastapi
 uvicorn[standard]
 pydantic
 websockets
-cadquery-ocp
 openai

@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,6 +32,12 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+
+@app.get("/health")
+def root_health() -> dict[str, str]:
+    """Railway healthcheck endpoint."""
+    return {"status": "ok", "service": "cadio-v2"}
 
 # ---------------------------------------------------------------------------
 # Frontend static files
@@ -130,14 +135,9 @@ def serve_spa(full_path: str) -> FileResponse | JSONResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
-
-import os
-import uvicorn
-
 if __name__ == "__main__":
+    import uvicorn
+
     port = int(os.environ.get("PORT", 8000))
 
     uvicorn.run(
