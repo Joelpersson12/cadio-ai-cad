@@ -48,12 +48,25 @@ export default function ObjectInspector() {
     onDeleteObject,
     patchParam,
     onToggleFeature,
+    onTransformCommit,
     setPrinter,
   } = useCadStore();
 
   const selectedObject = objects.find((o) => o.id === selectedObjectId);
   const params = selectedObject?.parameters ?? {};
   const features = selectedObject?.feature_tree ?? [];
+  const transform = selectedObject?.transform;
+
+  const patchTransformVector = (
+    key: "position" | "rotation" | "scale",
+    index: number,
+    value: number,
+  ) => {
+    if (!selectedObject || !transform) return;
+    const next = [...transform[key]] as [number, number, number];
+    next[index] = value;
+    void onTransformCommit(selectedObject.id, { [key]: next });
+  };
 
   return (
     <div className="flex flex-col gap-3 text-sm">
@@ -99,6 +112,50 @@ export default function ObjectInspector() {
       >
         Delete Selected
       </button>
+
+      {transform && (
+        <div className="flex flex-col gap-2 rounded-lg border border-cadio-border bg-[#101622] p-2">
+          <p className="text-xs text-cadio-muted uppercase tracking-wider">Position</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {["X", "Y", "Z"].map((axis, i) => (
+              <NumberInput
+                key={`pos-${axis}`}
+                label={axis}
+                value={transform.position[i] ?? 0}
+                onChange={(v) => patchTransformVector("position", i, v)}
+                step={1}
+                min={-500}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-cadio-muted uppercase tracking-wider">Rotation</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {["X", "Y", "Z"].map((axis, i) => (
+              <NumberInput
+                key={`rot-${axis}`}
+                label={axis}
+                value={transform.rotation[i] ?? 0}
+                onChange={(v) => patchTransformVector("rotation", i, v)}
+                step={5}
+                min={-360}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-cadio-muted uppercase tracking-wider">Scale</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {["X", "Y", "Z"].map((axis, i) => (
+              <NumberInput
+                key={`scale-${axis}`}
+                label={axis}
+                value={transform.scale[i] ?? 1}
+                onChange={(v) => patchTransformVector("scale", i, Math.max(0.05, v))}
+                step={0.1}
+                min={0.05}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Parameters */}
       <h3 className="text-sm font-semibold text-cadio-text mt-2">Parameters</h3>

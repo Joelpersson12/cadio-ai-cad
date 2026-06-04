@@ -152,6 +152,74 @@ def _ensure_feature(
     features.append(Feature(id=feature_type, type=feature_type, enabled=enabled))
 
 
+def _apply_deterministic_edit(
+    prompt: str,
+    params: dict[str, float],
+    features: list[Feature],
+    transform: Transform,
+) -> list[str]:
+    """Handle common quick edits without relying on an external LLM."""
+    text = prompt.lower()
+    actions: list[str] = []
+
+    def scale_param(key: str, factor: float, minimum: float = 0.0, maximum: float = 500.0) -> None:
+        params[key] = max(minimum, min(maximum, float(params.get(key, 0.0)) * factor))
+
+    if any(phrase in text for phrase in ("make it taller", "taller", "increase height")):
+        scale_param("height", 1.25, 20.0)
+        actions.append("increased height")
+
+    if any(phrase in text for phrase in ("make it wider", "wider", "increase width")):
+        scale_param("width", 1.25, 10.0)
+        actions.append("increased width")
+
+    if any(phrase in text for phrase in ("make it thicker", "thicker", "stronger", "heavy duty", "heavy-duty")):
+        scale_param("thickness", 1.25, 2.0, 30.0)
+        params["wall_thickness"] = max(float(params.get("wall_thickness", 3.0)), 4.0)
+        actions.append("increased thickness")
+
+    if any(phrase in text for phrase in ("rounded", "round corners", "fillet")):
+        params["fillet_radius"] = max(float(params.get("fillet_radius", 2.0)), 4.0)
+        _ensure_feature(features, "fillet_edges", True)
+        _ensure_feature(features, "chamfer_edges", False)
+        actions.append("enabled rounded corners")
+
+    if any(phrase in text for phrase in ("mounting holes", "add holes", "holes")):
+        params["hole_count"] = max(float(params.get("hole_count", 0.0)), 2.0)
+        params["hole_diameter"] = max(float(params.get("hole_diameter", 5.0)), 5.0)
+        _ensure_feature(features, "mount_holes", True)
+        actions.append("enabled mounting holes")
+
+    if "mirror" in text:
+        _ensure_feature(features, "mirror", True)
+        actions.append("enabled mirrored geometry")
+
+    if any(phrase in text for phrase in ("optimize for printing", "optimise for printing", "printable")):
+        params["thickness"] = max(float(params.get("thickness", 6.0)), 6.0)
+        params["wall_thickness"] = max(float(params.get("wall_thickness", 3.0)), 3.0)
+        params["angle"] = min(72.0, max(60.0, float(params.get("angle", 68.0))))
+        _ensure_feature(features, "base_extrude", True)
+        _ensure_feature(features, "fillet_edges", True)
+        actions.append("optimized for printing")
+
+    rotate_match = re.search(r"rotate\s+(-?\d+(?:\.\d+)?)", text)
+    if rotate_match:
+        transform.rotation[2] += float(rotate_match.group(1))
+        actions.append(f"rotated {rotate_match.group(1)} degrees")
+
+    return actions
+
+
+def _feature_tree_for_template(default_features: list[str]) -> list[Feature]:
+    from backend.services.cad_engine import DEFAULT_FEATURE_TREE
+
+    enabled = set(default_features)
+    features = [_coerce_feature(f) for f in DEFAULT_FEATURE_TREE]
+    for feature in features:
+        feature.enabled = feature.type in enabled
+    return features
+
+
 def _parse_with_gpt(prompt: str, current_params: dict, current_transform: dict) -> dict:
     """Call GPT-4o to parse the prompt into CAD changes."""
     try:
@@ -210,7 +278,7 @@ def parse_ai_command(
             if key not in ["width", "depth", "height", "thickness", "angle", "hole_count"]:
                 params[key] = obj["parameters"][key]
         
-        features = [_coerce_feature(f) for f in template.default_features]
+        features = _feature_tree_for_template(template.default_features)
         external_actions = _external_design_signals(prompt, params)
         
         obj["template_hint"] = template.name
@@ -232,8 +300,12 @@ def parse_ai_command(
         "scale": transform.scale,
     }
 
+    quick_actions = _apply_deterministic_edit(prompt, params, features, transform)
+
     # Call GPT-4o for fine-tuning if not a direct template match
-    if not template or "modify" in prompt.lower() or "change" in prompt.lower():
+    if quick_actions:
+        actions = quick_actions
+    elif not template or "modify" in prompt.lower() or "change" in prompt.lower():
         result = _parse_with_gpt(prompt, params, current_transform)
         
         # Apply parameter changes

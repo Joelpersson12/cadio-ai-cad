@@ -51,6 +51,7 @@ from backend.services.session_manager import (
 )
 from backend.services.geometry_validator import GeometryValidator
 from backend.services.example_discovery import ExampleDiscovery
+from backend.services.cad_engine import DEFAULT_PARAMETERS
 from backend.services.ws_manager import broadcast, connect, disconnect
 
 logger = logging.getLogger(__name__)
@@ -213,8 +214,9 @@ async def update_parameters(
             if obj is None:
                 return _error(404, "Object not found")
 
+            allowed_params = set(DEFAULT_PARAMETERS) | set(obj["parameters"])
             for key, value in data.parameters.items():
-                if key in obj["parameters"]:
+                if key in allowed_params:
                     obj["parameters"][key] = float(value)
             rebuild_object(obj)
 

@@ -332,6 +332,14 @@ def rebuild_from_features(
             if template:
                 # Generate using template
                 mesh = template.geometry_fn(params)
+                enabled_set = {f.type for f in feature_tree if f.enabled}
+                if "mirror" in enabled_set and mesh.verts:
+                    mirrored = TriMesh()
+                    for vx, vy, vz in mesh.verts:
+                        mirrored.verts.append((-vx, vy, vz))
+                    for a, b, c in mesh.tris:
+                        mirrored.tris.append((a, c, b))
+                    mesh = mesh.merge(mirrored)
                 # Ensure all geometry is above build plate
                 mesh = shift_mesh_to_buildplate(mesh)
                 return mesh
