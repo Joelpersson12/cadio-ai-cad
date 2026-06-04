@@ -164,10 +164,17 @@ export default function App() {
     bounds,
     printers,
     printer,
+    expertMode,
+    expertTool,
+    sketchHeight,
     loadPrinters,
     applyScenePayload,
     onSelectObject,
     onTransformCommit,
+    setExpertMode,
+    setExpertTool,
+    setSketchHeight,
+    createPrimitive,
     runPrompt,
   } = useCadStore();
 
@@ -213,6 +220,13 @@ export default function App() {
             onTransformCommit={(id, t) => void onTransformCommit(id, t)}
             printerVolume={printerVolume}
             bounds={bounds}
+            expertMode={expertMode}
+            expertTool={expertTool}
+            sketchHeight={sketchHeight}
+            onSetExpertMode={setExpertMode}
+            onSetExpertTool={setExpertTool}
+            onSetSketchHeight={setSketchHeight}
+            onCreatePrimitive={(payload) => void createPrimitive(payload)}
           />
         </main>
 
@@ -253,6 +267,7 @@ export default function App() {
             onTransformCommit={(id, t) => void onTransformCommit(id, t)}
             printerVolume={printerVolume}
             bounds={bounds}
+            expertMode={false}
           />
         </div>
 

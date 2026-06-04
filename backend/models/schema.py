@@ -122,3 +122,13 @@ class TransformUpdateRequest(BaseModel):
     position: list[float] | None = None
     rotation: list[float] | None = None
     scale: list[float] | None = None
+
+
+class PrimitiveCreateRequest(BaseModel):
+    session_id: str | None = None
+    primitive: str
+    name: str | None = None
+    center: list[float] = Field(default_factory=lambda: [0.0, 0.0])
+    size: list[float] = Field(default_factory=lambda: [40.0, 30.0])
+    height: float = 8.0
+    radius: float | None = None

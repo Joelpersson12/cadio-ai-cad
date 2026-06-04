@@ -96,6 +96,21 @@ export async function updateObjectTransform(payload: {
   });
 }
 
+export async function createPrimitive(payload: {
+  session_id?: string;
+  primitive: string;
+  name?: string;
+  center: [number, number];
+  size: [number, number];
+  height: number;
+  radius?: number;
+}): Promise<ScenePayload> {
+  return request<ScenePayload>("/api/object/primitive", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listPrinters(): Promise<{
   status: string;
   default: string;

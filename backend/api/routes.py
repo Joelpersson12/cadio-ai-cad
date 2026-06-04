@@ -20,6 +20,7 @@ from backend.models.schema import (
     ObjectDeleteRequest,
     ObjectSelectRequest,
     ParameterUpdateRequest,
+    PrimitiveCreateRequest,
     ScenePayload,
     TransformUpdateRequest,
 )
@@ -41,6 +42,7 @@ from backend.services.session_manager import (
     add_history,
     bump_version,
     create_object,
+    create_primitive_object,
     get_object,
     get_or_create_session,
     get_selected_object,
@@ -289,6 +291,42 @@ async def toggle_feature(data: FeatureToggleRequest) -> ScenePayload | JSONRespo
 # ---------------------------------------------------------------------------
 # Object selection / deletion / transform
 # ---------------------------------------------------------------------------
+
+
+@router.post("/api/object/primitive", response_model=None)
+async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONResponse:
+    try:
+        lock = acquire_lock()
+        with lock:
+            session = get_or_create_session(data.session_id)
+            obj = create_primitive_object(
+                primitive=data.primitive,
+                name=data.name or data.primitive,
+                center=data.center,
+                size=data.size,
+                height=data.height,
+                radius=data.radius,
+            )
+            add_object(session, obj)
+            session["selected_object_id"] = obj["id"]
+            if session.get("fit"):
+                auto_fit_session(session)
+            bump_version(session)
+            add_history(
+                session,
+                f"expert-{data.primitive}",
+                [f"created {data.primitive} from sketch"],
+            )
+            payload = build_scene_payload(
+                session, include_mesh=True, model_updated=True
+            )
+
+        await broadcast(session["session_id"], payload.model_dump())
+        return payload
+
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
 
 
 @router.post("/api/object/select", response_model=None)

@@ -6,6 +6,7 @@ import type {
   PrintAssistantResult,
   PrinterProfile,
   ScenePayload,
+  ExpertTool,
   TransformMode,
 } from "../utils/types";
 import {
@@ -16,6 +17,7 @@ import {
   selectObject as apiSelectObject,
   deleteObject as apiDeleteObject,
   updateObjectTransform as apiUpdateTransform,
+  createPrimitive as apiCreatePrimitive,
   listPrinters as apiListPrinters,
 } from "../utils/api";
 
@@ -41,10 +43,16 @@ interface CadState {
   // UI
   status: string;
   transformMode: TransformMode;
+  expertMode: boolean;
+  expertTool: ExpertTool;
+  sketchHeight: number;
   editHistory: Array<Record<string, unknown>>;
 
   // Actions
   setTransformMode: (mode: TransformMode) => void;
+  setExpertMode: (enabled: boolean) => void;
+  setExpertTool: (tool: ExpertTool) => void;
+  setSketchHeight: (height: number) => void;
   applyScenePayload: (payload: ScenePayload) => void;
   loadPrinters: () => Promise<void>;
   syncMesh: (sid?: string) => Promise<void>;
@@ -61,6 +69,12 @@ interface CadState {
       scale?: [number, number, number];
     },
   ) => Promise<void>;
+  createPrimitive: (payload: {
+    primitive: ExpertTool;
+    center: [number, number];
+    size: [number, number];
+    radius?: number;
+  }) => Promise<void>;
   setPrinter: (printer: string) => void;
 }
 
@@ -83,6 +97,9 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
   status: "Ready",
   transformMode: "translate",
+  expertMode: false,
+  expertTool: "select",
+  sketchHeight: 8,
   editHistory: [],
 
   // ---------------------------------------------------------------------------
@@ -90,6 +107,9 @@ export const useCadStore = create<CadState>((set, get) => ({
   // ---------------------------------------------------------------------------
 
   setTransformMode: (mode) => set({ transformMode: mode }),
+  setExpertMode: (enabled) => set({ expertMode: enabled, expertTool: enabled ? get().expertTool : "select" }),
+  setExpertTool: (tool) => set({ expertTool: tool }),
+  setSketchHeight: (height) => set({ sketchHeight: Math.max(0.5, height) }),
   setPrinter: (printer) => set({ printer }),
 
   applyScenePayload: (payload) => {
@@ -223,6 +243,26 @@ export const useCadStore = create<CadState>((set, get) => ({
         ...transform,
       });
       get().applyScenePayload(data);
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Error" });
+    }
+  },
+
+  createPrimitive: async ({ primitive, center, size, radius }) => {
+    const { sessionId, sketchHeight } = get();
+    set({ status: `Sketching ${primitive}...` });
+    try {
+      const data = await apiCreatePrimitive({
+        session_id: sessionId || undefined,
+        primitive,
+        name: primitive === "hole" ? "hole guide" : primitive,
+        center,
+        size,
+        radius,
+        height: sketchHeight,
+      });
+      get().applyScenePayload(data);
+      set({ status: `Created ${primitive}` });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });
     }

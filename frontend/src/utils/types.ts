@@ -56,3 +56,5 @@ export interface PrinterProfile {
 }
 
 export type TransformMode = "translate" | "rotate" | "scale";
+
+export type ExpertTool = "select" | "rectangle" | "circle" | "hole";

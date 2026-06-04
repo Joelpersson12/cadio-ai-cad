@@ -18,6 +18,8 @@ from backend.services.cad_engine import (
     DEFAULT_PARAMETERS,
     TriMesh,
     auto_adjust_z_position,
+    make_box,
+    make_cylinder,
     rebuild_from_features,
 )
 
@@ -62,6 +64,76 @@ def create_object(name: str = "part") -> CadObject:
         "transform": Transform(),
         "shape": shape,
     }
+
+
+def create_manual_object(
+    name: str,
+    shape: TriMesh,
+    parameters: dict[str, float] | None = None,
+) -> CadObject:
+    """Create an object from an explicitly sketched mesh."""
+    params = dict(DEFAULT_PARAMETERS)
+    if parameters:
+        params.update(parameters)
+    features = [Feature(**f) for f in DEFAULT_FEATURE_TREE]
+    obj = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "parameters": params,
+        "feature_tree": features,
+        "transform": Transform(),
+        "shape": shape,
+        "template_hint": None,
+        "manual": True,
+    }
+    auto_adjust_z_position(obj["transform"], shape)
+    return obj
+
+
+def create_primitive_object(
+    primitive: str,
+    name: str,
+    center: list[float],
+    size: list[float],
+    height: float,
+    radius: float | None = None,
+) -> CadObject:
+    """Create a simple expert-mode primitive on the build plate."""
+    cx = float(center[0]) if len(center) > 0 else 0.0
+    cy = float(center[1]) if len(center) > 1 else 0.0
+    width = max(1.0, abs(float(size[0])) if len(size) > 0 else 40.0)
+    depth = max(1.0, abs(float(size[1])) if len(size) > 1 else 30.0)
+    h = max(0.5, min(500.0, float(height)))
+
+    kind = primitive.strip().lower()
+    if kind in {"circle", "cylinder", "hole"}:
+        r = max(0.5, float(radius) if radius is not None else max(width, depth) / 2.0)
+        shape = make_cylinder(r, h, origin=(0.0, 0.0, 0.0))
+        params = {
+            "width": r * 2.0,
+            "depth": r * 2.0,
+            "height": h,
+            "thickness": h,
+            "hole_diameter": r * 2.0,
+        }
+        obj_name = name or ("hole_guide" if kind == "hole" else "cylinder")
+    else:
+        shape = make_box(width, depth, h)
+        params = {
+            "width": width,
+            "depth": depth,
+            "height": h,
+            "thickness": h,
+        }
+        obj_name = name or "rectangle"
+
+    obj = create_manual_object(obj_name, shape, params)
+    obj["transform"].position = [cx, cy, 0.0]
+    if kind == "hole":
+        obj["feature_tree"] = [
+            Feature(id="hole_guide", type="hole_guide", enabled=True),
+        ]
+    return obj
 
 
 # ---------------------------------------------------------------------------
