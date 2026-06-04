@@ -170,7 +170,16 @@ def _create_box_component(
         "height": float(height),
         "thickness": float(height),
     })
-    shape = make_box_body(width, depth, height) or make_box(width, depth, height)
+    fillet = max(0.0, min(float(params.get("fillet_radius", 0.0)), width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1))
+    chamfer = max(0.0, min(float(params.get("chamfer_size", 0.0)), width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1))
+    shape = make_box_body(width, depth, height, fillet=fillet, chamfer=chamfer)
+    if shape is None:
+        if fillet > 0.0:
+            shape = make_rounded_box(width, depth, height, fillet, segments=8)
+        elif chamfer > 0.0:
+            shape = make_rounded_box(width, depth, height, chamfer, segments=1)
+        else:
+            shape = make_box(width, depth, height)
     obj = create_manual_object(name, shape, part_params)
     obj["primitive"] = "rectangle"
     obj["template_component"] = True

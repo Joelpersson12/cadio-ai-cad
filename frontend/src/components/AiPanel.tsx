@@ -94,6 +94,14 @@ export default function AiPanel() {
           </button>
         </div>
       )}
+      {!showExamples && (
+        <button
+          onClick={() => setShowExamples(true)}
+          className="w-full rounded-md bg-[#2b2b2e] px-3 py-2 text-left text-xs font-semibold text-cadio-text hover:bg-[#38383b] transition-all"
+        >
+          Get Inspired
+        </button>
+      )}
 
       {/* Divider */}
       <div className="border-t border-cadio-border" />

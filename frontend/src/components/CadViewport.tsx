@@ -169,10 +169,10 @@ function ScaledMesh({
     >
       <meshPhysicalMaterial
         color={selected ? "#27bfe6" : obj.color || "#a9aaad"}
-        roughness={0.62}
+        roughness={0.68}
         metalness={0.02}
-        clearcoat={0.16}
-        clearcoatRoughness={0.72}
+        clearcoat={0.08}
+        clearcoatRoughness={0.82}
         emissive={selected ? "#0a5265" : "#000000"}
         emissiveIntensity={selected ? 0.12 : 0}
         polygonOffset
@@ -238,11 +238,15 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
     <group>
       {/* Base plate - visible and textured */}
       <mesh position={[0, -0.55, 0]} receiveShadow>
-        <boxGeometry args={[px, 0.08, py]} />
+        <boxGeometry args={[px, 0.04, py]} />
         <meshStandardMaterial 
-          color="#202124" 
-          roughness={0.95}
+          color="#38393d" 
+          roughness={0.88}
           metalness={0.02}
+          transparent
+          opacity={0.18}
+          side={THREE.DoubleSide}
+          depthWrite={false}
         />
       </mesh>
       {/* Corner markers for orientation */}
@@ -562,6 +566,7 @@ export default function CadViewport({
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 1.0;
         }}
+        onPointerUp={() => setTransformDragging(false)}
       >
       <color attach="background" args={["#1d1d20"]} />
  
