@@ -28,40 +28,139 @@ class ProductTemplate:
 # Phone & Device Stands
 # ---------------------------------------------------------------------------
 
+def _add_box(mesh: TriMesh, width: float, depth: float, height: float, pos: list[float]) -> TriMesh:
+    return mesh.merge(
+        make_box(width, depth, height).transformed(
+            Transform(position=pos, rotation=[0.0, 0.0, 0.0], scale=[1.0, 1.0, 1.0])
+        )
+    )
+
+
+def _make_slanted_slab(
+    width: float,
+    y0: float,
+    z0: float,
+    y1: float,
+    z1: float,
+    thickness: float,
+) -> TriMesh:
+    """Create a rectangular slab following a line in the Y/Z plane."""
+    import math
+
+    dy = y1 - y0
+    dz = z1 - z0
+    length = max(math.hypot(dy, dz), 1e-6)
+    ny = -dz / length
+    nz = dy / length
+    oy = ny * thickness / 2.0
+    oz = nz * thickness / 2.0
+    hw = width / 2.0
+
+    verts = [
+        (-hw, y0 + oy, z0 + oz),
+        (hw, y0 + oy, z0 + oz),
+        (hw, y1 + oy, z1 + oz),
+        (-hw, y1 + oy, z1 + oz),
+        (-hw, y0 - oy, z0 - oz),
+        (hw, y0 - oy, z0 - oz),
+        (hw, y1 - oy, z1 - oz),
+        (-hw, y1 - oy, z1 - oz),
+    ]
+    mesh = TriMesh()
+    ids = [mesh.add_vertex(v) for v in verts]
+    for face in [
+        (0, 1, 2, 3),
+        (5, 4, 7, 6),
+        (4, 5, 1, 0),
+        (3, 2, 6, 7),
+        (1, 5, 6, 2),
+        (4, 0, 3, 7),
+    ]:
+        mesh.add_quad(*(ids[i] for i in face))
+    return mesh
+
+
+def _make_side_rib(x: float, y0: float, y1: float, z0: float, z1: float, thickness: float) -> TriMesh:
+    """Create a triangular side gusset for stand stiffness."""
+    half = thickness / 2.0
+    verts = [
+        (x - half, y0, z0),
+        (x - half, y1, z0),
+        (x - half, y1, z1),
+        (x + half, y0, z0),
+        (x + half, y1, z0),
+        (x + half, y1, z1),
+    ]
+    mesh = TriMesh()
+    ids = [mesh.add_vertex(v) for v in verts]
+    mesh.add_tri(ids[0], ids[1], ids[2])
+    mesh.add_tri(ids[3], ids[5], ids[4])
+    mesh.add_quad(ids[0], ids[3], ids[4], ids[1])
+    mesh.add_quad(ids[1], ids[4], ids[5], ids[2])
+    mesh.add_quad(ids[2], ids[5], ids[3], ids[0])
+    return mesh
+
 def generate_phone_stand(params: dict[str, float]) -> TriMesh:
     """Generate a realistic phone stand."""
-    width = max(70.0, min(150.0, params.get("width", 85.0)))
-    depth = max(60.0, min(150.0, params.get("depth", 75.0)))
-    height = max(80.0, min(200.0, params.get("height", 120.0)))
-    thickness = max(4.0, min(15.0, params.get("thickness", 6.0)))
-    angle = max(40.0, min(80.0, params.get("angle", 65.0)))
-    
-    mesh = TriMesh()
-    
-    # Base platform
-    base = make_box(width, depth, thickness)
-    mesh = mesh.merge(base)
-    
-    # Support structure at back
-    support_width = max(width * 0.8, 20.0)
-    support_thickness = thickness
-    support_height = height * 0.7
-    support = make_box(support_width, support_thickness, support_height)
-    
-    # Position support at angle
-    rot_rad = (angle - 90.0) * 3.14159 / 180.0
+    width = max(72.0, min(125.0, params.get("width", 88.0)))
+    depth = max(65.0, min(120.0, params.get("depth", 82.0)))
+    height = max(85.0, min(165.0, params.get("height", 118.0)))
+    thickness = max(5.0, min(12.0, params.get("thickness", 7.0)))
+    angle = max(58.0, min(75.0, params.get("angle", 68.0)))
+
     import math
-    offset_z = support_height * 0.3
-    offset_y = -depth * 0.25
-    
-    support = support.transformed(Transform(
-        position=[0, offset_y, offset_z],
-        rotation=[angle - 90.0, 0, 0],
-        scale=[1.0, 1.0, 1.0],
-    ))
-    mesh = mesh.merge(support)
-    
-    # Fillet edge (represented by slight rounding via geometry)
+
+    mesh = TriMesh()
+
+    # Stable footprint with a small front retaining lip.
+    mesh = _add_box(mesh, width, depth, thickness, [0.0, 0.0, thickness / 2.0])
+    lip_height = max(thickness * 2.2, 14.0)
+    lip_depth = max(thickness * 1.4, 9.0)
+    mesh = _add_box(
+        mesh,
+        width * 0.92,
+        lip_depth,
+        lip_height,
+        [0.0, -depth / 2.0 + lip_depth / 2.0, thickness + lip_height / 2.0],
+    )
+
+    # Angled back support: a real slab from base to top, not a floating box.
+    lean = math.tan(math.radians(90.0 - angle)) * height
+    bottom_y = -depth * 0.24
+    top_y = min(depth * 0.35, bottom_y + lean)
+    back = _make_slanted_slab(
+        width * 0.86,
+        bottom_y,
+        thickness,
+        top_y,
+        height,
+        thickness,
+    )
+    mesh = mesh.merge(back)
+
+    # Two triangular gussets make the stand look and print like a real design.
+    rib_offset = width * 0.34
+    for x in (-rib_offset, rib_offset):
+        mesh = mesh.merge(
+            _make_side_rib(
+                x,
+                bottom_y,
+                top_y,
+                thickness,
+                height * 0.72,
+                max(thickness * 0.8, 4.5),
+            )
+        )
+
+    # Small rear foot improves stability for taller phones.
+    mesh = _add_box(
+        mesh,
+        width * 0.76,
+        thickness * 1.4,
+        thickness * 1.2,
+        [0.0, depth / 2.0 - thickness * 0.7, thickness * 0.6],
+    )
+
     return mesh
 
 

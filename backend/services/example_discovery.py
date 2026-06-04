@@ -33,6 +33,7 @@ class ExampleDiscovery:
             "template_examples": [],
             "external_examples": [],
             "matching_templates": [],
+            "provider_status": {},
         }
         
         # Find matching template
@@ -56,6 +57,7 @@ class ExampleDiscovery:
         # Search external providers (optional, slower)
         if include_external:
             registry = get_provider_registry()
+            result["provider_status"] = registry.status()
             external = registry.search_all(prompt, limit=4)
             result["external_examples"] = [ex.to_dict() for ex in external]
         

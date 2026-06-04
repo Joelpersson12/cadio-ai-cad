@@ -109,7 +109,7 @@ def list_printers() -> dict[str, Any]:
 @router.get("/api/examples/search", response_model=None)
 def search_examples(
     prompt: str = Query(..., min_length=1),
-    external: bool = False,
+    external: bool = True,
 ) -> dict[str, Any] | JSONResponse:
     """Find template and external inspiration examples for a prompt."""
     try:

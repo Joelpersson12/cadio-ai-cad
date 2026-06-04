@@ -102,6 +102,44 @@ def _coerce_feature(feature: Any) -> Feature:
     raise TypeError(f"Unsupported feature value: {feature!r}")
 
 
+def _external_design_signals(prompt: str, params: dict[str, float]) -> list[str]:
+    """Use ranked external metadata as inspiration signals, never source geometry."""
+    try:
+        from backend.services.design_providers import get_provider_registry
+
+        examples = get_provider_registry().search_all(prompt, limit=6)
+    except Exception:
+        return []
+
+    if not examples:
+        return []
+
+    title_text = " ".join(ex.title.lower() for ex in examples)
+
+    # Conservative, explainable parameter nudges from clear design patterns.
+    if any(word in title_text for word in ("heavy", "stable", "sturdy", "practical")):
+        params["depth"] = max(params.get("depth", 75.0), 82.0)
+        params["thickness"] = max(params.get("thickness", 6.0), 7.0)
+    if any(word in title_text for word in ("adjustable", "foldable")):
+        params["angle"] = min(72.0, max(params.get("angle", 65.0), 68.0))
+    if any(word in title_text for word in ("thin", "credit card", "card")):
+        params["thickness"] = max(5.0, min(params.get("thickness", 6.0), 6.0))
+    if any(word in title_text for word in ("pillow", "soft", "rounded")):
+        params["fillet_radius"] = max(params.get("fillet_radius", 2.0), 4.0)
+    if any(word in title_text for word in ("magsafe", "charging", "charger", "dock")):
+        params["depth"] = max(params.get("depth", 75.0), 85.0)
+        params["angle"] = min(params.get("angle", 68.0), 68.0)
+
+    top = examples[:3]
+    return [
+        "external-inspiration: "
+        + "; ".join(
+            f"{ex.source}:{ex.title} ({ex.likes} likes, {ex.downloads} downloads)"
+            for ex in top
+        )
+    ]
+
+
 def _ensure_feature(
     features: list[Feature],
     feature_type: str,
@@ -173,11 +211,13 @@ def parse_ai_command(
                 params[key] = obj["parameters"][key]
         
         features = [_coerce_feature(f) for f in template.default_features]
+        external_actions = _external_design_signals(prompt, params)
         
         obj["template_hint"] = template.name
     else:
         params = dict(obj["parameters"])
         features = [_coerce_feature(f) for f in obj["feature_tree"]]
+        external_actions = []
     
     src_transform: Transform = obj["transform"]
     transform = Transform(
@@ -223,6 +263,9 @@ def parse_ai_command(
     else:
         # Use template directly
         actions = [f"Created {template.name}: {template.description}"]
+
+    if external_actions:
+        actions += external_actions
 
     return {
         "parameters": params,
