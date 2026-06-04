@@ -2,7 +2,7 @@
  
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Grid, GizmoHelper, GizmoViewport, OrbitControls } from "@react-three/drei";
+import { Grid, GizmoHelper, GizmoViewport, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
  
@@ -42,21 +42,38 @@ function ScaledMesh({
   obj,
   selected,
   onSelect,
+  transformMode,
+  onTransformCommit,
   printerVolume,
   selectionMode,
 }: {
   obj: CadObject;
   selected: boolean;
   onSelect: () => void;
+  transformMode: TransformMode;
+  onTransformCommit: (
+    objectId: string,
+    transform: {
+      position?: [number, number, number];
+      rotation?: [number, number, number];
+      scale?: [number, number, number];
+    },
+  ) => void;
   printerVolume: [number, number, number];
   selectionMode: SelectionMode;
 }) {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
  
   const geometry = useMemo(() => {
     if (!obj.mesh) return null;
     const geo = new THREE.BufferGeometry();
-    const positions = new Float32Array(obj.mesh.positions);
+    const source = obj.mesh.positions;
+    const positions = new Float32Array(source.length);
+    for (let i = 0; i < source.length; i += 3) {
+      positions[i] = source[i];
+      positions[i + 1] = source[i + 2];
+      positions[i + 2] = source[i + 1];
+    }
     const indices = new Uint32Array(obj.mesh.indices);
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geo.setIndex(new THREE.BufferAttribute(indices, 1));
@@ -72,8 +89,13 @@ function ScaledMesh({
     const sx = bb.max.x - bb.min.x;
     const sy = bb.max.y - bb.min.y;
     const sz = bb.max.z - bb.min.z;
-    const [px, py, pz] = printerVolume;
-    const ratio = Math.min(px / (sx || 1), py / (sy || 1), pz / (sz || 1), 1);
+    const [printerWidth, printerDepth, printerHeight] = printerVolume;
+    const ratio = Math.min(
+      printerWidth / (sx || 1),
+      printerHeight / (sy || 1),
+      printerDepth / (sz || 1),
+      1,
+    );
     return ratio;
   }, [geometry, printerVolume]);
  
@@ -98,14 +120,20 @@ function ScaledMesh({
   ];
 
   return (
-    <group>
-    <mesh
-      ref={meshRef}
-      geometry={geometry}
+    <>
+    <group
+      ref={groupRef}
       position={meshPosition}
       rotation={meshRotation}
       scale={meshScale}
-      onClick={(e) => { e.stopPropagation(); onSelect(); }}
+    >
+    <mesh
+      geometry={geometry}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        onSelect();
+      }}
       castShadow
       receiveShadow
     >
@@ -118,7 +146,7 @@ function ScaledMesh({
       />
     </mesh>
     {selected && (
-      <lineSegments position={meshPosition} rotation={meshRotation} scale={meshScale}>
+      <lineSegments>
         <edgesGeometry args={[geometry]} />
         <lineBasicMaterial
           color={selectionMode === "edge" ? "#facc15" : selectionMode === "face" ? "#a78bfa" : "#7dd3fc"}
@@ -128,6 +156,35 @@ function ScaledMesh({
       </lineSegments>
     )}
     </group>
+    {selected && groupRef.current && (
+      <TransformControls
+        object={groupRef.current}
+        mode={transformMode}
+        size={0.85}
+        onMouseUp={() => {
+          const group = groupRef.current;
+          if (!group) return;
+          onTransformCommit(obj.id, {
+            position: [
+              group.position.x / scaleFactor,
+              group.position.z / scaleFactor,
+              group.position.y / scaleFactor,
+            ],
+            rotation: [
+              THREE.MathUtils.radToDeg(group.rotation.x),
+              THREE.MathUtils.radToDeg(group.rotation.z),
+              THREE.MathUtils.radToDeg(group.rotation.y),
+            ],
+            scale: [
+              group.scale.x / scaleFactor,
+              group.scale.z / scaleFactor,
+              group.scale.y / scaleFactor,
+            ],
+          });
+        }}
+      />
+    )}
+    </>
   );
 }
  
@@ -136,12 +193,12 @@ function ScaledMesh({
 // ---------------------------------------------------------------------------
  
 function BuildPlate({ volume }: { volume: [number, number, number] }) {
-  const [px, , pz] = volume;
+  const [px, py] = volume;
   return (
     <group>
       {/* Base plate - visible and textured */}
       <mesh position={[0, -0.5, 0]} receiveShadow>
-        <boxGeometry args={[px, 1, pz]} />
+        <boxGeometry args={[px, 1, py]} />
         <meshStandardMaterial 
           color="#1a2a3a" 
           roughness={0.95}
@@ -150,10 +207,10 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       </mesh>
       {/* Corner markers for orientation */}
       {[
-        [-px / 2, 0, -pz / 2],
-        [px / 2, 0, -pz / 2],
-        [-px / 2, 0, pz / 2],
-        [px / 2, 0, pz / 2],
+        [-px / 2, 0, -py / 2],
+        [px / 2, 0, -py / 2],
+        [-px / 2, 0, py / 2],
+        [px / 2, 0, py / 2],
       ].map((pos, i) => (
         <mesh key={i} position={[pos[0], pos[1], pos[2]]}>
           <sphereGeometry args={[2, 8, 8]} />
@@ -162,7 +219,7 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       ))}
       {/* Border frame - enhanced visibility */}
       <lineSegments>
-        <edgesGeometry args={[new THREE.BoxGeometry(px, 0.5, pz)]} />
+        <edgesGeometry args={[new THREE.BoxGeometry(px, 0.5, py)]} />
         <lineBasicMaterial color="#5fd6ff" linewidth={2} />
       </lineSegments>
     </group>
@@ -226,7 +283,7 @@ function SketchPlane({
   const [start, setStart] = useState<THREE.Vector3 | null>(null);
   const [end, setEnd] = useState<THREE.Vector3 | null>(null);
   const enabled = active && tool !== "select";
-  const [px, , pz] = printerVolume;
+  const [px, py] = printerVolume;
 
   const preview = useMemo(() => {
     if (!start || !end || !enabled) return null;
@@ -285,7 +342,7 @@ function SketchPlane({
           setEnd(null);
         }}
       >
-        <planeGeometry args={[px * 2.2, pz * 2.2]} />
+        <planeGeometry args={[px * 2.2, py * 2.2]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
       {preview && tool === "rectangle" && (
@@ -428,7 +485,7 @@ export default function CadViewport({
  
       {/* Grid - improved visibility */}
       <Grid
-        args={[printerVolume[0] * 2.2, printerVolume[2] * 2.2]}
+        args={[printerVolume[0] * 2.2, printerVolume[1] * 2.2]}
         cellSize={10}
         cellThickness={0.6}
         cellColor="#1a3a4a"
@@ -456,6 +513,8 @@ export default function CadViewport({
           obj={obj}
           selected={obj.id === selectedObjectId}
           onSelect={() => onSelectObject(obj.id)}
+          transformMode={transformMode}
+          onTransformCommit={onTransformCommit}
           printerVolume={printerVolume}
           selectionMode={selectionMode}
         />

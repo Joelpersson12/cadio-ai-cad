@@ -65,9 +65,12 @@ DEFAULT_PRINTER = "adventurer_3"
 
 
 def mesh_for_object(obj: CadObject) -> MeshPayload:
-    """Tessellate the object's shape with its transform applied."""
-    transformed = apply_transform(obj["shape"], obj["transform"])
-    return tessellate(transformed)
+    """Tessellate the object's local shape.
+
+    The frontend applies object transforms interactively.  Export and scene
+    bounds still apply transforms server-side where needed.
+    """
+    return tessellate(obj["shape"])
 
 
 # ---------------------------------------------------------------------------
