@@ -235,7 +235,7 @@ export default function App() {
             onSetSelectionMode={setSelectionMode}
             onSetSketchHeight={setSketchHeight}
             onSetOperationAmount={setOperationAmount}
-            onApplyExpertOperation={(op, amount) => void applyExpertOperation(op, amount)}
+            onApplyExpertOperation={(op, amount, objectId) => void applyExpertOperation(op, amount, objectId)}
             onCreatePrimitive={(payload) => void createPrimitive(payload)}
           />
         </main>

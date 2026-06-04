@@ -22,6 +22,7 @@ import {
   createPrimitive as apiCreatePrimitive,
   applyExpertOperation as apiApplyExpertOperation,
   listPrinters as apiListPrinters,
+  updatePrinter as apiUpdatePrinter,
 } from "../utils/api";
 
 const SESSION_KEY = "cadio_session_id";
@@ -83,8 +84,8 @@ interface CadState {
     size: [number, number];
     radius?: number;
   }) => Promise<void>;
-  applyExpertOperation: (operation: string, amountOverride?: number) => Promise<void>;
-  setPrinter: (printer: string) => void;
+  applyExpertOperation: (operation: string, amountOverride?: number, objectIdOverride?: string) => Promise<void>;
+  setPrinter: (printer: string) => Promise<void>;
 }
 
 export const useCadStore = create<CadState>((set, get) => ({
@@ -123,7 +124,17 @@ export const useCadStore = create<CadState>((set, get) => ({
   setSelectionMode: (mode) => set({ selectionMode: mode }),
   setSketchHeight: (height) => set({ sketchHeight: Math.max(0.5, height) }),
   setOperationAmount: (amount) => set({ operationAmount: Math.max(0, amount) }),
-  setPrinter: (printer) => set({ printer }),
+  setPrinter: async (printer) => {
+    const { sessionId } = get();
+    set({ printer });
+    if (!sessionId) return;
+    try {
+      const data = await apiUpdatePrinter({ session_id: sessionId, printer });
+      get().applyScenePayload(data);
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Error" });
+    }
+  },
 
   applyScenePayload: (payload) => {
     if (payload.session_id) {
@@ -297,14 +308,15 @@ export const useCadStore = create<CadState>((set, get) => ({
     }
   },
 
-  applyExpertOperation: async (operation, amountOverride) => {
+  applyExpertOperation: async (operation, amountOverride, objectIdOverride) => {
     const { sessionId, selectedObjectId, selectionMode, operationAmount } = get();
-    if (!sessionId || !selectedObjectId) return;
+    const objectId = objectIdOverride || selectedObjectId;
+    if (!sessionId || !objectId) return;
     set({ status: `Applying ${operation}...` });
     try {
       const data = await apiApplyExpertOperation({
         session_id: sessionId,
-        object_id: selectedObjectId,
+        object_id: objectId,
         operation,
         amount: amountOverride ?? operationAmount,
         target: selectionMode,

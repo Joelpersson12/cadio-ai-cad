@@ -22,6 +22,7 @@ from backend.models.schema import (
     ObjectDeleteRequest,
     ObjectSelectRequest,
     ParameterUpdateRequest,
+    PrinterUpdateRequest,
     PrimitiveCreateRequest,
     ScenePayload,
     TransformUpdateRequest,
@@ -111,6 +112,24 @@ def health() -> dict[str, Any]:
 @router.get("/api/printers")
 def list_printers() -> dict[str, Any]:
     return {"status": "ok", "default": DEFAULT_PRINTER, "printers": PRINTERS}
+
+
+@router.post("/api/printer", response_model=None)
+async def update_printer(data: PrinterUpdateRequest) -> ScenePayload | JSONResponse:
+    try:
+        lock = acquire_lock()
+        with lock:
+            session = get_or_create_session(data.session_id)
+            session["printer"] = normalize_printer(data.printer)
+            bump_version(session)
+            payload = build_scene_payload(session, include_mesh=True)
+
+        await broadcast(session["session_id"], payload.model_dump())
+        return payload
+
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
 
 
 @router.get("/api/examples/search", response_model=None)

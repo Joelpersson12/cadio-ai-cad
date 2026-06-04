@@ -76,9 +76,10 @@ function ScaledMesh({
   selectionMode: SelectionMode;
   expertMode: boolean;
   edgeOperation: string;
-  onEdgeAmount: (x: number, y: number, operation: string) => void;
+  onEdgeAmount: (x: number, y: number, operation: string, objectId: string) => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
+  const [hovered, setHovered] = useState(false);
  
   const geometry = useMemo(() => {
     if (!obj.mesh) return null;
@@ -150,9 +151,11 @@ function ScaledMesh({
         e.stopPropagation();
         onSelect();
         if (expertMode && selectionMode === "edge") {
-          onEdgeAmount(e.nativeEvent.clientX, e.nativeEvent.clientY, edgeOperation);
+          onEdgeAmount(e.nativeEvent.clientX, e.nativeEvent.clientY, edgeOperation, obj.id);
         }
       }}
+      onPointerOver={() => setHovered(true)}
+      onPointerOut={() => setHovered(false)}
       castShadow
       receiveShadow
     >
@@ -164,13 +167,13 @@ function ScaledMesh({
         emissiveIntensity={selected ? 0.22 : 0}
       />
     </mesh>
-    {selected && (
+    {(selected || (hovered && expertMode && selectionMode === "edge")) && (
       <lineSegments>
         <edgesGeometry args={[geometry]} />
         <lineBasicMaterial
-          color={selectionMode === "edge" ? "#facc15" : selectionMode === "face" ? "#a78bfa" : "#7dd3fc"}
+          color={selectionMode === "edge" ? "#7de7ff" : selectionMode === "face" ? "#a78bfa" : "#7dd3fc"}
           transparent
-          opacity={selectionMode === "body" ? 0.45 : 0.95}
+          opacity={hovered && !selected ? 1 : selectionMode === "body" ? 0.45 : 0.95}
         />
       </lineSegments>
     )}
@@ -219,8 +222,8 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
   return (
     <group>
       {/* Base plate - visible and textured */}
-      <mesh position={[0, -0.08, 0]} receiveShadow>
-        <boxGeometry args={[px, 0.12, py]} />
+      <mesh position={[0, -0.24, 0]} receiveShadow>
+        <boxGeometry args={[px, 0.08, py]} />
         <meshStandardMaterial 
           color="#252528" 
           roughness={0.95}
@@ -283,7 +286,7 @@ interface CadViewportProps {
   onSetSelectionMode?: (mode: SelectionMode) => void;
   onSetSketchHeight?: (height: number) => void;
   onSetOperationAmount?: (amount: number) => void;
-  onApplyExpertOperation?: (operation: string, amountOverride?: number) => void;
+  onApplyExpertOperation?: (operation: string, amountOverride?: number, objectIdOverride?: string) => void;
 }
 
 function SketchPlane({
@@ -414,6 +417,7 @@ export default function CadViewport({
     x: number;
     y: number;
     operation: string;
+    objectId: string;
     value: string;
   } | null>(null);
 
@@ -533,7 +537,7 @@ export default function CadViewport({
         sectionColor="#45464a"
         fadeDistance={1000}
         fadeStrength={2.0}
-        position={[0, -0.035, 0]}
+        position={[0, -0.11, 0]}
       />
  
       {/* Build plate */}
@@ -558,8 +562,8 @@ export default function CadViewport({
           selectionMode={selectionMode}
           expertMode={expertMode}
           edgeOperation={edgeOperation}
-          onEdgeAmount={(x, y, operation) => {
-            setEdgeInput({ x, y, operation, value: String(operationAmount || 3) });
+          onEdgeAmount={(x, y, operation, objectId) => {
+            setEdgeInput({ x, y, operation, objectId, value: String(operationAmount || 3) });
           }}
         />
       ))}
@@ -599,7 +603,7 @@ export default function CadViewport({
             const amount = Number(edgeInput.value.replace("mm", "").trim());
             if (Number.isFinite(amount) && amount >= 0) {
               onSetOperationAmount?.(amount);
-              onApplyExpertOperation?.(edgeInput.operation, amount);
+              onApplyExpertOperation?.(edgeInput.operation, amount, edgeInput.objectId);
             }
             setEdgeInput(null);
           }}

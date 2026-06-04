@@ -144,6 +144,16 @@ export async function listPrinters(): Promise<{
   return request("/api/printers");
 }
 
+export async function updatePrinter(payload: {
+  session_id: string;
+  printer: string;
+}): Promise<ScenePayload> {
+  return request<ScenePayload>("/api/printer", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function exportUrl(sessionId: string, format: string): string {
   return `${API_BASE}/api/export/${sessionId}/${format}`;
 }

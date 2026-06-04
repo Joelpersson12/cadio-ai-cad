@@ -67,7 +67,7 @@ def create_object(name: str = "part") -> CadObject:
         "transform": Transform(),
         "shape": shape,
         "material": "PLA",
-        "color": "#4fc3f7",
+        "color": "#b8babd",
     }
 
 
@@ -90,7 +90,7 @@ def create_manual_object(
         "transform": Transform(),
         "shape": shape,
         "material": "PLA",
-        "color": "#4fc3f7",
+        "color": "#b8babd",
         "template_hint": None,
         "manual": True,
         "primitive": "manual",

@@ -54,6 +54,7 @@ export default function ObjectInspector() {
   } = useCadStore();
 
   const selectedObject = objects.find((o) => o.id === selectedObjectId);
+  const selectedPrinter = printers[printer] as PrinterProfile | undefined;
   const params = selectedObject?.parameters ?? {};
   const features = selectedObject?.feature_tree ?? [];
   const transform = selectedObject?.transform;
@@ -164,7 +165,7 @@ export default function ObjectInspector() {
         <span className="text-xs text-cadio-muted">Printer</span>
         <select
           value={printer}
-          onChange={(e) => setPrinter(e.target.value)}
+          onChange={(e) => void setPrinter(e.target.value)}
           className="rounded-lg border border-cadio-border bg-[#121723] text-cadio-text px-3 py-1.5 text-sm focus:outline-none"
         >
           {Object.entries(printers).map(([key, p]) => (
@@ -194,12 +195,17 @@ export default function ObjectInspector() {
             <option key={material} value={material}>{material}</option>
           ))}
         </select>
+        {selectedPrinter && (
+          <span className="text-[11px] text-cadio-muted">
+            {selectedPrinter.build_volume[0]} x {selectedPrinter.build_volume[1]} x {selectedPrinter.build_volume[2]} mm
+          </span>
+        )}
       </label>
       <label className="flex flex-col gap-1">
         <span className="text-xs text-cadio-muted">Color</span>
         <input
           type="color"
-          value={selectedObject?.color ?? "#4fc3f7"}
+          value={selectedObject?.color ?? "#b8babd"}
           onChange={(e) => void patchAppearance({ color: e.target.value })}
           className="h-10 rounded-lg border border-cadio-border bg-[#121723] px-2 py-1"
         />

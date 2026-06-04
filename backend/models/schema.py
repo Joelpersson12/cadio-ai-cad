@@ -101,6 +101,11 @@ class ParameterUpdateRequest(BaseModel):
     parameters: dict[str, float]
 
 
+class PrinterUpdateRequest(BaseModel):
+    session_id: str
+    printer: str
+
+
 class AppearanceUpdateRequest(BaseModel):
     session_id: str
     object_id: str | None = None
