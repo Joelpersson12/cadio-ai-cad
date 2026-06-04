@@ -132,3 +132,11 @@ class PrimitiveCreateRequest(BaseModel):
     size: list[float] = Field(default_factory=lambda: [40.0, 30.0])
     height: float = 8.0
     radius: float | None = None
+
+
+class ExpertOperationRequest(BaseModel):
+    session_id: str
+    object_id: str
+    operation: str
+    amount: float = 2.0
+    target: str = "body"

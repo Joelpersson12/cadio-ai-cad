@@ -111,6 +111,19 @@ export async function createPrimitive(payload: {
   });
 }
 
+export async function applyExpertOperation(payload: {
+  session_id: string;
+  object_id: string;
+  operation: string;
+  amount: number;
+  target: string;
+}): Promise<ScenePayload> {
+  return request<ScenePayload>("/api/object/operation", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listPrinters(): Promise<{
   status: string;
   default: string;

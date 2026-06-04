@@ -7,6 +7,7 @@ import type {
   PrinterProfile,
   ScenePayload,
   ExpertTool,
+  SelectionMode,
   TransformMode,
 } from "../utils/types";
 import {
@@ -18,6 +19,7 @@ import {
   deleteObject as apiDeleteObject,
   updateObjectTransform as apiUpdateTransform,
   createPrimitive as apiCreatePrimitive,
+  applyExpertOperation as apiApplyExpertOperation,
   listPrinters as apiListPrinters,
 } from "../utils/api";
 
@@ -45,14 +47,18 @@ interface CadState {
   transformMode: TransformMode;
   expertMode: boolean;
   expertTool: ExpertTool;
+  selectionMode: SelectionMode;
   sketchHeight: number;
+  operationAmount: number;
   editHistory: Array<Record<string, unknown>>;
 
   // Actions
   setTransformMode: (mode: TransformMode) => void;
   setExpertMode: (enabled: boolean) => void;
   setExpertTool: (tool: ExpertTool) => void;
+  setSelectionMode: (mode: SelectionMode) => void;
   setSketchHeight: (height: number) => void;
+  setOperationAmount: (amount: number) => void;
   applyScenePayload: (payload: ScenePayload) => void;
   loadPrinters: () => Promise<void>;
   syncMesh: (sid?: string) => Promise<void>;
@@ -75,6 +81,7 @@ interface CadState {
     size: [number, number];
     radius?: number;
   }) => Promise<void>;
+  applyExpertOperation: (operation: string) => Promise<void>;
   setPrinter: (printer: string) => void;
 }
 
@@ -99,7 +106,9 @@ export const useCadStore = create<CadState>((set, get) => ({
   transformMode: "translate",
   expertMode: false,
   expertTool: "select",
+  selectionMode: "body",
   sketchHeight: 8,
+  operationAmount: 2,
   editHistory: [],
 
   // ---------------------------------------------------------------------------
@@ -109,7 +118,9 @@ export const useCadStore = create<CadState>((set, get) => ({
   setTransformMode: (mode) => set({ transformMode: mode }),
   setExpertMode: (enabled) => set({ expertMode: enabled, expertTool: enabled ? get().expertTool : "select" }),
   setExpertTool: (tool) => set({ expertTool: tool }),
+  setSelectionMode: (mode) => set({ selectionMode: mode }),
   setSketchHeight: (height) => set({ sketchHeight: Math.max(0.5, height) }),
+  setOperationAmount: (amount) => set({ operationAmount: Math.max(0, amount) }),
   setPrinter: (printer) => set({ printer }),
 
   applyScenePayload: (payload) => {
@@ -263,6 +274,25 @@ export const useCadStore = create<CadState>((set, get) => ({
       });
       get().applyScenePayload(data);
       set({ status: `Created ${primitive}` });
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Error" });
+    }
+  },
+
+  applyExpertOperation: async (operation) => {
+    const { sessionId, selectedObjectId, selectionMode, operationAmount } = get();
+    if (!sessionId || !selectedObjectId) return;
+    set({ status: `Applying ${operation}...` });
+    try {
+      const data = await apiApplyExpertOperation({
+        session_id: sessionId,
+        object_id: selectedObjectId,
+        operation,
+        amount: operationAmount,
+        target: selectionMode,
+      });
+      get().applyScenePayload(data);
+      set({ status: `${operation} applied` });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });
     }

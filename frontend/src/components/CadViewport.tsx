@@ -4,7 +4,7 @@ import { useEffect, useRef, useMemo, useState } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { Grid, GizmoHelper, GizmoViewport, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import type { CadObject, ExpertTool, TransformMode } from "../utils/types";
+import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
  
 // ---------------------------------------------------------------------------
 // Camera auto-fit helper
@@ -43,11 +43,13 @@ function ScaledMesh({
   selected,
   onSelect,
   printerVolume,
+  selectionMode,
 }: {
   obj: CadObject;
   selected: boolean;
   onSelect: () => void;
   printerVolume: [number, number, number];
+  selectionMode: SelectionMode;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
  
@@ -79,25 +81,30 @@ function ScaledMesh({
  
   const t = obj.transform;
  
+  const meshPosition: [number, number, number] = [
+    (t?.position?.[0] ?? 0) * scaleFactor,
+    (t?.position?.[2] ?? 0) * scaleFactor,
+    (t?.position?.[1] ?? 0) * scaleFactor,
+  ];
+  const meshRotation: [number, number, number] = [
+    THREE.MathUtils.degToRad(t?.rotation?.[0] ?? 0),
+    THREE.MathUtils.degToRad(t?.rotation?.[2] ?? 0),
+    THREE.MathUtils.degToRad(t?.rotation?.[1] ?? 0),
+  ];
+  const meshScale: [number, number, number] = [
+    (t?.scale?.[0] ?? 1) * scaleFactor,
+    (t?.scale?.[2] ?? 1) * scaleFactor,
+    (t?.scale?.[1] ?? 1) * scaleFactor,
+  ];
+
   return (
+    <group>
     <mesh
       ref={meshRef}
       geometry={geometry}
-      position={[
-        (t?.position?.[0] ?? 0) * scaleFactor,
-        (t?.position?.[2] ?? 0) * scaleFactor,
-        (t?.position?.[1] ?? 0) * scaleFactor,
-      ]}
-      rotation={[
-        THREE.MathUtils.degToRad(t?.rotation?.[0] ?? 0),
-        THREE.MathUtils.degToRad(t?.rotation?.[2] ?? 0),
-        THREE.MathUtils.degToRad(t?.rotation?.[1] ?? 0),
-      ]}
-      scale={[
-        (t?.scale?.[0] ?? 1) * scaleFactor,
-        (t?.scale?.[2] ?? 1) * scaleFactor,
-        (t?.scale?.[1] ?? 1) * scaleFactor,
-      ]}
+      position={meshPosition}
+      rotation={meshRotation}
+      scale={meshScale}
       onClick={(e) => { e.stopPropagation(); onSelect(); }}
       castShadow
       receiveShadow
@@ -110,6 +117,17 @@ function ScaledMesh({
         emissiveIntensity={selected ? 0.3 : 0}
       />
     </mesh>
+    {selected && (
+      <lineSegments position={meshPosition} rotation={meshRotation} scale={meshScale}>
+        <edgesGeometry args={[geometry]} />
+        <lineBasicMaterial
+          color={selectionMode === "edge" ? "#facc15" : selectionMode === "face" ? "#a78bfa" : "#7dd3fc"}
+          transparent
+          opacity={selectionMode === "body" ? 0.45 : 0.95}
+        />
+      </lineSegments>
+    )}
+    </group>
   );
 }
  
@@ -172,7 +190,9 @@ interface CadViewportProps {
   bounds?: { x: number; y: number; z: number };
   expertMode?: boolean;
   expertTool?: ExpertTool;
+  selectionMode?: SelectionMode;
   sketchHeight?: number;
+  operationAmount?: number;
   onCreatePrimitive?: (payload: {
     primitive: ExpertTool;
     center: [number, number];
@@ -181,7 +201,10 @@ interface CadViewportProps {
   }) => void;
   onSetExpertMode?: (enabled: boolean) => void;
   onSetExpertTool?: (tool: ExpertTool) => void;
+  onSetSelectionMode?: (mode: SelectionMode) => void;
   onSetSketchHeight?: (height: number) => void;
+  onSetOperationAmount?: (amount: number) => void;
+  onApplyExpertOperation?: (operation: string) => void;
 }
 
 function SketchPlane({
@@ -294,11 +317,16 @@ export default function CadViewport({
   bounds = { x: 100, y: 100, z: 100 },
   expertMode = false,
   expertTool = "select",
+  selectionMode = "body",
   sketchHeight = 8,
+  operationAmount = 2,
   onCreatePrimitive,
   onSetExpertMode,
   onSetExpertTool,
+  onSetSelectionMode,
   onSetSketchHeight,
+  onSetOperationAmount,
+  onApplyExpertOperation,
 }: CadViewportProps) {
   return (
     <div className="relative w-full h-full">
@@ -323,6 +351,21 @@ export default function CadViewport({
             {tool}
           </button>
         ))}
+        <div className="h-6 w-px bg-cadio-border" />
+        {(["body", "face", "edge"] as SelectionMode[]).map((mode) => (
+          <button
+            key={mode}
+            disabled={!expertMode}
+            onClick={() => onSetSelectionMode?.(mode)}
+            className={`px-2.5 py-1.5 rounded-md text-xs capitalize transition-colors ${
+              expertMode && selectionMode === mode
+                ? "bg-[#facc15] text-[#1f2937] font-semibold"
+                : "bg-[#1e2536] text-cadio-muted hover:text-cadio-text disabled:opacity-40"
+            }`}
+          >
+            {mode}
+          </button>
+        ))}
         <label className="flex items-center gap-1 text-xs text-cadio-muted">
           H
           <input
@@ -334,6 +377,27 @@ export default function CadViewport({
             className="w-16 rounded border border-cadio-border bg-[#111827] px-2 py-1 text-cadio-text"
           />
         </label>
+        <label className="flex items-center gap-1 text-xs text-cadio-muted">
+          A
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={operationAmount}
+            onChange={(e) => onSetOperationAmount?.(Number(e.target.value))}
+            className="w-16 rounded border border-cadio-border bg-[#111827] px-2 py-1 text-cadio-text"
+          />
+        </label>
+        {["extrude", "fillet", "chamfer", "shell"].map((op) => (
+          <button
+            key={op}
+            disabled={!expertMode}
+            onClick={() => onApplyExpertOperation?.(op)}
+            className="rounded-md bg-[#243048] px-2.5 py-1.5 text-xs capitalize text-cadio-muted hover:text-cadio-text disabled:opacity-40"
+          >
+            {op}
+          </button>
+        ))}
       </div>
       <Canvas
         shadows
@@ -391,6 +455,7 @@ export default function CadViewport({
           selected={obj.id === selectedObjectId}
           onSelect={() => onSelectObject(obj.id)}
           printerVolume={printerVolume}
+          selectionMode={selectionMode}
         />
       ))}
  

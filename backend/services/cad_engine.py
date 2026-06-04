@@ -173,6 +173,57 @@ def make_box(width: float, depth: float, height: float) -> TriMesh:
     return m
 
 
+def make_rounded_box(
+    width: float,
+    depth: float,
+    height: float,
+    radius: float,
+    segments: int = 6,
+) -> TriMesh:
+    """Create an extruded rounded/chamfered rectangle.
+
+    This is a mesh-level approximation intended for expert-mode primitives.
+    It rounds/chamfers the vertical perimeter edges of a rectangular body.
+    """
+    radius = max(0.0, min(radius, width / 2.0 - 0.01, depth / 2.0 - 0.01))
+    if radius <= 0.0:
+        return make_box(width, depth, height)
+
+    segments = max(1, int(segments))
+    hw, hd = width / 2.0, depth / 2.0
+    z0, z1 = 0.0, height
+    corners = [
+        (hw - radius, hd - radius, 0.0, math.pi / 2.0),
+        (-hw + radius, hd - radius, math.pi / 2.0, math.pi),
+        (-hw + radius, -hd + radius, math.pi, 3.0 * math.pi / 2.0),
+        (hw - radius, -hd + radius, 3.0 * math.pi / 2.0, 2.0 * math.pi),
+    ]
+
+    outline: list[Vec3] = []
+    for cx, cy, a0, a1 in corners:
+        for i in range(segments + 1):
+            if outline and i == 0:
+                continue
+            t = i / segments
+            a = a0 + (a1 - a0) * t
+            outline.append((cx + math.cos(a) * radius, cy + math.sin(a) * radius, 0.0))
+
+    mesh = TriMesh()
+    bottom = [mesh.add_vertex((x, y, z0)) for x, y, _ in outline]
+    top = [mesh.add_vertex((x, y, z1)) for x, y, _ in outline]
+    bottom_center = mesh.add_vertex((0.0, 0.0, z0))
+    top_center = mesh.add_vertex((0.0, 0.0, z1))
+    count = len(outline)
+
+    for i in range(count):
+        j = (i + 1) % count
+        mesh.add_tri(bottom_center, bottom[j], bottom[i])
+        mesh.add_tri(top_center, top[i], top[j])
+        mesh.add_quad(bottom[i], bottom[j], top[j], top[i])
+
+    return mesh
+
+
 def make_cylinder(
     radius: float,
     height: float,

@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from backend.models.schema import (
     FeatureToggleRequest,
+    ExpertOperationRequest,
     GenerateRequest,
     ObjectDeleteRequest,
     ObjectSelectRequest,
@@ -40,6 +41,7 @@ from backend.services.object_manager import (
 from backend.services.session_manager import (
     acquire_lock,
     add_history,
+    apply_expert_operation,
     bump_version,
     create_object,
     create_primitive_object,
@@ -317,6 +319,38 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
                 f"expert-{data.primitive}",
                 [f"created {data.primitive} from sketch"],
             )
+            payload = build_scene_payload(
+                session, include_mesh=True, model_updated=True
+            )
+
+        await broadcast(session["session_id"], payload.model_dump())
+        return payload
+
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.post("/api/object/operation", response_model=None)
+async def apply_operation(data: ExpertOperationRequest) -> ScenePayload | JSONResponse:
+    try:
+        lock = acquire_lock()
+        with lock:
+            session = get_session(data.session_id)
+            if session is None:
+                return _error(404, "Session not found")
+            obj = get_object(session, data.object_id)
+            if obj is None:
+                return _error(404, "Object not found")
+
+            actions = apply_expert_operation(
+                obj,
+                operation=data.operation,
+                amount=data.amount,
+                target=data.target,
+            )
+            bump_version(session)
+            add_history(session, f"expert-{data.operation}", actions)
             payload = build_scene_payload(
                 session, include_mesh=True, model_updated=True
             )

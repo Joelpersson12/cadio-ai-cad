@@ -49,6 +49,11 @@ export default function ObjectInspector() {
     patchParam,
     onToggleFeature,
     onTransformCommit,
+    applyExpertOperation,
+    operationAmount,
+    setOperationAmount,
+    selectionMode,
+    setSelectionMode,
     setPrinter,
   } = useCadStore();
 
@@ -156,6 +161,43 @@ export default function ObjectInspector() {
           </div>
         </div>
       )}
+
+      <h3 className="text-sm font-semibold text-cadio-text mt-2">Expert Operations</h3>
+      <div className="rounded-lg border border-cadio-border bg-[#101622] p-2 flex flex-col gap-2">
+        <div className="grid grid-cols-3 gap-1.5">
+          {(["body", "face", "edge"] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setSelectionMode(mode)}
+              className={`rounded-md px-2 py-1.5 text-xs capitalize ${
+                selectionMode === mode
+                  ? "bg-cadio-accent text-[#081225] font-semibold"
+                  : "bg-[#1e2536] text-cadio-muted hover:text-cadio-text"
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+        <NumberInput
+          label="Amount"
+          value={operationAmount}
+          onChange={(v) => setOperationAmount(v)}
+          step={0.5}
+          min={0}
+        />
+        <div className="grid grid-cols-2 gap-1.5">
+          {["extrude", "fillet", "chamfer", "shell"].map((op) => (
+            <button
+              key={op}
+              onClick={() => void applyExpertOperation(op)}
+              className="rounded-md bg-[#243048] px-2 py-1.5 text-xs capitalize text-cadio-muted hover:text-cadio-text"
+            >
+              {op}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Parameters */}
       <h3 className="text-sm font-semibold text-cadio-text mt-2">Parameters</h3>

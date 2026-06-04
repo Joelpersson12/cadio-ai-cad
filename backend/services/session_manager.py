@@ -20,6 +20,7 @@ from backend.services.cad_engine import (
     auto_adjust_z_position,
     make_box,
     make_cylinder,
+    make_rounded_box,
     rebuild_from_features,
 )
 
@@ -85,6 +86,8 @@ def create_manual_object(
         "shape": shape,
         "template_hint": None,
         "manual": True,
+        "primitive": "manual",
+        "operation_history": [],
     }
     auto_adjust_z_position(obj["transform"], shape)
     return obj
@@ -114,6 +117,8 @@ def create_primitive_object(
             "depth": r * 2.0,
             "height": h,
             "thickness": h,
+            "fillet_radius": 0.0,
+            "chamfer_size": 0.0,
             "hole_diameter": r * 2.0,
         }
         obj_name = name or ("hole_guide" if kind == "hole" else "cylinder")
@@ -124,16 +129,87 @@ def create_primitive_object(
             "depth": depth,
             "height": h,
             "thickness": h,
+            "fillet_radius": 0.0,
+            "chamfer_size": 0.0,
         }
         obj_name = name or "rectangle"
 
     obj = create_manual_object(obj_name, shape, params)
+    obj["primitive"] = "cylinder" if kind in {"circle", "cylinder", "hole"} else "rectangle"
     obj["transform"].position = [cx, cy, 0.0]
     if kind == "hole":
         obj["feature_tree"] = [
             Feature(id="hole_guide", type="hole_guide", enabled=True),
         ]
     return obj
+
+
+def rebuild_manual_object(obj: CadObject) -> None:
+    """Rebuild an expert-mode primitive from its parameters and operations."""
+    params = obj["parameters"]
+    primitive = obj.get("primitive", "rectangle")
+    width = max(1.0, float(params.get("width", 40.0)))
+    depth = max(1.0, float(params.get("depth", 30.0)))
+    height = max(0.5, float(params.get("height", params.get("thickness", 8.0))))
+
+    if primitive in {"circle", "cylinder"}:
+        radius = max(width, depth) / 2.0
+        obj["shape"] = make_cylinder(radius, height)
+    elif primitive == "hole":
+        radius = max(float(params.get("hole_diameter", max(width, depth))) / 2.0, 0.5)
+        obj["shape"] = make_cylinder(radius, height)
+    else:
+        fillet = max(0.0, float(params.get("fillet_radius", 0.0)))
+        chamfer = max(0.0, float(params.get("chamfer_size", 0.0)))
+        if fillet > 0.0:
+            obj["shape"] = make_rounded_box(width, depth, height, fillet, segments=8)
+        elif chamfer > 0.0:
+            obj["shape"] = make_rounded_box(width, depth, height, chamfer, segments=1)
+        else:
+            obj["shape"] = make_box(width, depth, height)
+
+    auto_adjust_z_position(obj["transform"], obj["shape"])
+
+
+def apply_expert_operation(
+    obj: CadObject,
+    operation: str,
+    amount: float,
+    target: str = "body",
+) -> list[str]:
+    """Apply an expert-mode operation to a manual primitive."""
+    if not obj.get("manual"):
+        return ["operation skipped: selected object is not an expert primitive"]
+
+    op = operation.strip().lower()
+    amt = max(0.0, float(amount))
+    params = obj["parameters"]
+    actions: list[str] = []
+
+    if op == "fillet":
+        params["fillet_radius"] = amt
+        params["chamfer_size"] = 0.0
+        actions.append(f"fillet {target} radius {amt}mm")
+    elif op == "chamfer":
+        params["chamfer_size"] = amt
+        params["fillet_radius"] = 0.0
+        actions.append(f"chamfer {target} size {amt}mm")
+    elif op == "extrude":
+        params["height"] = max(0.5, float(params.get("height", 8.0)) + amount)
+        params["thickness"] = params["height"]
+        actions.append(f"extruded {target} by {amount}mm")
+    elif op == "shell":
+        params["wall_thickness"] = max(0.5, amt)
+        actions.append(f"set shell wall thickness to {amt}mm")
+    else:
+        actions.append(f"unsupported expert operation: {operation}")
+        return actions
+
+    obj.setdefault("operation_history", []).append(
+        {"operation": op, "target": target, "amount": amount}
+    )
+    rebuild_manual_object(obj)
+    return actions
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +315,10 @@ def remove_object(session: Session, object_id: str) -> bool:
 
 def rebuild_object(obj: CadObject) -> None:
     """Rebuild the mesh from current parameters + feature tree."""
+    if obj.get("manual"):
+        rebuild_manual_object(obj)
+        return
+
     template_hint = obj.get("template_hint")
     obj["shape"] = rebuild_from_features(
         obj["parameters"], 

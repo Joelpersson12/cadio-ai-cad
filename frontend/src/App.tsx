@@ -166,15 +166,20 @@ export default function App() {
     printer,
     expertMode,
     expertTool,
+    selectionMode,
     sketchHeight,
+    operationAmount,
     loadPrinters,
     applyScenePayload,
     onSelectObject,
     onTransformCommit,
     setExpertMode,
     setExpertTool,
+    setSelectionMode,
     setSketchHeight,
+    setOperationAmount,
     createPrimitive,
+    applyExpertOperation,
     runPrompt,
   } = useCadStore();
 
@@ -222,10 +227,15 @@ export default function App() {
             bounds={bounds}
             expertMode={expertMode}
             expertTool={expertTool}
+            selectionMode={selectionMode}
             sketchHeight={sketchHeight}
+            operationAmount={operationAmount}
             onSetExpertMode={setExpertMode}
             onSetExpertTool={setExpertTool}
+            onSetSelectionMode={setSelectionMode}
             onSetSketchHeight={setSketchHeight}
+            onSetOperationAmount={setOperationAmount}
+            onApplyExpertOperation={(op) => void applyExpertOperation(op)}
             onCreatePrimitive={(payload) => void createPrimitive(payload)}
           />
         </main>
