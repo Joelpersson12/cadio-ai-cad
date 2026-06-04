@@ -1,17 +1,33 @@
-"""AI command parser for natural-language CAD editing instructions.
-
-Parses user prompts into concrete parameter mutations, feature toggles,
-and transform changes.  Designed to be extended with LLM integration
-in the future while providing deterministic rule-based parsing now.
-"""
+"""AI command parser using GPT-4o for natural-language CAD editing."""
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from typing import Any
 
 from backend.models.schema import Feature, Transform
 from backend.services.session_manager import CadObject, Session
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+
+SYSTEM_PROMPT = """You are a CAD assistant that converts natural language into CAD parameter changes.
+
+Given the current object parameters and a user prompt, return ONLY a valid JSON object with these keys:
+- parameters: object with any of these keys to update:
+  width, height, depth, thickness, fillet_radius, chamfer_size, hole_count, angle
+- features: list of objects with {id, type, enabled} — supported types:
+  mount_holes, fillet_edges, chamfer_edges, mirror
+- transform: object with optional position [x,y,z], rotation [x,y,z], scale [x,y,z]
+- actions: list of strings describing what was done
+
+Rules:
+- Only include keys that should change
+- All dimensions are in millimeters
+- Return ONLY raw JSON, no markdown, no explanation
+- If nothing matches, return {"parameters": {}, "features": [], "transform": {}, "actions": ["no-op"]}
+"""
 
 
 def _ensure_feature(
@@ -19,7 +35,6 @@ def _ensure_feature(
     feature_type: str,
     enabled: bool = True,
 ) -> None:
-    """Enable or add a feature in the feature tree."""
     for f in features:
         if f.type == feature_type:
             f.enabled = enabled
@@ -27,16 +42,42 @@ def _ensure_feature(
     features.append(Feature(id=feature_type, type=feature_type, enabled=enabled))
 
 
+def _parse_with_gpt(prompt: str, current_params: dict, current_transform: dict) -> dict:
+    """Call GPT-4o to parse the prompt into CAD changes."""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=OPENAI_API_KEY)
+
+        user_message = f"""Current parameters: {json.dumps(current_params)}
+Current transform: {json.dumps(current_transform)}
+User instruction: {prompt}"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.1,
+            max_tokens=500,
+        )
+
+        raw = response.choices[0].message.content or "{}"
+        # Strip markdown if model adds it
+        raw = re.sub(r"```json|```", "", raw).strip()
+        return json.loads(raw)
+
+    except Exception as e:
+        print(f"GPT error: {e}")
+        return {"parameters": {}, "features": [], "transform": {}, "actions": ["ai-error"]}
+
+
 def parse_ai_command(
     prompt: str,
     session: Session,
     obj: CadObject,
 ) -> dict[str, Any]:
-    """Parse a natural-language prompt into parameter/feature/transform changes.
-
-    Returns a dict with keys: parameters, feature_tree, transform, actions.
-    """
-    p = (prompt or "").strip().lower()
+    """Parse a natural-language prompt using GPT-4o into CAD changes."""
     params = dict(obj["parameters"])
     features = [
         f if isinstance(f, Feature) else Feature(**f) for f in obj["feature_tree"]
@@ -47,139 +88,34 @@ def parse_ai_command(
         rotation=list(src_transform.rotation),
         scale=list(src_transform.scale),
     )
-    actions: list[str] = []
 
-    # --- Thickness / strength ---
-    if "make thicker" in p or "thicker" in p or "strengthen" in p:
-        params["thickness"] = min(30.0, params.get("thickness", 8.0) + 2.0)
-        actions.append("increase thickness")
+    current_transform = {
+        "position": transform.position,
+        "rotation": transform.rotation,
+        "scale": transform.scale,
+    }
 
-    # --- Size reduction ---
-    if "reduce size" in p or "smaller" in p:
-        for key in ("width", "depth", "height"):
-            params[key] = max(20.0, params.get(key, 80.0) * 0.9)
-        actions.append("reduce size")
+    # Call GPT-4o
+    result = _parse_with_gpt(prompt, params, current_transform)
 
-    # --- Size increase ---
-    if "bigger" in p or "larger" in p or "increase size" in p:
-        for key in ("width", "depth", "height"):
-            params[key] = params.get(key, 80.0) * 1.15
-        actions.append("increase size")
+    # Apply parameter changes
+    for key, value in result.get("parameters", {}).items():
+        params[key] = float(value)
 
-    # --- Resize with explicit dimensions ---
-    width_match = re.search(r"width\s*[=:]\s*(\d+(?:\.\d+)?)", p)
-    if width_match:
-        params["width"] = max(10.0, float(width_match.group(1)))
-        actions.append("set width")
-    height_match = re.search(r"height\s*[=:]\s*(\d+(?:\.\d+)?)", p)
-    if height_match:
-        params["height"] = max(20.0, float(height_match.group(1)))
-        actions.append("set height")
-    depth_match = re.search(r"depth\s*[=:]\s*(\d+(?:\.\d+)?)", p)
-    if depth_match:
-        params["depth"] = max(10.0, float(depth_match.group(1)))
-        actions.append("set depth")
+    # Apply feature changes
+    for feat in result.get("features", []):
+        _ensure_feature(features, feat.get("type", ""), feat.get("enabled", True))
 
-    # --- Holes ---
-    if "add holes" in p or "holes" in p:
-        _ensure_feature(features, "mount_holes", True)
-        params["hole_count"] = max(params.get("hole_count", 0.0), 2.0)
-        hole_count_match = re.search(r"(\d+)\s*holes?", p)
-        if hole_count_match:
-            params["hole_count"] = float(hole_count_match.group(1))
-        actions.append("add holes")
+    # Apply transform changes
+    t = result.get("transform", {})
+    if "position" in t and len(t["position"]) == 3:
+        transform.position = [float(v) for v in t["position"]]
+    if "rotation" in t and len(t["rotation"]) == 3:
+        transform.rotation = [float(v) for v in t["rotation"]]
+    if "scale" in t and len(t["scale"]) == 3:
+        transform.scale = [max(0.001, float(v)) for v in t["scale"]]
 
-    # --- Fillet ---
-    if "fillet" in p or "round corners" in p or "round edges" in p:
-        _ensure_feature(features, "fillet_edges", True)
-        params["fillet_radius"] = max(1.0, params.get("fillet_radius", 2.0))
-        fillet_match = re.search(r"fillet\s*(?:radius)?\s*[=:]\s*(\d+(?:\.\d+)?)", p)
-        if fillet_match:
-            params["fillet_radius"] = float(fillet_match.group(1))
-        actions.append("add fillet")
-
-    # --- Chamfer ---
-    if "chamfer" in p:
-        _ensure_feature(features, "chamfer_edges", True)
-        params["chamfer_size"] = max(0.8, params.get("chamfer_size", 0.0))
-        chamfer_match = re.search(r"chamfer\s*(?:size)?\s*[=:]\s*(\d+(?:\.\d+)?)", p)
-        if chamfer_match:
-            params["chamfer_size"] = float(chamfer_match.group(1))
-        actions.append("add chamfer")
-
-    # --- Mirror ---
-    if "mirror" in p:
-        _ensure_feature(features, "mirror", True)
-        actions.append("mirror geometry")
-
-    # --- Print optimization ---
-    if "optimize for printing" in p or "optimize print" in p:
-        params["thickness"] = max(6.0, params.get("thickness", 8.0))
-        params["angle"] = min(75.0, max(55.0, params.get("angle", 70.0)))
-        actions.append("optimize printing")
-
-    # --- Material reduction ---
-    if "reduce material" in p or "less material" in p:
-        params["thickness"] = max(2.0, params.get("thickness", 8.0) - 1.0)
-        _ensure_feature(features, "mount_holes", True)
-        params["hole_count"] = max(params.get("hole_count", 0.0), 2.0)
-        actions.append("reduce material")
-
-    # --- Movement ---
-    if "move" in p and "left" in p:
-        amount = 10.0
-        move_match = re.search(r"move\s+(?:object\s+)?left\s+(\d+(?:\.\d+)?)", p)
-        if move_match:
-            amount = float(move_match.group(1))
-        transform.position[0] -= amount
-        actions.append("move left")
-
-    if "move" in p and "right" in p:
-        amount = 10.0
-        move_match = re.search(r"move\s+(?:object\s+)?right\s+(\d+(?:\.\d+)?)", p)
-        if move_match:
-            amount = float(move_match.group(1))
-        transform.position[0] += amount
-        actions.append("move right")
-
-    if "move" in p and ("up" in p or "higher" in p):
-        amount = 10.0
-        move_match = re.search(r"move\s+(?:object\s+)?up\s+(\d+(?:\.\d+)?)", p)
-        if move_match:
-            amount = float(move_match.group(1))
-        transform.position[2] += amount
-        actions.append("move up")
-
-    if "move" in p and ("down" in p or "lower" in p):
-        amount = 10.0
-        move_match = re.search(r"move\s+(?:object\s+)?down\s+(\d+(?:\.\d+)?)", p)
-        if move_match:
-            amount = float(move_match.group(1))
-        transform.position[2] -= amount
-        actions.append("move down")
-
-    if "center" in p and "object" in p:
-        transform.position = [0.0, 0.0, transform.position[2]]
-        actions.append("center object")
-
-    # --- Rotation ---
-    if "rotate" in p:
-        angle = 90.0
-        rot_match = re.search(r"rotate\s+(\d+(?:\.\d+)?)", p)
-        if rot_match:
-            angle = float(rot_match.group(1))
-        if "x" in p:
-            transform.rotation[0] += angle
-            actions.append(f"rotate X {angle}")
-        elif "y" in p:
-            transform.rotation[1] += angle
-            actions.append(f"rotate Y {angle}")
-        else:
-            transform.rotation[2] += angle
-            actions.append(f"rotate Z {angle}")
-
-    if not actions:
-        actions.append("no-op")
+    actions = result.get("actions", ["no-op"])
 
     return {
         "parameters": params,
