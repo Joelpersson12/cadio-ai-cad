@@ -55,6 +55,7 @@ from backend.services.session_manager import (
     rebuild_object,
     remove_object,
     add_object,
+    split_object_by_line,
 )
 from backend.services.geometry_validator import GeometryValidator
 from backend.services.example_discovery import ExampleDiscovery
@@ -248,6 +249,10 @@ async def update_parameters(
             for key, value in data.parameters.items():
                 if key in allowed_params:
                     obj["parameters"][key] = float(value)
+                    if obj.get("manual") and key == "thickness":
+                        obj["parameters"]["height"] = float(value)
+                    if obj.get("manual") and key == "height":
+                        obj["parameters"]["thickness"] = float(value)
             rebuild_object(obj)
 
             if session.get("fit"):
@@ -333,6 +338,17 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
                 actions = add_hole_to_object(obj, data.center, diameter)
                 bump_version(session)
                 add_history(session, "expert-hole", actions)
+                payload = build_scene_payload(
+                    session, include_mesh=True, model_updated=True
+                )
+                await broadcast(session["session_id"], payload.model_dump())
+                return payload
+
+            if data.primitive.strip().lower() == "line" and session.get("selected_object_id") and session["object_order"]:
+                obj = get_selected_object(session)
+                actions = split_object_by_line(session, obj, data.center, data.size)
+                bump_version(session)
+                add_history(session, "expert-line-split", actions)
                 payload = build_scene_payload(
                     session, include_mesh=True, model_updated=True
                 )

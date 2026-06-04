@@ -173,6 +173,68 @@ def _make_open_shell_box(width: float, depth: float, height: float, wall: float)
     return mesh
 
 
+def _hole_specs(params: dict[str, float]) -> list[tuple[float, float, float]]:
+    specs: list[tuple[float, float, float]] = []
+    count = max(0, int(params.get("custom_hole_count", 0.0)))
+    for index in range(count):
+        x_key = f"custom_hole_{index}_x"
+        y_key = f"custom_hole_{index}_y"
+        d_key = f"custom_hole_{index}_diameter"
+        if x_key in params and y_key in params:
+            specs.append((
+                float(params[x_key]),
+                float(params[y_key]),
+                max(0.5, float(params.get(d_key, params.get("hole_diameter", 5.0)))),
+            ))
+
+    generated_count = max(0, int(round(params.get("hole_count", 0.0)))) - len(specs)
+    if generated_count > 0:
+        width = max(1.0, float(params.get("width", 80.0)))
+        depth = max(1.0, float(params.get("depth", 70.0)))
+        diameter = max(1.0, float(params.get("hole_diameter", 5.0)))
+        spacing = width / (generated_count + 1)
+        for i in range(generated_count):
+            specs.append((-width / 2.0 + spacing * (i + 1), depth * 0.15, diameter))
+    return specs
+
+
+def _make_box_with_rect_holes(width: float, depth: float, height: float, params: dict[str, float]) -> TriMesh:
+    """Approximate through-holes in mesh fallback by subdividing the box."""
+    holes = _hole_specs(params)
+    if not holes:
+        return make_box(width, depth, height)
+
+    xs = [-width / 2.0, width / 2.0]
+    ys = [-depth / 2.0, depth / 2.0]
+    expanded: list[tuple[float, float, float]] = []
+    for x, y, diameter in holes:
+        r = diameter / 2.0
+        x0, x1 = max(-width / 2.0, x - r), min(width / 2.0, x + r)
+        y0, y1 = max(-depth / 2.0, y - r), min(depth / 2.0, y + r)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        expanded.append((x, y, r))
+        xs.extend([x0, x1])
+        ys.extend([y0, y1])
+
+    xs = sorted(set(round(v, 5) for v in xs))
+    ys = sorted(set(round(v, 5) for v in ys))
+    mesh = TriMesh()
+    for xi in range(len(xs) - 1):
+        for yi in range(len(ys) - 1):
+            x0, x1 = xs[xi], xs[xi + 1]
+            y0, y1 = ys[yi], ys[yi + 1]
+            cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+            inside_hole = any((cx - hx) ** 2 + (cy - hy) ** 2 <= hr ** 2 for hx, hy, hr in expanded)
+            if inside_hole:
+                continue
+            part = make_box(max(0.01, x1 - x0), max(0.01, y1 - y0), height).transformed(
+                Transform(position=[cx, cy, height / 2.0], rotation=[0.0, 0.0, 0.0], scale=[1.0, 1.0, 1.0])
+            )
+            mesh = mesh.merge(part)
+    return mesh if mesh.verts else make_box(width, depth, height)
+
+
 def rebuild_manual_object(obj: CadObject) -> None:
     """Rebuild an expert-mode primitive from its parameters and operations."""
     params = obj["parameters"]
@@ -214,7 +276,7 @@ def rebuild_manual_object(obj: CadObject) -> None:
         elif chamfer > 0.0:
             obj["shape"] = make_rounded_box(width, depth, height, chamfer, segments=1)
         else:
-            obj["shape"] = make_box(width, depth, height)
+            obj["shape"] = _make_box_with_rect_holes(width, depth, height, params)
 
     obj["shape"] = shift_mesh_to_buildplate(obj["shape"])
 
@@ -300,6 +362,66 @@ def add_hole_to_object(obj: CadObject, center: list[float], diameter: float) -> 
     else:
         rebuild_object(obj)
     return [f"cut hole diameter {diameter}mm"]
+
+
+def split_object_by_line(session: Session, obj: CadObject, center: list[float], delta: list[float]) -> list[str]:
+    """Split a manual rectangular primitive into two movable bodies."""
+    if not obj.get("manual") or obj.get("primitive") != "rectangle":
+        return ["split skipped: selected object is not a sketched rectangle"]
+    if len(center) < 2 or len(delta) < 2:
+        return ["split skipped: missing line"]
+
+    params = obj["parameters"]
+    width = max(1.0, float(params.get("width", 40.0)))
+    depth = max(1.0, float(params.get("depth", 30.0)))
+    height = max(0.5, float(params.get("height", params.get("thickness", 8.0))))
+    transform: Transform = obj["transform"]
+    local_x = float(center[0]) - float(transform.position[0])
+    local_y = float(center[1]) - float(transform.position[1])
+
+    vertical_split = abs(float(delta[1])) >= abs(float(delta[0]))
+    new_objects: list[CadObject] = []
+    if vertical_split:
+        split_x = max(-width / 2.0 + 1.0, min(width / 2.0 - 1.0, local_x))
+        left_w = split_x + width / 2.0
+        right_w = width / 2.0 - split_x
+        specs = [
+            (left_w, depth, [transform.position[0] - (width - left_w) / 2.0, transform.position[1], transform.position[2]]),
+            (right_w, depth, [transform.position[0] + (width - right_w) / 2.0, transform.position[1], transform.position[2]]),
+        ]
+    else:
+        split_y = max(-depth / 2.0 + 1.0, min(depth / 2.0 - 1.0, local_y))
+        front_d = split_y + depth / 2.0
+        back_d = depth / 2.0 - split_y
+        specs = [
+            (width, front_d, [transform.position[0], transform.position[1] - (depth - front_d) / 2.0, transform.position[2]]),
+            (width, back_d, [transform.position[0], transform.position[1] + (depth - back_d) / 2.0, transform.position[2]]),
+        ]
+
+    for idx, (part_w, part_d, position) in enumerate(specs, start=1):
+        part_params = dict(params)
+        part_params["width"] = part_w
+        part_params["depth"] = part_d
+        part_params["height"] = height
+        part = create_manual_object(f"{obj['name']}_part_{idx}", make_box(part_w, part_d, height), part_params)
+        part["primitive"] = "rectangle"
+        part["transform"] = Transform(
+            position=list(position),
+            rotation=list(transform.rotation),
+            scale=list(transform.scale),
+        )
+        part["material"] = obj.get("material", "PLA")
+        part["color"] = obj.get("color", "#b8babd")
+        rebuild_manual_object(part)
+        new_objects.append(part)
+
+    object_id = obj["id"]
+    del session["objects"][object_id]
+    session["object_order"] = [oid for oid in session["object_order"] if oid != object_id]
+    for part in new_objects:
+        add_object(session, part)
+    session["selected_object_id"] = new_objects[-1]["id"]
+    return ["split rectangle into 2 editable bodies"]
 
 
 # ---------------------------------------------------------------------------

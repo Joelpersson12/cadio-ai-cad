@@ -350,11 +350,11 @@ function SketchPlane({
           const maxX = Math.max(start.x, finish.x);
           const minZ = Math.min(start.z, finish.z);
           const maxZ = Math.max(start.z, finish.z);
-          const width = maxX - minX;
-          const depth = maxZ - minZ;
+          const width = tool === "line" ? finish.x - start.x : maxX - minX;
+          const depth = tool === "line" ? finish.z - start.z : maxZ - minZ;
           if (Math.max(Math.abs(width), Math.abs(depth)) >= 2) {
             const center: [number, number] = [(minX + maxX) / 2, (minZ + maxZ) / 2];
-            const size: [number, number] = [Math.abs(width), Math.abs(depth)];
+            const size: [number, number] = tool === "line" ? [width, depth] : [Math.abs(width), Math.abs(depth)];
             const radius = Math.max(size[0], size[1]) / 2;
             onCreatePrimitive?.({
               primitive: tool,
@@ -375,6 +375,17 @@ function SketchPlane({
           <boxGeometry args={[preview.width, 0.8, preview.depth]} />
           <meshBasicMaterial color="#7dd3fc" transparent opacity={0.35} />
         </mesh>
+      )}
+      {start && end && enabled && tool === "line" && (
+        <line>
+          <bufferGeometry>
+            <bufferAttribute
+              attach="attributes-position"
+              args={[new Float32Array([start.x, 0.55, start.z, end.x, 0.55, end.z]), 3]}
+            />
+          </bufferGeometry>
+          <lineBasicMaterial color="#7de7ff" />
+        </line>
       )}
       {preview && (tool === "circle" || tool === "hole") && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[preview.cx, 0.35, preview.cz]}>
@@ -430,7 +441,7 @@ export default function CadViewport({
         >
           Modeling
         </button>
-        {(["select", "rectangle", "circle", "hole"] as ExpertTool[]).map((tool) => (
+        {(["select", "rectangle", "circle", "line", "hole"] as ExpertTool[]).map((tool) => (
           <button
             key={tool}
             disabled={!expertMode}

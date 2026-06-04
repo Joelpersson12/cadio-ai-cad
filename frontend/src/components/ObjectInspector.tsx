@@ -1,6 +1,7 @@
 /** Object inspector panel - parameters, features, hierarchy, transforms. */
 
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { useCadStore } from "../stores/cadStore";
 import type { PrinterProfile, TransformMode } from "../utils/types";
 import { exportUrl } from "../utils/api";
@@ -18,6 +19,24 @@ function NumberInput({
   step?: number;
   min?: number;
 }) {
+  const [draft, setDraft] = useState(String(Number.isFinite(value) ? value : 0));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) {
+      setDraft(String(Number.isFinite(value) ? value : 0));
+    }
+  }, [focused, value]);
+
+  const commit = () => {
+    const next = Number(draft);
+    if (Number.isFinite(next)) {
+      onChange(next);
+    } else {
+      setDraft(String(Number.isFinite(value) ? value : 0));
+    }
+  };
+
   return (
     <label className="flex flex-col gap-1">
       <span className="text-xs text-cadio-muted">{label}</span>
@@ -25,8 +44,22 @@ function NumberInput({
         type="number"
         min={min}
         step={step}
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(Number(e.target.value))}
+        value={draft}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          commit();
+        }}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.currentTarget.blur();
+          }
+          if (e.key === "Escape") {
+            setDraft(String(Number.isFinite(value) ? value : 0));
+            e.currentTarget.blur();
+          }
+        }}
         className="rounded-lg border border-cadio-border bg-[#121723] text-cadio-text px-3 py-1.5 text-sm focus:outline-none focus:border-cadio-accent"
       />
     </label>

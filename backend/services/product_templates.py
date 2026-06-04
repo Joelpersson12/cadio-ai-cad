@@ -36,6 +36,62 @@ def _add_box(mesh: TriMesh, width: float, depth: float, height: float, pos: list
     )
 
 
+def _hole_specs(params: dict[str, float], width: float, depth: float) -> list[tuple[float, float, float]]:
+    specs: list[tuple[float, float, float]] = []
+    custom_count = max(0, int(params.get("custom_hole_count", 0.0)))
+    for index in range(custom_count):
+        x_key = f"custom_hole_{index}_x"
+        y_key = f"custom_hole_{index}_y"
+        d_key = f"custom_hole_{index}_diameter"
+        if x_key in params and y_key in params:
+            specs.append((
+                float(params[x_key]),
+                float(params[y_key]),
+                max(1.0, float(params.get(d_key, params.get("hole_diameter", 5.0)))),
+            ))
+
+    generated_count = max(0, int(round(params.get("hole_count", 0.0)))) - len(specs)
+    if generated_count > 0:
+        diameter = max(1.0, float(params.get("hole_diameter", 5.0)))
+        spacing = width / (generated_count + 1)
+        for index in range(generated_count):
+            specs.append((-width / 2.0 + spacing * (index + 1), depth * 0.15, diameter))
+    return specs
+
+
+def _make_box_with_rect_holes(width: float, depth: float, height: float, params: dict[str, float]) -> TriMesh:
+    """Mesh fallback for plates with visible through-holes."""
+    holes = _hole_specs(params, width, depth)
+    if not holes:
+        return make_box(width, depth, height)
+
+    xs = [-width / 2.0, width / 2.0]
+    ys = [-depth / 2.0, depth / 2.0]
+    expanded: list[tuple[float, float, float]] = []
+    for x, y, diameter in holes:
+        radius = diameter / 2.0
+        x0, x1 = max(-width / 2.0, x - radius), min(width / 2.0, x + radius)
+        y0, y1 = max(-depth / 2.0, y - radius), min(depth / 2.0, y + radius)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        expanded.append((x, y, radius))
+        xs.extend([x0, x1])
+        ys.extend([y0, y1])
+
+    xs = sorted(set(round(v, 5) for v in xs))
+    ys = sorted(set(round(v, 5) for v in ys))
+    mesh = TriMesh()
+    for xi in range(len(xs) - 1):
+        for yi in range(len(ys) - 1):
+            x0, x1 = xs[xi], xs[xi + 1]
+            y0, y1 = ys[yi], ys[yi + 1]
+            cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+            if any((cx - hx) ** 2 + (cy - hy) ** 2 <= radius ** 2 for hx, hy, radius in expanded):
+                continue
+            mesh = _add_box(mesh, x1 - x0, y1 - y0, height, [cx, cy, height / 2.0])
+    return mesh if mesh.verts else make_box(width, depth, height)
+
+
 def _make_slanted_slab(
     width: float,
     y0: float,
@@ -122,7 +178,7 @@ def generate_phone_stand(params: dict[str, float]) -> TriMesh:
     mesh = TriMesh()
 
     # Stable footprint with a small front retaining lip.
-    mesh = _add_box(mesh, width, depth, thickness, [0.0, 0.0, thickness / 2.0])
+    mesh = mesh.merge(_make_box_with_rect_holes(width, depth, thickness, params))
     lip_height = max(thickness * 2.2, 14.0)
     lip_depth = max(thickness * 1.4, 9.0)
     mesh = _add_box(
@@ -208,36 +264,35 @@ def generate_tablet_stand(params: dict[str, float]) -> TriMesh:
 
 def generate_headphone_stand(params: dict[str, float]) -> TriMesh:
     """Generate a realistic headphone stand."""
-    width = max(80.0, min(150.0, params.get("width", 100.0)))
-    depth = max(70.0, min(140.0, params.get("depth", 90.0)))
-    height = max(140.0, min(250.0, params.get("height", 180.0)))
-    thickness = max(4.0, min(12.0, params.get("thickness", 6.0)))
+    width = max(90.0, min(170.0, params.get("width", 120.0)))
+    depth = max(90.0, min(170.0, params.get("depth", 120.0)))
+    height = max(150.0, min(260.0, params.get("height", 205.0)))
+    thickness = max(6.0, min(16.0, params.get("thickness", 9.0)))
     
     mesh = TriMesh()
     
-    # Base plate
-    base = make_box(width, depth, thickness)
-    mesh = mesh.merge(base)
-    
-    # Vertical stand rod (cylinder approximation via box)
-    rod_width = max(20.0, thickness * 3)
-    rod = make_box(rod_width, thickness, height * 0.8)
-    rod = rod.transformed(Transform(
-        position=[0, 0, height * 0.4],
-        rotation=[0, 0, 0],
-        scale=[1.0, 1.0, 1.0],
-    ))
-    mesh = mesh.merge(rod)
-    
-    # Top hook area
-    hook_width = width * 0.6
-    hook = make_box(hook_width, thickness * 2, thickness * 2)
-    hook = hook.transformed(Transform(
-        position=[0, rod_width * 0.5, height * 0.75],
-        rotation=[0, 0, 0],
-        scale=[1.0, 1.0, 1.0],
-    ))
-    mesh = mesh.merge(hook)
+    # Wide stable base.
+    mesh = mesh.merge(_make_box_with_rect_holes(width, depth, thickness, params))
+
+    # Upright rear column.
+    column_width = max(22.0, thickness * 3.0)
+    column_depth = max(18.0, thickness * 2.2)
+    mesh = _add_box(
+        mesh,
+        column_width,
+        column_depth,
+        height * 0.78,
+        [0.0, depth * 0.18, thickness + height * 0.39],
+    )
+
+    # Curved-looking top cradle approximated by three print-friendly blocks.
+    top_z = thickness + height * 0.78
+    mesh = _add_box(mesh, width * 0.68, thickness * 2.2, thickness * 2.0, [0.0, depth * 0.20, top_z])
+    mesh = _add_box(mesh, thickness * 2.0, thickness * 3.0, thickness * 3.0, [-width * 0.34, depth * 0.18, top_z - thickness * 0.4])
+    mesh = _add_box(mesh, thickness * 2.0, thickness * 3.0, thickness * 3.0, [width * 0.34, depth * 0.18, top_z - thickness * 0.4])
+
+    # Front cable notch / anti-slip foot.
+    mesh = _add_box(mesh, width * 0.45, thickness * 1.3, thickness * 1.2, [0.0, -depth / 2.0 + thickness, thickness * 1.1])
     
     return mesh
 
@@ -431,10 +486,15 @@ PRODUCT_TEMPLATES: dict[str, ProductTemplate] = {
         category="Device Stand",
         description="Vertical stand for headphone display",
         default_params={
-            "width": 100.0,
-            "depth": 90.0,
-            "height": 180.0,
-            "thickness": 6.0,
+            "width": 120.0,
+            "depth": 120.0,
+            "height": 205.0,
+            "thickness": 9.0,
+            "fillet_radius": 3.0,
+            "hole_count": 0.0,
+            "hole_diameter": 5.0,
+            "wall_thickness": 3.0,
+            "chamfer_size": 0.0,
         },
         default_features=["base_extrude", "fillet_edges"],
         geometry_fn=generate_headphone_stand,
@@ -496,34 +556,37 @@ PRODUCT_TEMPLATES: dict[str, ProductTemplate] = {
 
 def get_template_for_prompt(prompt: str) -> ProductTemplate | None:
     """Find the best matching template for a natural language prompt."""
+    import re
+
     prompt_lower = prompt.lower()
-    
-    # Direct template matching
-    for key, template in PRODUCT_TEMPLATES.items():
-        if template.name.lower() in prompt_lower:
-            return template
-        if any(word in prompt_lower for word in template.name.lower().split()):
-            return template
-    
-    # Category matching
-    for key, template in PRODUCT_TEMPLATES.items():
-        if template.category.lower() in prompt_lower:
-            return template
-    
-    # Keyword-based matching
-    keyword_map = {
-        "phone": "phone_stand",
-        "tablet": "tablet_stand",
-        "headphone": "headphone_stand",
-        "cable": "cable_organizer",
-        "storage": "storage_bin",
-        "hook": "wall_hook",
-        "shelf": "shelf_bracket",
-        "stand": "phone_stand",  # Default to phone stand
+    words = set(re.findall(r"[a-z0-9]+", prompt_lower))
+    aliases = {
+        "phone_stand": {"phone", "smartphone", "mobile", "iphone", "android", "dock"},
+        "tablet_stand": {"tablet", "ipad", "kindle"},
+        "headphone_stand": {"headphone", "headphones", "headset", "headsets", "gaming", "earphone"},
+        "cable_organizer": {"cable", "cord", "wire", "organizer", "organiser"},
+        "storage_bin": {"storage", "bin", "box", "container", "drawer"},
+        "wall_hook": {"hook", "hanger", "wall"},
+        "shelf_bracket": {"shelf", "bracket", "support"},
     }
-    
-    for keyword, template_key in keyword_map.items():
-        if keyword in prompt_lower:
-            return PRODUCT_TEMPLATES.get(template_key)
-    
+
+    best_key: str | None = None
+    best_score = 0
+    for key, template in PRODUCT_TEMPLATES.items():
+        name_words = set(re.findall(r"[a-z0-9]+", template.name.lower()))
+        score = len(words & aliases.get(key, set())) * 4
+        score += len(words & name_words) * 2
+        if template.name.lower() in prompt_lower:
+            score += 8
+        if "stand" in words and key.endswith("_stand") and score > 0:
+            score += 1
+        if score > best_score:
+            best_key = key
+            best_score = score
+
+    if best_key:
+        return PRODUCT_TEMPLATES[best_key]
+
+    if "stand" in words:
+        return PRODUCT_TEMPLATES["phone_stand"]
     return None

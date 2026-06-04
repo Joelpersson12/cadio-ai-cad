@@ -71,6 +71,14 @@ def _hole_specs(params: dict[str, float]) -> list[tuple[float, float, float]]:
             continue
         diameter = max(0.5, float(params.get(d_key, params.get("hole_diameter", 5.0))))
         specs.append((float(params[x_key]), float(params[y_key]), diameter))
+    generated_count = max(0, int(round(params.get("hole_count", 0.0)))) - len(specs)
+    if generated_count > 0:
+        width = max(1.0, float(params.get("width", 80.0)))
+        depth = max(1.0, float(params.get("depth", 70.0)))
+        diameter = max(1.0, float(params.get("hole_diameter", 5.0)))
+        spacing = width / (generated_count + 1)
+        for index in range(generated_count):
+            specs.append((-width / 2.0 + spacing * (index + 1), depth * 0.18, diameter))
     return specs
 
 
