@@ -150,6 +150,131 @@ def create_primitive_object(
     return obj
 
 
+def _create_box_component(
+    name: str,
+    width: float,
+    depth: float,
+    height: float,
+    position: list[float],
+    params: dict[str, float],
+    *,
+    rotation: list[float] | None = None,
+    color: str = "#b8babd",
+) -> CadObject:
+    part_params = dict(DEFAULT_PARAMETERS)
+    part_params.update(params)
+    part_params.update({
+        "width": float(width),
+        "depth": float(depth),
+        "height": float(height),
+        "thickness": float(height),
+    })
+    shape = make_box_body(width, depth, height) or make_box(width, depth, height)
+    obj = create_manual_object(name, shape, part_params)
+    obj["primitive"] = "rectangle"
+    obj["template_component"] = True
+    obj["color"] = color
+    obj["transform"] = Transform(
+        position=[float(position[0]), float(position[1]), float(position[2])],
+        rotation=rotation or [0.0, 0.0, 0.0],
+        scale=[1.0, 1.0, 1.0],
+    )
+    return obj
+
+
+def _remove_object_direct(session: Session, object_id: str) -> None:
+    if object_id in session["objects"]:
+        del session["objects"][object_id]
+    session["object_order"] = [oid for oid in session["object_order"] if oid != object_id]
+
+
+def replace_object_with_template_assembly(
+    session: Session,
+    obj: CadObject,
+    template_name: str | None,
+    params: dict[str, float],
+) -> list[str]:
+    """Replace a generated single mesh with editable component bodies.
+
+    This is an intentionally conservative bridge toward true sub-body editing:
+    generated assemblies become separate manual CAD bodies, so transform and
+    parameter edits can target useful parts such as base, column, rails, lips.
+    """
+    name = (template_name or "").strip().lower()
+    parts: list[CadObject] = []
+    color = obj.get("color", "#b8babd")
+
+    if name == "headphone stand":
+        width = max(90.0, min(170.0, float(params.get("width", 120.0))))
+        depth = max(90.0, min(170.0, float(params.get("depth", 120.0))))
+        height = max(150.0, min(260.0, float(params.get("height", 205.0))))
+        thickness = max(6.0, min(16.0, float(params.get("thickness", 9.0))))
+        column_width = max(22.0, thickness * 3.0)
+        column_depth = max(18.0, thickness * 2.2)
+        column_height = height * 0.78
+        top_z = thickness + column_height
+        parts = [
+            _create_box_component("headphone_base", width, depth, thickness, [0.0, 0.0, 0.0], params, color=color),
+            _create_box_component("headphone_column", column_width, column_depth, column_height, [0.0, depth * 0.18, thickness], params, color=color),
+            _create_box_component("headphone_top_cradle", width * 0.68, thickness * 2.2, thickness * 2.0, [0.0, depth * 0.20, top_z], params, color=color),
+            _create_box_component("headphone_left_stop", thickness * 2.0, thickness * 3.0, thickness * 3.0, [-width * 0.34, depth * 0.18, top_z - thickness * 0.9], params, color=color),
+            _create_box_component("headphone_right_stop", thickness * 2.0, thickness * 3.0, thickness * 3.0, [width * 0.34, depth * 0.18, top_z - thickness * 0.9], params, color=color),
+            _create_box_component("headphone_cable_notch", width * 0.45, thickness * 1.3, thickness * 1.2, [0.0, -depth / 2.0 + thickness, thickness], params, color=color),
+        ]
+    elif name == "phone stand":
+        width = max(78.0, min(130.0, float(params.get("width", 92.0))))
+        depth = max(75.0, min(130.0, float(params.get("depth", 92.0))))
+        height = max(92.0, min(170.0, float(params.get("height", 122.0))))
+        thickness = max(5.0, min(12.0, float(params.get("thickness", 7.0))))
+        angle = max(60.0, min(74.0, float(params.get("angle", 68.0))))
+        parts = [
+            _create_box_component("phone_base", width, depth, thickness, [0.0, 0.0, 0.0], params, color=color),
+            _create_box_component("phone_left_lip", width * 0.36, thickness * 1.45, thickness * 2.0, [-width * 0.26, -depth / 2.0 + thickness, thickness], params, color=color),
+            _create_box_component("phone_right_lip", width * 0.36, thickness * 1.45, thickness * 2.0, [width * 0.26, -depth / 2.0 + thickness, thickness], params, color=color),
+            _create_box_component("phone_back_support", width * 0.70, thickness, height, [0.0, -depth * 0.05, thickness], params, rotation=[angle - 90.0, 0.0, 0.0], color=color),
+            _create_box_component("phone_left_rail", max(thickness * 0.65, 4.5), depth * 0.54, thickness * 1.25, [-width * 0.41, -depth * 0.02, thickness], params, color=color),
+            _create_box_component("phone_right_rail", max(thickness * 0.65, 4.5), depth * 0.54, thickness * 1.25, [width * 0.41, -depth * 0.02, thickness], params, color=color),
+        ]
+    elif name == "battery holder":
+        width = max(70.0, min(150.0, float(params.get("width", 104.0))))
+        depth = max(55.0, min(150.0, float(params.get("depth", 92.0))))
+        height = max(28.0, min(90.0, float(params.get("height", 46.0))))
+        thickness = max(4.0, min(14.0, float(params.get("thickness", 7.0))))
+        rail_width = max(thickness * 1.15, 7.0)
+        rail_height = max(height * 0.52, 18.0)
+        parts = [
+            _create_box_component("battery_back_plate", width, depth, thickness, [0.0, 0.0, 0.0], params, color=color),
+            _create_box_component("battery_left_slide", rail_width, depth * 0.72, rail_height, [-width * 0.30, -depth * 0.02, thickness], params, color=color),
+            _create_box_component("battery_right_slide", rail_width, depth * 0.72, rail_height, [width * 0.30, -depth * 0.02, thickness], params, color=color),
+            _create_box_component("battery_front_stop", width * 0.72, thickness * 1.4, height * 0.45, [0.0, -depth / 2.0 + thickness, thickness], params, color=color),
+            _create_box_component("battery_rear_register", width * 0.56, thickness, height * 0.32, [0.0, depth * 0.36, thickness], params, color=color),
+        ]
+    elif name == "electronics holder":
+        width = max(55.0, min(180.0, float(params.get("width", 86.0))))
+        depth = max(45.0, min(150.0, float(params.get("depth", 68.0))))
+        height = max(20.0, min(100.0, float(params.get("height", 38.0))))
+        thickness = max(3.0, min(12.0, float(params.get("thickness", 5.0))))
+        parts = [
+            _create_box_component("electronics_base", width * 1.18, depth, thickness, [0.0, 0.0, 0.0], params, color=color),
+            _create_box_component("electronics_front_wall", width, thickness, height, [0.0, -depth / 2.0 + thickness / 2.0, thickness], params, color=color),
+            _create_box_component("electronics_back_wall", width, thickness, height, [0.0, depth / 2.0 - thickness / 2.0, thickness], params, color=color),
+            _create_box_component("electronics_left_wall", thickness, depth, height * 0.72, [-width / 2.0 + thickness / 2.0, 0.0, thickness], params, color=color),
+            _create_box_component("electronics_right_wall", thickness, depth, height * 0.72, [width / 2.0 - thickness / 2.0, 0.0, thickness], params, color=color),
+            _create_box_component("electronics_strap_bridge", width * 0.72, thickness * 0.8, thickness * 1.2, [0.0, 0.0, thickness + height], params, color=color),
+        ]
+
+    if not parts:
+        return []
+
+    source_id = obj["id"]
+    _remove_object_direct(session, source_id)
+    for part in parts:
+        part["assembly_source"] = template_name
+        add_object(session, part)
+    session["selected_object_id"] = parts[0]["id"]
+    return [f"created editable {template_name} assembly with {len(parts)} bodies"]
+
+
 def _make_open_shell_box(width: float, depth: float, height: float, wall: float) -> TriMesh:
     """Create a simple open-top shell from box primitives."""
     wall = max(0.5, min(wall, width / 3.0, depth / 3.0, height / 2.0))

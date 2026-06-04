@@ -243,6 +243,49 @@ def _apply_deterministic_edit(
     return actions
 
 
+def _apply_prompt_shape_inference(
+    prompt: str,
+    params: dict[str, float],
+    features: list[Feature],
+) -> list[str]:
+    """Create a useful first sketch when no curated template exists yet."""
+    text = prompt.lower()
+    actions: list[str] = []
+
+    if any(word in text for word in ("holder", "mount", "bracket", "clip", "retainer")):
+        params["width"] = max(float(params.get("width", 70.0)), 86.0)
+        params["depth"] = max(float(params.get("depth", 55.0)), 64.0)
+        params["height"] = max(float(params.get("height", 24.0)), 34.0)
+        params["thickness"] = max(float(params.get("thickness", 4.0)), 5.0)
+        params["hole_count"] = max(float(params.get("hole_count", 0.0)), 2.0)
+        params["hole_diameter"] = max(float(params.get("hole_diameter", 5.0)), 5.0)
+        _ensure_feature(features, "base_extrude", True)
+        _ensure_feature(features, "mount_holes", True)
+        _ensure_feature(features, "back_support", False)
+        actions.append("inferred generic holder/mount geometry from prompt")
+
+    if any(word in text for word in ("case", "cover", "enclosure", "box", "housing", "shell")):
+        params["width"] = max(float(params.get("width", 80.0)), 90.0)
+        params["depth"] = max(float(params.get("depth", 65.0)), 70.0)
+        params["height"] = max(float(params.get("height", 35.0)), 45.0)
+        params["thickness"] = max(float(params.get("thickness", 3.0)), 4.0)
+        params["wall_thickness"] = max(float(params.get("wall_thickness", 2.0)), 3.0)
+        _ensure_feature(features, "base_extrude", True)
+        _ensure_feature(features, "back_support", False)
+        actions.append("inferred enclosure-style geometry from prompt")
+
+    if any(word in text for word in ("spacer", "shim", "washer", "plate", "adapter")):
+        params["width"] = max(float(params.get("width", 50.0)), 60.0)
+        params["depth"] = max(float(params.get("depth", 40.0)), 45.0)
+        params["height"] = min(max(float(params.get("height", 8.0)), 6.0), 18.0)
+        params["thickness"] = params["height"]
+        _ensure_feature(features, "base_extrude", True)
+        _ensure_feature(features, "back_support", False)
+        actions.append("inferred flat adapter/plate geometry from prompt")
+
+    return actions
+
+
 def _feature_tree_for_template(default_features: list[str]) -> list[Feature]:
     from backend.services.cad_engine import DEFAULT_FEATURE_TREE
 
@@ -318,7 +361,7 @@ def parse_ai_command(
     else:
         params = dict(obj["parameters"])
         features = [_coerce_feature(f) for f in obj["feature_tree"]]
-        external_actions = []
+        external_actions = _external_design_signals(prompt, params)
     
     src_transform: Transform = obj["transform"]
     transform = Transform(
@@ -334,10 +377,11 @@ def parse_ai_command(
     }
 
     quick_actions = _apply_deterministic_edit(prompt, params, features, transform)
+    inference_actions = [] if template else _apply_prompt_shape_inference(prompt, params, features)
 
     # Call GPT-4o for fine-tuning if not a direct template match
-    if quick_actions:
-        actions = quick_actions
+    if quick_actions or inference_actions:
+        actions = quick_actions + inference_actions
     elif not template or "modify" in prompt.lower() or "change" in prompt.lower():
         result = _parse_with_gpt(prompt, params, current_transform)
         

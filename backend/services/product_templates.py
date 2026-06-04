@@ -663,7 +663,7 @@ def get_template_for_prompt(prompt: str) -> ProductTemplate | None:
         "tablet_stand": {"tablet", "ipad", "kindle"},
         "headphone_stand": {"headphone", "headphones", "headset", "headsets", "gaming", "earphone"},
         "battery_holder": {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch", "holder", "charger"},
-        "electronics_holder": {"cdi", "ecu", "ecm", "electronics", "module", "ignition", "honda", "cr250r", "crf", "holder", "bracket", "mount"},
+        "electronics_holder": {"cdi", "ecu", "ecm", "electronics", "module", "ignition", "honda", "cr250r", "crf"},
         "cable_organizer": {"cable", "cord", "wire", "organizer", "organiser"},
         "storage_bin": {"storage", "bin", "box", "container", "drawer"},
         "wall_hook": {"hook", "hanger", "wall"},

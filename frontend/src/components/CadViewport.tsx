@@ -158,7 +158,7 @@ function ScaledMesh({
       onPointerOver={() => setHovered(true)}
       onPointerOut={() => setHovered(false)}
       castShadow
-      receiveShadow
+      receiveShadow={false}
     >
       <meshPhysicalMaterial
         color={selected ? "#27bfe6" : obj.color || "#b9bab8"}
@@ -228,7 +228,7 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
   return (
     <group>
       {/* Base plate - visible and textured */}
-      <mesh position={[0, -0.24, 0]} receiveShadow>
+      <mesh position={[0, -0.55, 0]} receiveShadow>
         <boxGeometry args={[px, 0.08, py]} />
         <meshStandardMaterial 
           color="#202124" 
@@ -255,6 +255,28 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       </lineSegments>
     </group>
   );
+}
+
+function snapSketchPoint(start: THREE.Vector3, point: THREE.Vector3, tool: ExpertTool): THREE.Vector3 {
+  const snapped = point.clone();
+  snapped.x = Math.round(snapped.x);
+  snapped.z = Math.round(snapped.z);
+  if (tool !== "line") return snapped;
+
+  const dx = snapped.x - start.x;
+  const dz = snapped.z - start.z;
+  const length = Math.hypot(dx, dz);
+  if (length < 0.001) return snapped;
+
+  const snapStep = Math.PI / 4.0;
+  const angle = Math.atan2(dz, dx);
+  const snappedAngle = Math.round(angle / snapStep) * snapStep;
+  const delta = Math.abs(Math.atan2(Math.sin(angle - snappedAngle), Math.cos(angle - snappedAngle)));
+  if (delta <= THREE.MathUtils.degToRad(8)) {
+    snapped.x = start.x + Math.cos(snappedAngle) * length;
+    snapped.z = start.z + Math.sin(snappedAngle) * length;
+  }
+  return snapped;
 }
  
 // ---------------------------------------------------------------------------
@@ -345,13 +367,13 @@ function SketchPlane({
         onPointerMove={(e) => {
           if (!enabled || !start) return;
           e.stopPropagation();
-          setEnd(e.point.clone());
+          setEnd(snapSketchPoint(start, e.point, tool));
         }}
         onPointerUp={(e) => {
           if (e.button !== 0) return;
           if (!enabled || !start) return;
           e.stopPropagation();
-          const finish = e.point.clone();
+          const finish = snapSketchPoint(start, e.point, tool);
           const minX = Math.min(start.x, finish.x);
           const maxX = Math.max(start.x, finish.x);
           const minZ = Math.min(start.z, finish.z);
@@ -546,6 +568,8 @@ export default function CadViewport({
         shadow-camera-right={400}
         shadow-camera-top={400}
         shadow-camera-bottom={-400}
+        shadow-bias={-0.00008}
+        shadow-normalBias={0.025}
       />
       <directionalLight position={[-180, 150, -140]} intensity={0.65} color="#d7e7ff" />
       <pointLight position={[0, 260, 0]} intensity={0.35} color="#ffffff" />
@@ -561,7 +585,7 @@ export default function CadViewport({
         sectionColor="#3e4045"
         fadeDistance={1000}
         fadeStrength={2.0}
-        position={[0, -0.36, 0]}
+        position={[0, -0.78, 0]}
       />
  
       {/* Build plate */}

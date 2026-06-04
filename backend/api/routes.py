@@ -56,6 +56,7 @@ from backend.services.session_manager import (
     remove_object,
     add_object,
     split_object_by_line,
+    replace_object_with_template_assembly,
 )
 from backend.services.geometry_validator import GeometryValidator
 from backend.services.example_discovery import ExampleDiscovery
@@ -193,20 +194,29 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                 obj["feature_tree"] = parsed["feature_tree"]
                 obj["transform"] = parsed["transform"]
                 rebuild_object(obj)
-                
-                # Validate generated geometry
-                validation = GeometryValidator.validate(obj["shape"])
-                if not validation.is_valid:
-                    logger.warning(f"Generated model failed validation: {validation.issues}")
-                    # Add validation info to actions
-                    actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
+
+                assembly_actions = replace_object_with_template_assembly(
+                    session,
+                    obj,
+                    parsed.get("template"),
+                    parsed["parameters"],
+                )
+                if assembly_actions:
+                    actions = parsed["actions"] + assembly_actions
                 else:
-                    actions = parsed["actions"]
-                    if validation.warnings:
-                        actions += [f"Note: {w}" for w in validation.warnings]
-                
-                # Store validation metrics
-                obj["validation"] = validation.to_dict()
+                    # Validate generated geometry
+                    validation = GeometryValidator.validate(obj["shape"])
+                    if not validation.is_valid:
+                        logger.warning(f"Generated model failed validation: {validation.issues}")
+                        # Add validation info to actions
+                        actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
+                    else:
+                        actions = parsed["actions"]
+                        if validation.warnings:
+                            actions += [f"Note: {w}" for w in validation.warnings]
+
+                    # Store validation metrics
+                    obj["validation"] = validation.to_dict()
 
             if session.get("fit"):
                 auto_fit_session(session)

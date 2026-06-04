@@ -77,33 +77,9 @@ class ExampleDiscovery:
     @staticmethod
     def _find_template(prompt: str) -> ProductTemplate | None:
         """Find the best matching template for a prompt."""
-        prompt_lower = prompt.lower().strip()
-        
-        # Direct name match
-        for template in PRODUCT_TEMPLATES.values():
-            if template.name.lower() in prompt_lower:
-                return template
-        
-        # Keyword match
-        keywords = {
-            "phone": "phone_stand",
-            "tablet": "tablet_stand",
-            "headphone": "headphone_stand",
-            "cable": "cable_organizer",
-            "storage": "storage_bin",
-            "hook": "wall_hook",
-            "shelf": "shelf_bracket",
-            "stand": "phone_stand",  # Default
-            "organizer": "cable_organizer",
-            "bin": "storage_bin",
-        }
-        
-        for keyword, template_key in keywords.items():
-            if keyword in prompt_lower:
-                return PRODUCT_TEMPLATES.get(template_key)
-        
-        # No match - return first template as default
-        return next(iter(PRODUCT_TEMPLATES.values())) if PRODUCT_TEMPLATES else None
+        from backend.services.product_templates import get_template_for_prompt
+
+        return get_template_for_prompt(prompt)
     
     @staticmethod
     def _generate_template_examples(template: ProductTemplate) -> list[dict[str, Any]]:
