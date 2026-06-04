@@ -152,14 +152,21 @@ export const useCadStore = create<CadState>((set, get) => ({
     if (payload.session_id) {
       localStorage.setItem(SESSION_KEY, payload.session_id);
     }
+    const current = get();
+    const payloadIds = new Set(payload.objects.map((object) => object.id));
+    const preservedSelection = current.selectedObjectIds.filter((id) => payloadIds.has(id));
+    const keepMultiSelection = preservedSelection.length > 1;
+    const nextSelectedObjectId = keepMultiSelection
+      ? (preservedSelection.includes(current.selectedObjectId) ? current.selectedObjectId : preservedSelection[0])
+      : payload.selected_object_id;
     set({
       sessionId: payload.session_id,
       version: payload.version,
       sceneToken: payload.scene_token,
       objects: payload.objects,
       objectOrder: payload.object_order,
-      selectedObjectId: payload.selected_object_id,
-      selectedObjectIds: payload.selected_object_id ? [payload.selected_object_id] : [],
+      selectedObjectId: nextSelectedObjectId,
+      selectedObjectIds: keepMultiSelection ? preservedSelection : payload.selected_object_id ? [payload.selected_object_id] : [],
       bounds: payload.bounds,
       printer: payload.printer,
       printAssistant: payload.print_assistant,
@@ -225,16 +232,24 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
 
   onToggleFeature: async (featureId: string, enabled: boolean) => {
-    const { sessionId, selectedObjectId } = get();
-    if (!sessionId || !selectedObjectId) return;
+    const { sessionId, selectedObjectId, selectedObjectIds } = get();
+    const targets = selectedObjectIds.length > 1 ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : [];
+    if (!sessionId || !targets.length) return;
     try {
-      const data = await apiToggleFeature({
-        session_id: sessionId,
-        object_id: selectedObjectId,
-        feature_id: featureId,
-        enabled,
-      });
-      get().applyScenePayload(data);
+      let data: ScenePayload | null = null;
+      for (const objectId of targets) {
+        data = await apiToggleFeature({
+          session_id: sessionId,
+          object_id: objectId,
+          feature_id: featureId,
+          enabled,
+        });
+      }
+      if (data) {
+        get().applyScenePayload(data);
+        const valid = targets.filter((id) => data?.objects.some((object) => object.id === id));
+        set({ selectedObjectIds: valid, selectedObjectId: valid.includes(selectedObjectId) ? selectedObjectId : valid[0] || "" });
+      }
       set({ status: `Feature ${featureId} ${enabled ? "on" : "off"}` });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });

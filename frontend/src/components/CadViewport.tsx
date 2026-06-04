@@ -51,6 +51,8 @@ function CameraController({
 function ScaledMesh({
   obj,
   selected,
+  active,
+  suppressSelection,
   onSelect,
   transformMode,
   onTransformCommit,
@@ -59,9 +61,12 @@ function ScaledMesh({
   expertMode,
   edgeOperation,
   onEdgeAmount,
+  onTransformDrag,
 }: {
   obj: CadObject;
   selected: boolean;
+  active: boolean;
+  suppressSelection: boolean;
   onSelect: () => void;
   transformMode: TransformMode;
   onTransformCommit: (
@@ -77,6 +82,7 @@ function ScaledMesh({
   expertMode: boolean;
   edgeOperation: string;
   onEdgeAmount: (x: number, y: number, operation: string, objectId: string) => void;
+  onTransformDrag: (dragging: boolean) => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
@@ -149,6 +155,7 @@ function ScaledMesh({
       geometry={geometry}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
+        if (suppressSelection) return;
         e.stopPropagation();
         onSelect();
         if (expertMode && selectionMode === "edge") {
@@ -173,18 +180,18 @@ function ScaledMesh({
         polygonOffsetUnits={1}
       />
     </mesh>
-    {(selected || (hovered && expertMode && selectionMode === "edge")) && (
+    {((selected && selectionMode !== "body") || (hovered && expertMode && selectionMode === "edge")) && (
       <lineSegments>
         <edgesGeometry args={[geometry]} />
         <lineBasicMaterial
           color={selectionMode === "edge" ? "#7de7ff" : selectionMode === "face" ? "#a78bfa" : "#7dd3fc"}
           transparent
-          opacity={hovered && !selected ? 1 : selectionMode === "body" ? 0.45 : 0.95}
+          opacity={hovered && !selected ? 1 : 0.82}
         />
       </lineSegments>
     )}
     </group>
-    {selected && transformMode !== "off" && groupRef.current && (
+    {active && transformMode !== "off" && groupRef.current && (
       <TransformControls
         object={groupRef.current}
         mode={transformMode}
@@ -192,8 +199,10 @@ function ScaledMesh({
         translationSnap={2}
         rotationSnap={THREE.MathUtils.degToRad(5)}
         scaleSnap={0.05}
+        onMouseDown={() => onTransformDrag(true)}
         onMouseUp={() => {
           const group = groupRef.current;
+          onTransformDrag(false);
           if (!group) return;
           onTransformCommit(obj.id, {
             position: [
@@ -461,6 +470,7 @@ export default function CadViewport({
     objectId: string;
     value: string;
   } | null>(null);
+  const [transformDragging, setTransformDragging] = useState(false);
 
   return (
     <div className="relative w-full h-full bg-cadio-bg" onContextMenu={(e) => e.preventDefault()}>
@@ -605,6 +615,8 @@ export default function CadViewport({
           key={obj.id}
           obj={obj}
           selected={obj.id === selectedObjectId || selectedObjectIds.includes(obj.id)}
+          active={obj.id === selectedObjectId}
+          suppressSelection={transformDragging}
           onSelect={() => onSelectObject(obj.id)}
           transformMode={transformMode}
           onTransformCommit={onTransformCommit}
@@ -615,6 +627,7 @@ export default function CadViewport({
           onEdgeAmount={(x, y, operation, objectId) => {
             setEdgeInput({ x, y, operation, objectId, value: String(operationAmount || 3) });
           }}
+          onTransformDrag={setTransformDragging}
         />
       ))}
  

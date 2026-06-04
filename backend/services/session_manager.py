@@ -203,7 +203,7 @@ def replace_object_with_template_assembly(
     """
     name = (template_name or "").strip().lower()
     parts: list[CadObject] = []
-    color = obj.get("color", "#b8babd")
+    color = obj.get("color", "#a9aaad")
 
     if name == "headphone stand":
         width = max(90.0, min(170.0, float(params.get("width", 120.0))))
@@ -570,7 +570,7 @@ def create_session(session_id: str | None = None) -> str:
             "session_id": sid,
             "objects": {base["id"]: base},
             "object_order": [base["id"]],
-            "selected_object_id": base["id"],
+            "selected_object_id": "",
             "edit_history": [],
             "version": 0,
             "printer": "adventurer_3",
