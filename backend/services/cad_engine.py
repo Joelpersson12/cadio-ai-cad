@@ -256,6 +256,30 @@ def auto_adjust_z_position(transform: Transform, mesh: TriMesh) -> None:
         transform.position[2] -= min_z_val
 
 
+def shift_mesh_to_buildplate(mesh: TriMesh) -> TriMesh:
+    """Ensure all vertices are at Z >= 0 by translating the mesh upward.
+    
+    Returns a new mesh with all vertices shifted so the minimum Z is at 0.
+    This is applied to the raw geometry before transform.
+    """
+    if not mesh.verts:
+        return mesh
+    
+    min_z_val = min(v[2] for v in mesh.verts)
+    
+    # No shift needed if already at or above build plate
+    if min_z_val >= 0:
+        return mesh
+    
+    # Shift all vertices upward
+    shifted = TriMesh()
+    for vx, vy, vz in mesh.verts:
+        shifted.verts.append((vx, vy, vz - min_z_val))
+    
+    shifted.tris = list(mesh.tris)
+    return shifted
+
+
 # ---------------------------------------------------------------------------
 # Feature-tree based geometry rebuild
 # ---------------------------------------------------------------------------
@@ -286,8 +310,37 @@ DEFAULT_FEATURE_TREE: list[dict[str, Any]] = [
 def rebuild_from_features(
     params: dict[str, float],
     feature_tree: list[Feature],
+    template_hint: str | None = None,
 ) -> TriMesh:
-    """Rebuild a parametric phone-stand model from parameters + feature tree."""
+    """Rebuild a parametric model from parameters + feature tree.
+    
+    Uses product templates when available for realistic geometry,
+    falls back to basic geometry generation for generic models.
+    """
+    # Try to use product template if hint provided
+    if template_hint:
+        try:
+            from backend.services.product_templates import PRODUCT_TEMPLATES, get_template_for_prompt
+            
+            # Find template by hint
+            template = None
+            if template_hint in PRODUCT_TEMPLATES:
+                template = PRODUCT_TEMPLATES[template_hint]
+            else:
+                template = get_template_for_prompt(template_hint)
+            
+            if template:
+                # Generate using template
+                mesh = template.geometry_fn(params)
+                # Ensure all geometry is above build plate
+                mesh = shift_mesh_to_buildplate(mesh)
+                return mesh
+        except Exception:
+            # Fall through to default generation
+            pass
+    
+    # Default/fallback generation (generic phone stand)
+    # Using improved dimensions
     width = max(10.0, params.get("width", 80.0))
     depth = max(10.0, params.get("depth", 70.0))
     height = max(20.0, params.get("height", 120.0))
@@ -334,7 +387,7 @@ def rebuild_from_features(
             )
             mesh = mesh.merge(hole)
 
-       # Mirror across YZ plane (duplicate geometry mirrored on X)
+    # Mirror across YZ plane (duplicate geometry mirrored on X)
     if "mirror" in enabled_set and mesh.verts:
         mirrored = TriMesh()
 
@@ -351,6 +404,9 @@ def rebuild_from_features(
     if not mesh.verts:
         mesh = make_box(width, depth, thickness)
 
+    # Ensure geometry is above build plate
+    mesh = shift_mesh_to_buildplate(mesh)
+    
     return mesh
 
 

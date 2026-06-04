@@ -137,11 +137,33 @@ def parse_ai_command(
     session: Session,
     obj: CadObject,
 ) -> dict[str, Any]:
-    """Parse a natural-language prompt using GPT-4o into CAD changes."""
-    params = dict(obj["parameters"])
-    features = [
-        f if isinstance(f, Feature) else Feature(**f) for f in obj["feature_tree"]
-    ]
+    """Parse a natural-language prompt using GPT-4o into CAD changes.
+    
+    Now also uses product templates to generate more realistic objects.
+    """
+    from backend.services.product_templates import get_template_for_prompt
+    
+    # Detect if prompt is requesting a specific product template
+    template = get_template_for_prompt(prompt)
+    
+    # If template found, use template defaults as base
+    if template:
+        params = dict(template.default_params)
+        # Preserve any user-set parameters that differ from template
+        for key in obj["parameters"]:
+            if key not in ["width", "depth", "height", "thickness", "angle", "hole_count"]:
+                params[key] = obj["parameters"][key]
+        
+        features = [Feature(**f.model_dump() if hasattr(f, 'model_dump') else f) 
+                   for f in template.default_features]
+        
+        obj["template_hint"] = template.name
+    else:
+        params = dict(obj["parameters"])
+        features = [
+            f if isinstance(f, Feature) else Feature(**f) for f in obj["feature_tree"]
+        ]
+    
     src_transform: Transform = obj["transform"]
     transform = Transform(
         position=list(src_transform.position),
@@ -155,44 +177,48 @@ def parse_ai_command(
         "scale": transform.scale,
     }
 
-    # Call GPT-4o
-    result = _parse_with_gpt(prompt, params, current_transform)
-
-    # Apply parameter changes
-    new_params = result.get("parameters", {})
-    if new_params:
-        for key, value in new_params.items():
-            try:
-                params[key] = float(value)
-            except (TypeError, ValueError):
-                pass
-
-    # Apply feature changes
-    feat_list = result.get("features", [])
-    if feat_list:
-        # Reset all features first then apply GPT result
-        features = []
-        for feat in feat_list:
-            features.append(Feature(
-                id=feat.get("id", feat.get("type", "")),
-                type=feat.get("type", ""),
-                enabled=bool(feat.get("enabled", True)),
-            ))
-
-    # Apply transform changes
-    t = result.get("transform", {})
-    if "position" in t and len(t["position"]) == 3:
-        transform.position = [float(v) for v in t["position"]]
-    if "rotation" in t and len(t["rotation"]) == 3:
-        transform.rotation = [float(v) for v in t["rotation"]]
-    if "scale" in t and len(t["scale"]) == 3:
-        transform.scale = [max(0.001, float(v)) for v in t["scale"]]
-
-    actions = result.get("actions", ["no-op"])
+    # Call GPT-4o for fine-tuning if not a direct template match
+    if not template or "modify" in prompt.lower() or "change" in prompt.lower():
+        result = _parse_with_gpt(prompt, params, current_transform)
+        
+        # Apply parameter changes
+        new_params = result.get("parameters", {})
+        if new_params:
+            for key, value in new_params.items():
+                try:
+                    params[key] = float(value)
+                except (TypeError, ValueError):
+                    pass
+        
+        # Apply feature changes
+        feat_list = result.get("features", [])
+        if feat_list:
+            features = []
+            for feat in feat_list:
+                features.append(Feature(
+                    id=feat.get("id", feat.get("type", "")),
+                    type=feat.get("type", ""),
+                    enabled=bool(feat.get("enabled", True)),
+                ))
+        
+        # Apply transform changes
+        t = result.get("transform", {})
+        if "position" in t and len(t["position"]) == 3:
+            transform.position = [float(v) for v in t["position"]]
+        if "rotation" in t and len(t["rotation"]) == 3:
+            transform.rotation = [float(v) for v in t["rotation"]]
+        if "scale" in t and len(t["scale"]) == 3:
+            transform.scale = [max(0.001, float(v)) for v in t["scale"]]
+        
+        actions = result.get("actions", ["no-op"])
+    else:
+        # Use template directly
+        actions = [f"Created {template.name}: {template.description}"]
 
     return {
         "parameters": params,
         "feature_tree": features,
         "transform": transform,
         "actions": actions,
+        "template": template.name if template else None,
     }

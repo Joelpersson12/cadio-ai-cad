@@ -167,7 +167,12 @@ def remove_object(session: Session, object_id: str) -> bool:
 
 def rebuild_object(obj: CadObject) -> None:
     """Rebuild the mesh from current parameters + feature tree."""
-    obj["shape"] = rebuild_from_features(obj["parameters"], obj["feature_tree"])
+    template_hint = obj.get("template_hint")
+    obj["shape"] = rebuild_from_features(
+        obj["parameters"], 
+        obj["feature_tree"],
+        template_hint=template_hint,
+    )
     # Auto-adjust Z position so the model sits on the build plate
     auto_adjust_z_position(obj["transform"], obj["shape"])
 

@@ -49,7 +49,8 @@ from backend.services.session_manager import (
     remove_object,
     add_object,
 )
-from backend.services.ws_manager import broadcast, connect, disconnect
+from backend.services.geometry_validator import GeometryValidator
+from backend.services.example_discovery import ExampleDiscovery
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,20 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                 obj["feature_tree"] = parsed["feature_tree"]
                 obj["transform"] = parsed["transform"]
                 rebuild_object(obj)
-                actions = parsed["actions"]
+                
+                # Validate generated geometry
+                validation = GeometryValidator.validate(obj["shape"])
+                if not validation.is_valid:
+                    logger.warning(f"Generated model failed validation: {validation.issues}")
+                    # Add validation info to actions
+                    actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
+                else:
+                    actions = parsed["actions"]
+                    if validation.warnings:
+                        actions += [f"Note: {w}" for w in validation.warnings]
+                
+                # Store validation metrics
+                obj["validation"] = validation.to_dict()
 
             if session.get("fit"):
                 auto_fit_session(session)
