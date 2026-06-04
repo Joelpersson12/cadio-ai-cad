@@ -161,6 +161,7 @@ def _create_box_component(
     *,
     rotation: list[float] | None = None,
     color: str = "#a9aaad",
+    cut_holes: bool = False,
 ) -> CadObject:
     part_params = dict(DEFAULT_PARAMETERS)
     part_params.update(params)
@@ -172,9 +173,18 @@ def _create_box_component(
     })
     fillet = max(0.0, min(float(params.get("fillet_radius", 0.0)), width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1))
     chamfer = max(0.0, min(float(params.get("chamfer_size", 0.0)), width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1))
-    shape = make_box_body(width, depth, height, fillet=fillet, chamfer=chamfer)
+    shape = make_box_body(
+        width,
+        depth,
+        height,
+        fillet=fillet,
+        chamfer=chamfer,
+        params=part_params if cut_holes else None,
+    )
     if shape is None:
-        if fillet > 0.0:
+        if cut_holes:
+            shape = _make_box_with_rect_holes(width, depth, height, part_params)
+        elif fillet > 0.0:
             shape = make_rounded_box(width, depth, height, fillet, segments=8)
         elif chamfer > 0.0:
             shape = make_rounded_box(width, depth, height, chamfer, segments=1)
@@ -182,6 +192,37 @@ def _create_box_component(
             shape = make_box(width, depth, height)
     obj = create_manual_object(name, shape, part_params)
     obj["primitive"] = "rectangle"
+    obj["template_component"] = True
+    obj["color"] = color
+    obj["transform"] = Transform(
+        position=[float(position[0]), float(position[1]), float(position[2])],
+        rotation=rotation or [0.0, 0.0, 0.0],
+        scale=[1.0, 1.0, 1.0],
+    )
+    return obj
+
+
+def _create_cylinder_component(
+    name: str,
+    radius: float,
+    height: float,
+    position: list[float],
+    params: dict[str, float],
+    *,
+    rotation: list[float] | None = None,
+    color: str = "#a9aaad",
+) -> CadObject:
+    part_params = dict(DEFAULT_PARAMETERS)
+    part_params.update(params)
+    part_params.update({
+        "width": radius * 2.0,
+        "depth": radius * 2.0,
+        "height": float(height),
+        "thickness": float(height),
+    })
+    shape = make_cylinder_body(radius, height) or make_cylinder(radius, height)
+    obj = create_manual_object(name, shape, part_params)
+    obj["primitive"] = "cylinder"
     obj["template_component"] = True
     obj["color"] = color
     obj["transform"] = Transform(
@@ -289,6 +330,152 @@ def replace_object_with_template_assembly(
         add_object(session, part)
     session["selected_object_id"] = parts[0]["id"]
     return [f"created editable {template_name} assembly with {len(parts)} bodies"]
+
+
+def replace_object_with_research_assembly(
+    session: Session,
+    obj: CadObject,
+    brief: dict[str, Any] | None,
+    params: dict[str, float],
+) -> list[str]:
+    """Create editable bodies from a source-informed design brief."""
+    if not brief:
+        return []
+
+    category = str(brief.get("category") or "generic").strip().lower()
+    if category == "generic":
+        return []
+
+    parts: list[CadObject] = []
+    color = obj.get("color", "#a9aaad")
+    width = max(10.0, float(params.get("width", 80.0)))
+    depth = max(10.0, float(params.get("depth", 60.0)))
+    height = max(4.0, float(params.get("height", 35.0)))
+    thickness = max(1.0, min(30.0, float(params.get("thickness", 5.0))))
+    wall = max(1.0, min(20.0, float(params.get("wall_thickness", 3.0))))
+
+    base_params = dict(params)
+    base_params["hole_count"] = max(0.0, float(params.get("hole_count", 0.0)))
+    base_params["hole_diameter"] = max(1.0, float(params.get("hole_diameter", 5.0)))
+
+    if category == "battery_holder":
+        slots = max(1, min(6, int(round(float(params.get("battery_slots", params.get("slots", 1.0)))))))
+        if slots > 1:
+            width = max(width, 104.0 * (1.0 + (slots - 1) * 0.82))
+        slot_width = width / slots
+        rail_width = max(thickness * 1.15, 7.0)
+        rail_height = max(height * 0.52, 18.0)
+        parts = [
+            _create_box_component("battery_mount_plate", width, depth, thickness, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
+            _create_box_component("battery_front_stop", width * 0.88, thickness * 1.35, height * 0.42, [0.0, -depth / 2.0 + thickness, thickness], params, color=color),
+            _create_box_component("battery_rear_register", width * 0.78, thickness, height * 0.30, [0.0, depth * 0.35, thickness], params, color=color),
+        ]
+        for slot in range(slots):
+            slot_center = -width / 2.0 + slot_width * (slot + 0.5)
+            parts.extend([
+                _create_box_component(f"battery_{slot + 1}_left_slide", rail_width, depth * 0.72, rail_height, [slot_center - slot_width * 0.26, -depth * 0.02, thickness], params, color=color),
+                _create_box_component(f"battery_{slot + 1}_right_slide", rail_width, depth * 0.72, rail_height, [slot_center + slot_width * 0.26, -depth * 0.02, thickness], params, color=color),
+                _create_box_component(f"battery_{slot + 1}_center_key", slot_width * 0.28, thickness * 0.8, rail_height * 0.45, [slot_center, depth * 0.02, thickness], params, color=color),
+            ])
+    elif category == "device_stand":
+        angle = max(50.0, min(78.0, float(params.get("angle", 68.0))))
+        if any(word in str(brief.get("prompt", "")).lower() for word in ("headset", "headphone")):
+            column_width = max(24.0, thickness * 3.0)
+            column_depth = max(18.0, thickness * 2.2)
+            column_height = max(120.0, height * 0.78)
+            top_z = thickness + column_height
+            parts = [
+                _create_box_component("stand_base", max(width, 120.0), max(depth, 110.0), thickness, [0.0, 0.0, 0.0], params, color=color),
+                _create_box_component("stand_column", column_width, column_depth, column_height, [0.0, depth * 0.16, thickness], params, color=color),
+                _create_box_component("stand_top_cradle", width * 0.68, thickness * 2.2, thickness * 2.0, [0.0, depth * 0.16, top_z], params, color=color),
+                _create_box_component("stand_left_stop", thickness * 2.0, thickness * 3.0, thickness * 3.0, [-width * 0.34, depth * 0.16, top_z - thickness], params, color=color),
+                _create_box_component("stand_right_stop", thickness * 2.0, thickness * 3.0, thickness * 3.0, [width * 0.34, depth * 0.16, top_z - thickness], params, color=color),
+            ]
+        else:
+            parts = [
+                _create_box_component("stand_base", width, depth, thickness, [0.0, 0.0, 0.0], params, color=color),
+                _create_box_component("stand_front_left_lip", width * 0.34, thickness * 1.4, thickness * 2.0, [-width * 0.26, -depth / 2.0 + thickness, thickness], params, color=color),
+                _create_box_component("stand_front_right_lip", width * 0.34, thickness * 1.4, thickness * 2.0, [width * 0.26, -depth / 2.0 + thickness, thickness], params, color=color),
+                _create_box_component("stand_back_support", width * 0.72, thickness, height, [0.0, -depth * 0.04, thickness], params, rotation=[angle - 90.0, 0.0, 0.0], color=color),
+                _create_box_component("stand_left_rail", max(thickness * 0.65, 4.5), depth * 0.55, thickness * 1.2, [-width * 0.42, -depth * 0.02, thickness], params, color=color),
+                _create_box_component("stand_right_rail", max(thickness * 0.65, 4.5), depth * 0.55, thickness * 1.2, [width * 0.42, -depth * 0.02, thickness], params, color=color),
+            ]
+    elif category in {"electronics_holder", "holder"}:
+        tray_h = max(height, thickness * 4.0)
+        parts = [
+            _create_box_component("holder_base", width * 1.12, depth, thickness, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
+            _create_box_component("holder_front_lip", width, thickness, tray_h * 0.52, [0.0, -depth / 2.0 + thickness / 2.0, thickness], params, color=color),
+            _create_box_component("holder_back_wall", width, thickness, tray_h * 0.78, [0.0, depth / 2.0 - thickness / 2.0, thickness], params, color=color),
+            _create_box_component("holder_left_wall", thickness, depth * 0.86, tray_h * 0.66, [-width / 2.0 + thickness / 2.0, 0.0, thickness], params, color=color),
+            _create_box_component("holder_right_wall", thickness, depth * 0.86, tray_h * 0.66, [width / 2.0 - thickness / 2.0, 0.0, thickness], params, color=color),
+        ]
+        if category == "electronics_holder":
+            parts.append(
+                _create_box_component("holder_strap_bridge", width * 0.72, thickness * 0.8, thickness * 1.2, [0.0, 0.0, thickness + tray_h], params, color=color)
+            )
+    elif category == "enclosure":
+        parts = [
+            _create_box_component("enclosure_floor", width, depth, wall, [0.0, 0.0, 0.0], params, color=color),
+            _create_box_component("enclosure_front_wall", width, wall, height, [0.0, -depth / 2.0 + wall / 2.0, wall], params, color=color),
+            _create_box_component("enclosure_back_wall", width, wall, height, [0.0, depth / 2.0 - wall / 2.0, wall], params, color=color),
+            _create_box_component("enclosure_left_wall", wall, depth, height, [-width / 2.0 + wall / 2.0, 0.0, wall], params, color=color),
+            _create_box_component("enclosure_right_wall", wall, depth, height, [width / 2.0 - wall / 2.0, 0.0, wall], params, color=color),
+            _create_box_component("enclosure_lid_register", width * 0.84, depth * 0.84, wall, [0.0, 0.0, wall + height], params, color=color),
+        ]
+    elif category == "organizer":
+        divider_count = max(1, min(8, int(round(float(params.get("divider_count", 3.0))))))
+        parts = [
+            _create_box_component("organizer_floor", width, depth, wall, [0.0, 0.0, 0.0], params, color=color),
+            _create_box_component("organizer_front_wall", width, wall, height, [0.0, -depth / 2.0 + wall / 2.0, wall], params, color=color),
+            _create_box_component("organizer_back_wall", width, wall, height, [0.0, depth / 2.0 - wall / 2.0, wall], params, color=color),
+            _create_box_component("organizer_left_wall", wall, depth, height, [-width / 2.0 + wall / 2.0, 0.0, wall], params, color=color),
+            _create_box_component("organizer_right_wall", wall, depth, height, [width / 2.0 - wall / 2.0, 0.0, wall], params, color=color),
+        ]
+        for idx in range(1, divider_count):
+            x = -width / 2.0 + width * idx / divider_count
+            parts.append(_create_box_component(f"organizer_divider_{idx}", wall, depth * 0.86, height * 0.82, [x, 0.0, wall], params, color=color))
+    elif category == "organic":
+        radius = min(width, depth) / 2.8
+        parts = [
+            _create_cylinder_component("organic_body", radius, max(height * 0.72, 18.0), [0.0, 0.0, 0.0], params, color=color),
+            _create_cylinder_component("organic_head", radius * 0.78, max(height * 0.36, 14.0), [0.0, 0.0, height * 0.68], params, color=color),
+        ]
+        appendages = 8 if "octopus" in str(brief.get("prompt", "")).lower() else 4
+        import math
+
+        for idx in range(appendages):
+            angle = 360.0 * idx / appendages
+            rad = math.radians(angle)
+            x = math.cos(rad) * radius * 0.9
+            y = math.sin(rad) * radius * 0.9
+            parts.append(
+                _create_cylinder_component(
+                    f"organic_appendage_{idx + 1}",
+                    max(radius * 0.22, 3.0),
+                    radius * 1.45,
+                    [x, y, thickness * 0.45],
+                    params,
+                    rotation=[82.0, 0.0, angle],
+                    color=color,
+                )
+            )
+    elif category == "tool":
+        parts = [
+            _create_box_component("tool_base_plate", width, depth, max(height, thickness), [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
+            _create_box_component("tool_alignment_rib", width * 0.72, wall, max(height * 0.8, wall), [0.0, 0.0, max(height, thickness)], params, color=color),
+        ]
+
+    if not parts:
+        return []
+
+    source_id = obj["id"]
+    _remove_object_direct(session, source_id)
+    for part in parts:
+        part["assembly_source"] = f"research:{category}"
+        part["research_brief"] = brief
+        add_object(session, part)
+    session["selected_object_id"] = ""
+    return [f"created editable research assembly ({category.replace('_', ' ')}) with {len(parts)} bodies"]
 
 
 def _make_open_shell_box(width: float, depth: float, height: float, wall: float) -> TriMesh:

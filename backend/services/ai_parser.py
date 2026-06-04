@@ -300,6 +300,31 @@ def _feature_tree_for_template(default_features: list[str]) -> list[Feature]:
     return features
 
 
+def _apply_research_brief(
+    brief: dict[str, Any] | None,
+    params: dict[str, float],
+    features: list[Feature],
+) -> list[str]:
+    """Apply a source-informed CAD brief to parameter defaults."""
+    if not brief:
+        return []
+
+    for key, value in dict(brief.get("dimensions", {})).items():
+        try:
+            params[key] = float(value)
+        except (TypeError, ValueError):
+            continue
+
+    brief_features = set(brief.get("features", []))
+    _ensure_feature(features, "base_extrude", True)
+    _ensure_feature(features, "fillet_edges", "rounded_edges" in brief_features or "soft_edges" in brief_features)
+    _ensure_feature(features, "chamfer_edges", "chamfered_edges" in brief_features)
+    _ensure_feature(features, "mount_holes", "mounting_holes" in brief_features)
+    _ensure_feature(features, "back_support", "back_support" in brief_features)
+
+    return list(brief.get("actions", []))
+
+
 def _parse_with_gpt(prompt: str, current_params: dict, current_transform: dict) -> dict:
     """Call GPT-4o to parse the prompt into CAD changes."""
     try:
@@ -362,10 +387,17 @@ def parse_ai_command(
         external_actions = _external_design_signals(prompt, params)
         
         obj["template_hint"] = template.name
+        research_brief = None
+        brief_actions: list[str] = []
     else:
         params = dict(obj["parameters"])
         features = [_coerce_feature(f) for f in obj["feature_tree"]]
         external_actions = _external_design_signals(prompt, params)
+        from backend.services.design_brief import build_design_brief
+
+        research_brief = build_design_brief(prompt)
+        brief_actions = _apply_research_brief(research_brief, params, features)
+        obj["template_hint"] = None
     
     src_transform: Transform = obj["transform"]
     transform = Transform(
@@ -381,11 +413,12 @@ def parse_ai_command(
     }
 
     quick_actions = _apply_deterministic_edit(prompt, params, features, transform)
-    inference_actions = [] if template else _apply_prompt_shape_inference(prompt, params, features)
+    uses_brief = bool(research_brief and research_brief.get("category") != "generic")
+    inference_actions = [] if template or uses_brief else _apply_prompt_shape_inference(prompt, params, features)
 
     # Call GPT-4o for fine-tuning if not a direct template match
-    if quick_actions or inference_actions:
-        actions = quick_actions + inference_actions
+    if quick_actions or inference_actions or brief_actions:
+        actions = brief_actions + quick_actions + inference_actions
     elif not template or "modify" in prompt.lower() or "change" in prompt.lower():
         result = _parse_with_gpt(prompt, params, current_transform)
         
@@ -426,4 +459,5 @@ def parse_ai_command(
         "transform": transform,
         "actions": actions,
         "template": template.name if template else None,
+        "research_brief": research_brief,
     }

@@ -56,6 +56,7 @@ from backend.services.session_manager import (
     remove_object,
     add_object,
     split_object_by_line,
+    replace_object_with_research_assembly,
     replace_object_with_template_assembly,
     save_undo_snapshot,
     undo_session,
@@ -206,8 +207,16 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                     parsed.get("template"),
                     parsed["parameters"],
                 )
-                if assembly_actions:
-                    actions = parsed["actions"] + assembly_actions
+                research_actions = []
+                if not assembly_actions:
+                    research_actions = replace_object_with_research_assembly(
+                        session,
+                        obj,
+                        parsed.get("research_brief"),
+                        parsed["parameters"],
+                    )
+                if assembly_actions or research_actions:
+                    actions = parsed["actions"] + assembly_actions + research_actions
                 else:
                     # Validate generated geometry
                     validation = GeometryValidator.validate(obj["shape"])
