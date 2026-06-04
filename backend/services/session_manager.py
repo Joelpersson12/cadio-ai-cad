@@ -194,6 +194,7 @@ def rebuild_manual_object(obj: CadObject) -> None:
             fillet=fillet,
             chamfer=chamfer,
             shell_wall=max(0.0, float(params.get("wall_thickness", 0.0))) if shell else 0.0,
+            params=params,
         )
         if kernel_shape:
             obj["shape"] = kernel_shape
@@ -267,6 +268,34 @@ def apply_expert_operation(
     else:
         rebuild_object(obj)
     return actions
+
+
+def add_hole_to_object(obj: CadObject, center: list[float], diameter: float) -> list[str]:
+    """Add a vertical hole at a sketch-plane location and rebuild the object."""
+    if len(center) < 2:
+        return ["hole skipped: missing center"]
+
+    transform: Transform = obj["transform"]
+    sx = max(0.001, float(transform.scale[0]))
+    sy = max(0.001, float(transform.scale[1]))
+    local_x = (float(center[0]) - float(transform.position[0])) / sx
+    local_y = (float(center[1]) - float(transform.position[1])) / sy
+
+    params = obj["parameters"]
+    index = max(0, int(params.get("custom_hole_count", 0.0)))
+    params[f"custom_hole_{index}_x"] = local_x
+    params[f"custom_hole_{index}_y"] = local_y
+    params[f"custom_hole_{index}_diameter"] = max(0.5, float(diameter))
+    params["custom_hole_count"] = float(index + 1)
+    params["hole_count"] = max(float(params.get("hole_count", 0.0)), float(index + 1))
+    params["hole_diameter"] = max(0.5, float(diameter))
+    _set_feature_enabled(obj["feature_tree"], "mount_holes", True)
+
+    if obj.get("manual"):
+        rebuild_manual_object(obj)
+    else:
+        rebuild_object(obj)
+    return [f"cut hole diameter {diameter}mm"]
 
 
 # ---------------------------------------------------------------------------
@@ -356,11 +385,20 @@ def add_object(session: Session, obj: CadObject) -> None:
 
 
 def remove_object(session: Session, object_id: str) -> bool:
-    """Remove an object.  Returns False if it's the last one."""
-    if len(session["object_order"]) <= 1:
-        return False
+    """Remove an object.
+
+    If it is the last object, replace it with a fresh empty part so users can
+    clear generated models without losing the session.
+    """
     if object_id not in session["objects"]:
         return False
+    if len(session["object_order"]) <= 1:
+        del session["objects"][object_id]
+        base = create_object("part_1")
+        session["objects"][base["id"]] = base
+        session["object_order"] = [base["id"]]
+        session["selected_object_id"] = base["id"]
+        return True
     del session["objects"][object_id]
     session["object_order"] = [
         oid for oid in session["object_order"] if oid != object_id

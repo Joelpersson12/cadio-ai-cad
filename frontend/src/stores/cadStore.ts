@@ -103,7 +103,7 @@ export const useCadStore = create<CadState>((set, get) => ({
     printability_score: 0,
   },
   status: "Ready",
-  transformMode: "translate",
+  transformMode: "off",
   expertMode: false,
   expertTool: "select",
   selectionMode: "body",

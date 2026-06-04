@@ -41,6 +41,7 @@ from backend.services.object_manager import (
 from backend.services.session_manager import (
     acquire_lock,
     add_history,
+    add_hole_to_object,
     apply_expert_operation,
     bump_version,
     create_object,
@@ -301,6 +302,18 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
         lock = acquire_lock()
         with lock:
             session = get_or_create_session(data.session_id)
+            if data.primitive.strip().lower() == "hole" and session.get("selected_object_id"):
+                obj = get_selected_object(session)
+                diameter = max(0.5, float(data.radius or max(data.size or [5.0]) / 2.0) * 2.0)
+                actions = add_hole_to_object(obj, data.center, diameter)
+                bump_version(session)
+                add_history(session, "expert-hole", actions)
+                payload = build_scene_payload(
+                    session, include_mesh=True, model_updated=True
+                )
+                await broadcast(session["session_id"], payload.model_dump())
+                return payload
+
             obj = create_primitive_object(
                 primitive=data.primitive,
                 name=data.name or data.primitive,

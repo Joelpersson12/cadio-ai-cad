@@ -10,10 +10,20 @@ import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../uti
 // Camera auto-fit helper
 // ---------------------------------------------------------------------------
  
-function CameraController({ bounds }: { bounds: { x: number; y: number; z: number } }) {
+function CameraController({
+  bounds,
+  fitKey,
+}: {
+  bounds: { x: number; y: number; z: number };
+  fitKey: string;
+}) {
   const { camera, controls } = useThree();
+  const lastFitKey = useRef<string>("");
 
   useEffect(() => {
+    if (lastFitKey.current === fitKey) return;
+    lastFitKey.current = fitKey;
+
     // Calculate appropriate distance to frame the entire model
     const size = Math.max(bounds.x, bounds.y, bounds.z, 50);
     const distance = Math.max(size * 2.5, 200);
@@ -29,7 +39,7 @@ function CameraController({ bounds }: { bounds: { x: number; y: number; z: numbe
     controls?.target?.set(0, size * 0.15, 0);
     // @ts-ignore
     controls?.update?.();
-  }, [bounds, camera, controls]);
+  }, [bounds, camera, controls, fitKey]);
 
   return null;
 }
@@ -156,11 +166,14 @@ function ScaledMesh({
       </lineSegments>
     )}
     </group>
-    {selected && groupRef.current && (
+    {selected && transformMode !== "off" && groupRef.current && (
       <TransformControls
         object={groupRef.current}
         mode={transformMode}
         size={0.85}
+        translationSnap={5}
+        rotationSnap={THREE.MathUtils.degToRad(15)}
+        scaleSnap={0.1}
         onMouseUp={() => {
           const group = groupRef.current;
           if (!group) return;
@@ -521,7 +534,7 @@ export default function CadViewport({
       ))}
  
       {/* Camera auto-fit */}
-      <CameraController bounds={bounds} />
+      <CameraController bounds={bounds} fitKey={objects.length ? objects.map((o) => o.id).join("|") : "empty"} />
  
       {/* Orbit controls */}
       <OrbitControls

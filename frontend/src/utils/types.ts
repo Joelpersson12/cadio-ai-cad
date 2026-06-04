@@ -55,7 +55,7 @@ export interface PrinterProfile {
   build_volume: [number, number, number];
 }
 
-export type TransformMode = "translate" | "rotate" | "scale";
+export type TransformMode = "off" | "translate" | "rotate" | "scale";
 
 export type ExpertTool = "select" | "rectangle" | "circle" | "hole";
 export type SelectionMode = "body" | "face" | "edge";

@@ -97,7 +97,7 @@ export default function ObjectInspector() {
       {/* Transform tools */}
       <h3 className="text-sm font-semibold text-cadio-text mt-2">Transform</h3>
       <div className="grid grid-cols-3 gap-1.5">
-        {(["translate", "rotate", "scale"] as TransformMode[]).map((mode) => (
+        {(["off", "translate", "rotate", "scale"] as TransformMode[]).map((mode) => (
           <button
             key={mode}
             onClick={() => setTransformMode(mode)}
@@ -180,7 +180,7 @@ export default function ObjectInspector() {
           ))}
         </div>
         <NumberInput
-          label="Amount"
+          label="Amount (mm)"
           value={operationAmount}
           onChange={(v) => setOperationAmount(v)}
           step={0.5}

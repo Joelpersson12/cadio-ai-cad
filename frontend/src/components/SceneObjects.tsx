@@ -43,11 +43,24 @@ export default function SceneObjects({
             />
           );
         }
+        if (transformMode === "off") {
+          return (
+            <PartMesh
+              key={obj.id}
+              object={obj}
+              selected
+              onSelect={onSelectObject}
+            />
+          );
+        }
         return (
           <TransformControls
             key={`tc-${obj.id}`}
             mode={transformMode}
             size={0.8}
+            translationSnap={5}
+            rotationSnap={THREE.MathUtils.degToRad(15)}
+            scaleSnap={0.1}
             onMouseDown={() => setDragging(true)}
             onMouseUp={(e) => {
               setDragging(false);

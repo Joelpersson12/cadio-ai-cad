@@ -60,6 +60,35 @@ def to_trimesh(value: Any, tolerance: float = 0.25) -> TriMesh | None:
     return mesh
 
 
+def _hole_specs(params: dict[str, float]) -> list[tuple[float, float, float]]:
+    count = max(0, int(params.get("custom_hole_count", 0.0)))
+    specs: list[tuple[float, float, float]] = []
+    for index in range(count):
+        x_key = f"custom_hole_{index}_x"
+        y_key = f"custom_hole_{index}_y"
+        d_key = f"custom_hole_{index}_diameter"
+        if x_key not in params or y_key not in params:
+            continue
+        diameter = max(0.5, float(params.get(d_key, params.get("hole_diameter", 5.0))))
+        specs.append((float(params[x_key]), float(params[y_key]), diameter))
+    return specs
+
+
+def _cut_vertical_holes(body: Any, params: dict[str, float], height: float):
+    if not CADQUERY_AVAILABLE:
+        return body
+    for x, y, diameter in _hole_specs(params):
+        cutter = (
+            cq.Workplane("XY")
+            .center(x, y)
+            .circle(diameter / 2.0)
+            .extrude(height + 4.0)
+            .translate((0.0, 0.0, -2.0))
+        )
+        body = body.cut(cutter)
+    return body
+
+
 def make_box_body(
     width: float,
     depth: float,
@@ -68,6 +97,7 @@ def make_box_body(
     fillet: float = 0.0,
     chamfer: float = 0.0,
     shell_wall: float = 0.0,
+    params: dict[str, float] | None = None,
 ) -> TriMesh | None:
     """Create a true CAD box with optional shell/fillet/chamfer."""
     if not CADQUERY_AVAILABLE:
@@ -75,6 +105,7 @@ def make_box_body(
 
     try:
         body = cq.Workplane("XY").box(width, depth, height, centered=(True, True, False))
+        body = _cut_vertical_holes(body, params or {}, height)
 
         if shell_wall > 0:
             wall = max(0.5, min(shell_wall, width / 3.0, depth / 3.0, height / 2.0))
@@ -149,6 +180,7 @@ def make_phone_stand_body(params: dict[str, float]) -> TriMesh | None:
         thickness = max(5.0, min(12.0, params.get("thickness", 7.0)))
         angle = max(58.0, min(75.0, params.get("angle", 68.0)))
         fillet = max(0.0, min(params.get("fillet_radius", 2.0), thickness * 0.45))
+        chamfer = max(0.0, min(params.get("chamfer_size", 0.0), thickness * 0.45))
 
         base = _box_solid(width, depth, thickness, (0.0, 0.0, 0.0))
         lip_depth = max(thickness * 1.4, 9.0)
@@ -176,8 +208,12 @@ def make_phone_stand_body(params: dict[str, float]) -> TriMesh | None:
         for x in (-width * 0.34, width * 0.34):
             solid = solid.union(_side_rib_solid(x, bottom_y, top_y, thickness, height * 0.72, max(thickness * 0.8, 4.5)))
 
+        solid = _cut_vertical_holes(solid, params, height + thickness + lip_height)
+
         if fillet > 0:
             solid = solid.edges().fillet(fillet)
+        elif chamfer > 0:
+            solid = solid.edges().chamfer(chamfer)
 
         return to_trimesh(solid)
     except Exception:
