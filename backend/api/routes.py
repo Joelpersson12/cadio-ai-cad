@@ -106,7 +106,7 @@ def list_printers() -> dict[str, Any]:
     return {"status": "ok", "default": DEFAULT_PRINTER, "printers": PRINTERS}
 
 
-@router.get("/api/examples/search")
+@router.get("/api/examples/search", response_model=None)
 def search_examples(
     prompt: str = Query(..., min_length=1),
     external: bool = False,
