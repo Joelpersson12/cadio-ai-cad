@@ -1,4 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
+import { RoundedBox } from "@react-three/drei";
 import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { markCadioAuthenticated } from "../utils/auth";
@@ -16,6 +17,8 @@ const languageOptions: Array<{ value: Language; label: string }> = [
   { value: "pt", label: "PT" },
 ];
 
+const heroPrompt = "Foldable phone stand with cable slot";
+
 const copy = {
   en: {
     nav: {
@@ -31,7 +34,7 @@ const copy = {
       title: "Describe the model. Edit like CAD. Print with the right profile.",
       body:
         "Cadio combines AI search, parametric models, and a clean CAD workspace for makers, workshops, and product ideas.",
-      prompt: "Dewalt battery holder with wall mount",
+      prompt: heroPrompt,
       primary: "Start building",
       secondary: "See pricing",
     },
@@ -126,7 +129,7 @@ const copy = {
       title: "Beskriv modellen. Justera som i CAD. Skriv ut med ratt profil.",
       body:
         "Cadio kombinerar AI-sokning, parametriska modeller och en ren CAD-arbetsyta for makers, verkstader och produktideer.",
-      prompt: "Dewalt battery holder with wall mount",
+      prompt: heroPrompt,
       primary: "Start building",
       secondary: "Se priser",
     },
@@ -221,7 +224,7 @@ const copy = {
       title: "Describe el modelo. Edita como en CAD. Imprime con el perfil correcto.",
       body:
         "Cadio combina busqueda con IA, modelos parametricos y un espacio CAD limpio para makers, talleres e ideas de producto.",
-      prompt: "Dewalt battery holder with wall mount",
+      prompt: heroPrompt,
       primary: "Start building",
       secondary: "Ver precios",
     },
@@ -316,7 +319,7 @@ const copy = {
       title: "Decrivez le modele. Modifiez comme en CAO. Imprimez avec le bon profil.",
       body:
         "Cadio combine recherche IA, modeles parametriques et espace CAO clair pour makers, ateliers et idees produit.",
-      prompt: "Dewalt battery holder with wall mount",
+      prompt: heroPrompt,
       primary: "Start building",
       secondary: "Voir les tarifs",
     },
@@ -411,7 +414,7 @@ const copy = {
       title: "Descrivi il modello. Modifica come in CAD. Stampa con il profilo giusto.",
       body:
         "Cadio combina ricerca AI, modelli parametrici e un workspace CAD pulito per maker, officine e idee prodotto.",
-      prompt: "Dewalt battery holder with wall mount",
+      prompt: heroPrompt,
       primary: "Start building",
       secondary: "Vedi prezzi",
     },
@@ -506,7 +509,7 @@ const copy = {
       title: "Beschreibe das Modell. Bearbeite wie im CAD. Drucke mit dem richtigen Profil.",
       body:
         "Cadio kombiniert KI-Suche, parametrische Modelle und einen klaren CAD-Workspace fur Maker, Werkstatten und Produktideen.",
-      prompt: "Dewalt battery holder with wall mount",
+      prompt: heroPrompt,
       primary: "Start building",
       secondary: "Preise ansehen",
     },
@@ -601,7 +604,7 @@ const copy = {
       title: "Descreva o modelo. Edite como CAD. Imprima com o perfil certo.",
       body:
         "Cadio combina busca com IA, modelos parametricos e um workspace CAD limpo para makers, oficinas e ideias de produto.",
-      prompt: "Dewalt battery holder with wall mount",
+      prompt: heroPrompt,
       primary: "Start building",
       secondary: "Ver precos",
     },
@@ -686,11 +689,29 @@ const copy = {
 
 function HeroModel() {
   const groupRef = useRef<THREE.Group>(null);
-  const railMaterial = useMemo(
+  const standMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#f6d627",
-        roughness: 0.5,
+        color: "#e7e6e1",
+        roughness: 0.46,
+        metalness: 0.05,
+      }),
+    [],
+  );
+  const sideMaterial = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#c9c8c2",
+        roughness: 0.52,
+        metalness: 0.03,
+      }),
+    [],
+  );
+  const accentMaterial = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#27bddd",
+        roughness: 0.38,
         metalness: 0.05,
       }),
     [],
@@ -704,43 +725,82 @@ function HeroModel() {
       }),
     [],
   );
+  const braceGeometry = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.66, 0);
+    shape.lineTo(0.74, 0);
+    shape.lineTo(0.08, 1.62);
+    shape.lineTo(-0.66, 0);
+
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.22,
+      bevelEnabled: true,
+      bevelSize: 0.025,
+      bevelThickness: 0.025,
+      bevelSegments: 4,
+    });
+    geometry.center();
+    return geometry;
+  }, []);
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
-    groupRef.current.rotation.y = -0.38 + Math.sin(clock.elapsedTime * 0.28) * 0.08;
-    groupRef.current.rotation.x = 0.62 + Math.sin(clock.elapsedTime * 0.2) * 0.04;
+    groupRef.current.rotation.y = -0.48 + Math.sin(clock.elapsedTime * 0.28) * 0.07;
+    groupRef.current.rotation.x = 0.5 + Math.sin(clock.elapsedTime * 0.2) * 0.035;
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.2, 0]}>
-      <mesh material={railMaterial} position={[0, 0, 0]} castShadow receiveShadow>
-        <boxGeometry args={[5.6, 0.28, 2.2]} />
-      </mesh>
-      <mesh material={railMaterial} position={[0, 0.22, -0.82]} castShadow receiveShadow>
-        <boxGeometry args={[5.9, 0.22, 0.32]} />
-      </mesh>
-      <mesh material={railMaterial} position={[0, 0.22, 0.82]} castShadow receiveShadow>
-        <boxGeometry args={[5.9, 0.22, 0.32]} />
-      </mesh>
-      {[-1.9, 0, 1.9].map((x) => (
-        <group key={x} position={[x, 0.42, 0]}>
-          <mesh material={railMaterial} position={[0, 0, 0]} castShadow receiveShadow>
-            <boxGeometry args={[1.25, 0.42, 1.35]} />
-          </mesh>
-          <mesh material={railMaterial} position={[0, 0.45, -0.46]} castShadow receiveShadow>
-            <boxGeometry args={[1.05, 0.46, 0.22]} />
-          </mesh>
-          <mesh material={railMaterial} position={[0, 0.45, 0.46]} castShadow receiveShadow>
-            <boxGeometry args={[1.05, 0.46, 0.22]} />
-          </mesh>
-          <mesh material={darkMaterial} position={[-0.34, 0.66, 0.28]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.12, 0.12, 0.035, 36]} />
-          </mesh>
-          <mesh material={darkMaterial} position={[0.34, 0.66, -0.28]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.12, 0.12, 0.035, 36]} />
-          </mesh>
-        </group>
+    <group ref={groupRef} position={[0.15, -0.15, 0.1]}>
+      <RoundedBox args={[4.5, 0.28, 2.55]} radius={0.14} smoothness={8} position={[0, 0, 0]} castShadow receiveShadow>
+        <primitive object={standMaterial} attach="material" />
+      </RoundedBox>
+      <RoundedBox args={[4.0, 0.44, 0.32]} radius={0.08} smoothness={8} position={[0, 0.36, 1.0]} castShadow receiveShadow>
+        <primitive object={standMaterial} attach="material" />
+      </RoundedBox>
+      <RoundedBox args={[0.62, 0.08, 0.16]} radius={0.04} smoothness={6} position={[0, 0.62, 1.18]} castShadow receiveShadow>
+        <primitive object={darkMaterial} attach="material" />
+      </RoundedBox>
+      <RoundedBox
+        args={[3.45, 2.45, 0.26]}
+        radius={0.13}
+        smoothness={8}
+        position={[0, 1.18, -0.54]}
+        rotation={[-0.42, 0, 0]}
+        castShadow
+        receiveShadow
+      >
+        <primitive object={standMaterial} attach="material" />
+      </RoundedBox>
+      <RoundedBox
+        args={[2.35, 0.18, 0.08]}
+        radius={0.04}
+        smoothness={6}
+        position={[0, 1.72, -1.18]}
+        rotation={[-0.42, 0, 0]}
+        castShadow
+        receiveShadow
+      >
+        <primitive object={accentMaterial} attach="material" />
+      </RoundedBox>
+      {[-1.58, 1.58].map((x) => (
+        <mesh
+          key={x}
+          geometry={braceGeometry}
+          material={sideMaterial}
+          position={[x, 0.68, -0.1]}
+          rotation={[0, Math.PI / 2, 0]}
+          castShadow
+          receiveShadow
+        />
       ))}
+      {[-1.6, 1.6].map((x) => (
+        <mesh key={x} material={darkMaterial} position={[x, 0.19, -0.76]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.13, 0.13, 0.045, 40]} />
+        </mesh>
+      ))}
+      <mesh material={accentMaterial} position={[0, 0.22, -1.04]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.09, 0.09, 3.25, 48]} />
+      </mesh>
       <gridHelper args={[8, 18, "#45484b", "#323436"]} position={[0, -0.23, 0]} />
     </group>
   );
