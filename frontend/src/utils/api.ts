@@ -2,20 +2,61 @@
 
 import type { ScenePayload, PrinterProfile, MaterialProfile } from "./types";
 
-const API_BASE = (
-  import.meta.env.VITE_API_BASE || window.location.origin
-).replace(/\/+$/, "");
+const REMOTE_API_BASE = "https://cadio-ai-cad-production.up.railway.app";
+
+function cleanBase(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function isLovableHost() {
+  const host = window.location.hostname.toLowerCase();
+  return (
+    host.endsWith(".lovable.app") ||
+    host.endsWith(".lovableproject.com") ||
+    host.includes("lovable")
+  );
+}
+
+function defaultApiBase() {
+  if (isLovableHost()) {
+    return REMOTE_API_BASE;
+  }
+  return window.location.origin;
+}
+
+const API_BASE = cleanBase(import.meta.env.VITE_API_BASE || defaultApiBase());
+const API_FALLBACKS = Array.from(
+  new Set(
+    [
+      API_BASE,
+      cleanBase(window.location.origin),
+      REMOTE_API_BASE,
+    ].filter(Boolean),
+  ),
+);
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const data = await res.json();
-  if (!res.ok || data.status === "error") {
-    throw new Error(data.message || "API request failed");
+  let lastError: unknown = null;
+  for (const base of API_FALLBACKS) {
+    try {
+      const res = await fetch(`${base}${path}`, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
+      const contentType = res.headers.get("content-type") || "";
+      const data = contentType.includes("application/json")
+        ? await res.json()
+        : { status: res.ok ? "ok" : "error", message: await res.text() };
+      if (!res.ok || data.status === "error") {
+        lastError = new Error(data.message || "API request failed");
+        continue;
+      }
+      return data as T;
+    } catch (err) {
+      lastError = err;
+    }
   }
-  return data as T;
+  throw lastError instanceof Error ? lastError : new Error("API request failed");
 }
 
 // ---------------------------------------------------------------------------

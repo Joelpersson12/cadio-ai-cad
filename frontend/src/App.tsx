@@ -696,6 +696,17 @@ export default function App() {
         </div>
 
         <div className="flex gap-2 overflow-x-auto border-b border-cadio-border bg-[#1f1f20]/95 px-3 py-2">
+          {TRANSFORM_MODES.map((mode) => (
+            <button
+              key={mode.id}
+              onClick={() => setTransformMode(mode.id)}
+              className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold ${
+                transformMode === mode.id ? "bg-cadio-accent text-[#101010]" : "bg-[#2b2b2d] text-cadio-text"
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
           <button
             onClick={selectAllObjects}
             disabled={!objects.length}
@@ -738,6 +749,7 @@ export default function App() {
             printerVolume={printerVolume}
             bounds={bounds}
             expertMode={false}
+            mobileMode
           />
         </div>
 

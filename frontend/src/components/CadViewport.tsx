@@ -85,6 +85,7 @@ function ScaledMesh({
   edgeOperation,
   onEdgeAmount,
   onTransformDrag,
+  mobileMode,
 }: {
   obj: CadObject;
   selected: boolean;
@@ -106,6 +107,7 @@ function ScaledMesh({
   edgeOperation: string;
   onEdgeAmount: (x: number, y: number, operation: string, objectId: string) => void;
   onTransformDrag: (dragging: boolean) => void;
+  mobileMode: boolean;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
@@ -179,7 +181,10 @@ function ScaledMesh({
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         if (suppressSelection) return;
-        e.stopPropagation();
+        const pointerType = (e.nativeEvent as PointerEvent).pointerType;
+        if (pointerType !== "touch") {
+          e.stopPropagation();
+        }
         onSelect();
         if (expertMode && selectionMode === "edge") {
           onEdgeAmount(e.nativeEvent.clientX, e.nativeEvent.clientY, edgeOperation, obj.id);
@@ -239,7 +244,7 @@ function ScaledMesh({
       <TransformControls
         object={groupRef.current}
         mode={transformMode}
-        size={0.85}
+        size={mobileMode ? 1.2 : 0.85}
         translationSnap={2}
         rotationSnap={THREE.MathUtils.degToRad(5)}
         scaleSnap={0.05}
@@ -373,6 +378,7 @@ interface CadViewportProps {
   onSetSketchHeight?: (height: number) => void;
   onSetOperationAmount?: (amount: number) => void;
   onApplyExpertOperation?: (operation: string, amountOverride?: number, objectIdOverride?: string) => void;
+  mobileMode?: boolean;
 }
 
 function SketchPlane({
@@ -509,6 +515,7 @@ export default function CadViewport({
   onSetSketchHeight,
   onSetOperationAmount,
   onApplyExpertOperation,
+  mobileMode = false,
 }: CadViewportProps) {
   const [edgeOperation, setEdgeOperation] = useState("chamfer");
   const [edgeInput, setEdgeInput] = useState<{
@@ -521,7 +528,11 @@ export default function CadViewport({
   const [transformDragging, setTransformDragging] = useState(false);
 
   return (
-    <div className="relative w-full h-full touch-none select-none bg-[#343435]" onContextMenu={(e) => e.preventDefault()}>
+    <div
+      className="relative h-full w-full select-none bg-[#343435]"
+      style={{ touchAction: "none" }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-3 top-14 z-10 w-44 flex-col gap-1.5 rounded-lg border border-[#454548] bg-[#242424]/92 p-2 shadow-xl backdrop-blur`}>
         <div className="px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cadio-muted">
           Expert tools
@@ -675,6 +686,7 @@ export default function CadViewport({
             setEdgeInput({ x, y, operation, objectId, value: String(operationAmount || 3) });
           }}
           onTransformDrag={setTransformDragging}
+          mobileMode={mobileMode}
         />
       ))}
  
@@ -686,6 +698,7 @@ export default function CadViewport({
         makeDefault
         enableDamping
         enablePan
+        enabled={!transformDragging && (transformMode === "off" || !selectedObjectId)}
         dampingFactor={0.07}
         minDistance={20}
         maxDistance={2000}
@@ -695,6 +708,10 @@ export default function CadViewport({
           LEFT: undefined,
           MIDDLE: THREE.MOUSE.PAN,
           RIGHT: THREE.MOUSE.ROTATE,
+        }}
+        touches={{
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN,
         }}
       />
  
