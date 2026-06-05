@@ -134,6 +134,137 @@ def _popularity(likes: int, downloads: int, rating: float) -> int:
     return int(round(score))
 
 
+_SOURCE_WEIGHTS = {
+    "printables": 22,
+    "thingiverse": 16,
+    "stlfinder": 10,
+    "yeggi": 9,
+    "makerworld": 18,
+    "thangs": 14,
+}
+
+_BAD_TITLE_WORDS = {
+    "login",
+    "sign up",
+    "privacy",
+    "terms",
+    "advertise",
+    "cookie",
+    "settings",
+    "next",
+    "previous",
+}
+
+_BAD_URL_FRAGMENTS = (
+    "/login",
+    "/signup",
+    "/privacy",
+    "/terms",
+    "/about",
+    "/contact",
+    "/search?",
+    "/tags/",
+    "/collections/",
+    "/users/",
+    "/makes/",
+)
+
+
+def _clean_title(text: str) -> str:
+    title = re.sub(r"<[^>]+>", " ", html.unescape(text))
+    title = re.sub(r"\s+", " ", title).strip()
+    title = re.sub(r"^(free|download|3d model)\s+", "", title, flags=re.I).strip()
+    return title
+
+
+def _looks_like_model_url(source: str, url: str, title: str) -> bool:
+    lower_url = url.lower()
+    lower_title = title.lower()
+    if len(title) < 4 or any(word in lower_title for word in _BAD_TITLE_WORDS):
+        return False
+    if any(fragment in lower_url for fragment in _BAD_URL_FRAGMENTS):
+        return False
+    if source == "thingiverse":
+        return "/thing:" in lower_url or "/thing/" in lower_url
+    if source == "printables":
+        return "/model/" in lower_url
+    if source == "stlfinder":
+        return any(fragment in lower_url for fragment in ("/3dmodels/", "/model/", "/thing:", "/thing/"))
+    if source == "yeggi":
+        return any(fragment in lower_url for fragment in ("/q/", "/3d-model/", "/models/", "/thing:", "/model/"))
+    return True
+
+
+def _query_words(query: str) -> list[str]:
+    base = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2]
+    aliases = {
+        "phone": ["mobile", "smartphone"],
+        "mobile": ["phone", "smartphone"],
+        "headset": ["headphone", "headphones"],
+        "headphone": ["headset", "headphones"],
+        "battery": ["batteries", "pack"],
+        "batteries": ["battery", "pack"],
+        "holder": ["mount", "bracket", "rack"],
+        "mount": ["holder", "bracket"],
+        "wall": ["mount"],
+        "dewalt": ["power", "tool"],
+    }
+    words: list[str] = []
+    for word in base:
+        if word not in words:
+            words.append(word)
+        for alias in aliases.get(word, []):
+            if alias not in words:
+                words.append(alias)
+    return words
+
+
+def _query_variants(query: str) -> list[str]:
+    normalized = re.sub(r"\s+", " ", query.strip().lower())
+    variants = [normalized] if normalized else []
+    words = set(_query_words(normalized))
+
+    def add(value: str) -> None:
+        value = re.sub(r"\s+", " ", value.strip().lower())
+        if value and value not in variants:
+            variants.append(value)
+
+    if {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch"} & words:
+        brand = next((word for word in ("dewalt", "makita", "milwaukee", "ryobi", "bosch") if word in words), "power tool")
+        add(f"{brand} battery holder wall mount")
+        add(f"{brand} battery holder slide rail")
+        add("power tool battery holder printable")
+    if {"phone", "mobile", "smartphone", "tablet"} & words and {"stand", "holder", "dock", "mount"} & words:
+        add("foldable phone stand 3d print")
+        add("phone tablet stand flat fold")
+        add("popular phone stand printable")
+    if {"headset", "headphone", "headphones"} & words:
+        add("headphone stand 3d print")
+        add("headset holder printable")
+    if {"cdi", "ecu", "ecm", "ignition", "module"} & words:
+        add("electronics module bracket 3d print")
+        add("cdi box holder bracket")
+    if {"holder", "mount", "bracket", "rack"} & words:
+        add(f"{normalized} 3d print")
+
+    return variants[:4]
+
+
+def _design_score(query: str, design: ExampleDesign) -> float:
+    relevance = _query_relevance(query, design.title, design.tags)
+    title = design.title.lower()
+    words = [w for w in _query_words(query) if len(w) > 2]
+    exact_phrase_bonus = 18.0 if query.strip().lower() in title else 0.0
+    coverage = 0.0
+    if words:
+        hits = sum(1 for word in words if word in title or word in design.tags)
+        coverage = hits / len(words)
+    quality_penalty = 18.0 if any(word in title for word in _BAD_TITLE_WORDS) else 0.0
+    source_weight = _SOURCE_WEIGHTS.get(design.source, 6)
+    popularity = min(100, design.popularity) * 0.85 + min(1000, design.likes) * 0.02 + min(10000, design.downloads) * 0.004
+    return relevance * 34.0 + coverage * 28.0 + exact_phrase_bonus + source_weight + popularity - quality_penalty
+
+
 
 
 def _generic_link_results(
@@ -145,17 +276,16 @@ def _generic_link_results(
     seen: set[str] = set()
     results: list[ExampleDesign] = []
     for href, text in re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', page, re.DOTALL | re.I):
-        title = re.sub(r"<[^>]+>", " ", html.unescape(text))
-        title = re.sub(r"\s+", " ", title).strip()
-        if len(title) < 4:
-            continue
-        if any(skip in title.lower() for skip in ("login", "sign up", "privacy", "terms", "advertise")):
-            continue
+        title = _clean_title(text)
         if href.startswith("/"):
             url = base_url.rstrip("/") + href
+        elif href.startswith("//"):
+            url = "https:" + href
         elif href.startswith("http"):
             url = href
         else:
+            continue
+        if not _looks_like_model_url(source, url, title):
             continue
         if url in seen:
             continue
@@ -322,18 +452,25 @@ class ThingiverseProvider(DesignProvider):
     """Thingiverse design provider."""
     
     def __init__(self):
-        self._available = False
-        # Future: Initialize API client
+        self._available = True
     
     def search(self, query: str, limit: int = 5) -> list[ExampleDesign]:
         """Search Thingiverse for designs."""
-        # TODO: Implement Thingiverse API integration
-        return []
+        cache_key = ("thingiverse", query.strip().lower(), limit)
+        cached = _SEARCH_CACHE.get(cache_key)
+        if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+            return list(cached[1])
+        try:
+            page = _fetch_text(f"https://www.thingiverse.com/search?q={quote_plus(query)}&type=things")
+        except Exception:
+            return []
+        results = _generic_link_results(page, "thingiverse", "https://www.thingiverse.com", limit)
+        _SEARCH_CACHE[cache_key] = (time.time(), results)
+        return list(results)
     
     def get_popular(self, category: str, limit: int = 5) -> list[ExampleDesign]:
         """Get popular Thingiverse designs."""
-        # TODO: Implement Thingiverse API integration
-        return []
+        return self.search(category, limit)
     
     def is_available(self) -> bool:
         """Check Thingiverse availability."""
@@ -438,21 +575,25 @@ class ProviderRegistry:
         }
     
     def search_all(self, query: str, limit: int = 5) -> list[ExampleDesign]:
-        """Search all available providers."""
-        results: list[ExampleDesign] = []
+        """Search all available providers with source-aware query expansion."""
+        ranked: dict[str, tuple[float, ExampleDesign]] = {}
+        variants = _query_variants(query) or [query]
+        per_query_limit = max(limit, 6)
         for provider in self.providers.values():
-            if provider.is_available():
-                results.extend(provider.search(query, limit))
-        
-        filtered = [
-            d for d in results
-            if _query_relevance(query, d.title, d.tags) > 0
-        ] or results
-        filtered.sort(
-            key=lambda d: (_query_relevance(query, d.title, d.tags), d.popularity),
-            reverse=True,
-        )
-        return filtered[:limit]
+            if not provider.is_available():
+                continue
+            for variant in variants:
+                for design in provider.search(variant, per_query_limit):
+                    score = _design_score(query, design)
+                    if score <= 0:
+                        continue
+                    existing = ranked.get(design.url)
+                    if existing is None or score > existing[0]:
+                        ranked[design.url] = (score, design)
+
+        results = list(ranked.values())
+        results.sort(key=lambda item: item[0], reverse=True)
+        return [design for _, design in results[:limit]]
     
     def get_popular_all(self, category: str, limit: int = 5) -> list[ExampleDesign]:
         """Get popular designs from all available providers."""
@@ -461,7 +602,7 @@ class ProviderRegistry:
             if provider.is_available():
                 results.extend(provider.get_popular(category, limit))
         
-        results.sort(key=lambda d: d.popularity, reverse=True)
+        results.sort(key=lambda d: _design_score(category, d), reverse=True)
         return results[:limit]
     
     def get_provider(self, name: str) -> DesignProvider | None:
@@ -511,7 +652,7 @@ def _title_tags(title: str) -> list[str]:
 
 
 def _query_relevance(query: str, title: str, tags: list[str]) -> int:
-    words = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2]
+    words = _query_words(query)
     haystack = set(re.findall(r"[a-z0-9]+", title.lower()) + tags)
     if not words:
         return 0

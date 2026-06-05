@@ -479,12 +479,9 @@ export default function CadViewport({
   return (
     <div className="relative w-full h-full bg-[#3a3a3a]" onContextMenu={(e) => e.preventDefault()}>
       <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-3 top-14 z-10 w-44 flex-col gap-1.5 rounded-lg border border-[#454548] bg-[#242424]/92 p-2 shadow-xl backdrop-blur`}>
-        <button
-          onClick={() => onSetExpertMode?.(!expertMode)}
-          className={`px-3 py-2 rounded-md text-left text-xs font-semibold ${expertMode ? "bg-cadio-accent text-[#111]" : "bg-[#38383b] text-cadio-text"}`}
-        >
-          Modeling
-        </button>
+        <div className="px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cadio-muted">
+          Expert tools
+        </div>
         {(["select", "rectangle", "circle", "line", "hole"] as ExpertTool[]).map((tool) => (
           <button
             key={tool}

@@ -311,12 +311,21 @@ def _apply_source_hints(text: str, dimensions: dict[str, float], notes: list[str
         dimensions["depth"] *= 1.15
         dimensions["height"] *= 1.12
         notes.append("scaled larger from wording")
+    if "slide rail" in text or "slide rails" in text:
+        dimensions["height"] = max(dimensions.get("height", 35.0), 46.0)
+        dimensions["thickness"] = max(dimensions.get("thickness", 5.0), 7.0)
+        notes.append("used slide-rail holder structure")
+    if "wall mount" in text or "wall mounted" in text:
+        dimensions["hole_count"] = max(dimensions.get("hole_count", 0.0), 4.0 if "battery" in text else 2.0)
+        dimensions["thickness"] = max(dimensions.get("thickness", 5.0), 6.0)
+        notes.append("used wall-mount screw pattern")
 
 
 def _apply_product_family_hints(text: str, dimensions: dict[str, float], notes: list[str]) -> None:
-    if "dewalt" in text:
+    if any(word in text for word in ("dewalt", "makita", "milwaukee", "ryobi", "bosch", "battery", "batteries")):
         dimensions.update({"width": max(dimensions["width"], 104.0), "depth": max(dimensions["depth"], 92.0)})
         dimensions["height"] = max(dimensions["height"], 46.0)
+        dimensions["hole_count"] = max(dimensions.get("hole_count", 0.0), 2.0)
         notes.append("used power-tool battery family proportions")
     if any(word in text for word in ("cdi", "ecu", "ecm", "ignition")):
         dimensions.update({"width": max(dimensions["width"], 86.0), "depth": max(dimensions["depth"], 68.0)})
