@@ -1,6 +1,7 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { markCadioAuthenticated } from "../utils/auth";
 
 type Language = "sv" | "en";
 type AuthMode = "login" | "signup" | null;
@@ -49,26 +50,41 @@ const copy = {
       ],
     },
     pricingTitle: "Priser",
-    pricingBody: "Starta enkelt och skala upp nar du vill skapa mer.",
+    pricingBody: "Alla paket har samma CAD-upplevelse. Skillnaden ar antal nedladdningsbara genereringar per manad.",
     tiers: [
       {
         name: "Free",
-        price: "0 kr",
-        note: "For att testa Cadio",
-        features: ["AI CAD workspace", "Begransade genereringar", "STL export", "Standard skrivare"],
+        price: "$0",
+        note: "1 nedladdningsbar generering",
+        features: [
+          "1 generering som kan laddas ner",
+          "Login kravs innan nedladdning",
+          "Samma Easy och Expert CAD",
+          "Samma modellkvalitet som betalda paket",
+        ],
       },
       {
         name: "Maker",
-        price: "149 kr/mo",
-        note: "For aktiva 3D-printare",
-        features: ["Fler AI-genereringar", "Printables-inspiration", "Alla exportformat", "Materialprofiler"],
+        price: "$10/mo",
+        note: "10 genereringar per manad",
+        features: [
+          "10 nedladdningsbara genereringar/manad",
+          "Samma CAD-verktyg som alla paket",
+          "Alla skrivare, material och exportformat",
+          "Login kravs for nedladdning",
+        ],
         featured: true,
       },
       {
         name: "Pro",
-        price: "399 kr/mo",
-        note: "For verkstad och produktjobb",
-        features: ["Prioriterad modellmotor", "Avancerad Expert mode", "Teamprojekt", "Hogre exportkontroll"],
+        price: "$49/mo",
+        note: "Obegransade genereringar",
+        features: [
+          "Obegransade nedladdningsbara genereringar",
+          "Samma CAD-upplevelse som alla paket",
+          "Alla skrivare, material och exportformat",
+          "Login kravs for nedladdning",
+        ],
       },
     ],
     auth: {
@@ -129,26 +145,41 @@ const copy = {
       ],
     },
     pricingTitle: "Pricing",
-    pricingBody: "Start simple and scale when you create more.",
+    pricingBody: "Every plan has the same CAD experience. The only difference is monthly downloadable generations.",
     tiers: [
       {
         name: "Free",
-        price: "0 kr",
-        note: "For trying Cadio",
-        features: ["AI CAD workspace", "Limited generations", "STL export", "Standard printers"],
+        price: "$0",
+        note: "1 downloadable generation",
+        features: [
+          "1 generation that can be downloaded",
+          "Login required before download",
+          "Same Easy and Expert CAD",
+          "Same model quality as paid plans",
+        ],
       },
       {
         name: "Maker",
-        price: "149 kr/mo",
-        note: "For active 3D printer users",
-        features: ["More AI generations", "Printables inspiration", "All export formats", "Material profiles"],
+        price: "$10/mo",
+        note: "10 generations per month",
+        features: [
+          "10 downloadable generations/month",
+          "Same CAD tools as every plan",
+          "All printers, materials, and export formats",
+          "Login required for downloads",
+        ],
         featured: true,
       },
       {
         name: "Pro",
-        price: "399 kr/mo",
-        note: "For workshops and product work",
-        features: ["Priority model engine", "Advanced Expert mode", "Team projects", "Higher export control"],
+        price: "$49/mo",
+        note: "Unlimited generations",
+        features: [
+          "Unlimited downloadable generations",
+          "Same CAD experience as every plan",
+          "All printers, materials, and export formats",
+          "Login required for downloads",
+        ],
       },
     ],
     auth: {
@@ -284,6 +315,7 @@ function AuthDialog({
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
+            markCadioAuthenticated();
             onStartBuilding();
           }}
         >

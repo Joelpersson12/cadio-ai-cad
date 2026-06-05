@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCadStore } from "../stores/cadStore";
 import type { MaterialProfile, PrinterProfile } from "../utils/types";
 import { exportUrl } from "../utils/api";
+import { isCadioAuthenticated, requestCadioAuth } from "../utils/auth";
 
 type ParamMeta = {
   label: string;
@@ -452,6 +453,12 @@ export default function ObjectInspector() {
         <a
           href={sessionId ? exportUrl(sessionId, exportFormat) : "#"}
           download={sessionId ? `cadio-${sessionId}.${exportFormat}` : undefined}
+          onClick={(event) => {
+            if (!sessionId) return;
+            if (isCadioAuthenticated()) return;
+            event.preventDefault();
+            requestCadioAuth();
+          }}
           className={`flex h-12 items-center justify-center rounded-lg text-sm font-semibold ${
             sessionId ? "bg-[#e8e8e8] text-[#171717] hover:bg-white" : "bg-[#333] text-[#777]"
           }`}

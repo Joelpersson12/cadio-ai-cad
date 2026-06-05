@@ -11,6 +11,7 @@ import LandingPage from "./components/LandingPage";
 import type { ExampleObject } from "./components/ExampleBrowser";
 import type { ExpertTool, MaterialProfile, SelectionMode, TransformMode } from "./utils/types";
 import { exportUrl } from "./utils/api";
+import { isCadioAuthenticated, markCadioAuthenticated, requestCadioAuth } from "./utils/auth";
 
 function promptFromHistory(item: Record<string, unknown> | undefined) {
   const value = item?.prompt ?? item?.command ?? item?.input;
@@ -187,6 +188,12 @@ function MobileExportSheet({
           <a
             href={sessionId ? exportUrl(sessionId, format) : "#"}
             download={sessionId ? `cadio-${sessionId}.${format}` : undefined}
+            onClick={(event) => {
+              if (!sessionId) return;
+              if (isCadioAuthenticated()) return;
+              event.preventDefault();
+              requestCadioAuth();
+            }}
             className={`flex h-12 items-center justify-center rounded-xl text-sm font-semibold ${
               sessionId ? "bg-[#e8e8e8] text-[#171717]" : "bg-[#333] text-[#777]"
             }`}
@@ -819,8 +826,64 @@ function MobileAiBar() {
   );
 }
 
+function AuthRequiredDialog({
+  open,
+  onClose,
+  onAuthenticated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onAuthenticated: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-[#343436] bg-[#1f1f20] p-5 text-white shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Logga in for nedladdning</h2>
+            <p className="mt-1 text-xs leading-5 text-[#a8a8ab]">
+              Gratispaketet ger 1 nedladdningsbar generering. Alla paket har samma CAD-upplevelse.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#2b2b2d] text-sm text-[#bdbdbd] hover:text-white"
+            aria-label="Close"
+          >
+            x
+          </button>
+        </div>
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onAuthenticated();
+          }}
+        >
+          <input
+            type="email"
+            placeholder="E-post"
+            className="h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm text-white outline-none placeholder:text-[#777] focus:border-[#2bb8dc]"
+          />
+          <input
+            type="password"
+            placeholder="Losenord"
+            className="h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm text-white outline-none placeholder:text-[#777] focus:border-[#2bb8dc]"
+          />
+          <button className="h-11 w-full rounded-lg bg-[#e8e8e8] text-sm font-semibold text-[#151515] hover:bg-white">
+            Logga in
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [showBuilder, setShowBuilder] = useState(() => window.location.hash === "#builder");
+  const [authRequiredOpen, setAuthRequiredOpen] = useState(false);
 
   useEffect(() => {
     const syncFromHash = () => setShowBuilder(window.location.hash === "#builder");
@@ -832,6 +895,12 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const openAuth = () => setAuthRequiredOpen(true);
+    window.addEventListener("cadio-auth-required", openAuth);
+    return () => window.removeEventListener("cadio-auth-required", openAuth);
+  }, []);
+
   const startBuilding = () => {
     if (window.location.hash !== "#builder") {
       window.history.pushState(null, "", "#builder");
@@ -839,9 +908,17 @@ export default function App() {
     setShowBuilder(true);
   };
 
-  if (!showBuilder) {
-    return <LandingPage onStartBuilding={startBuilding} />;
-  }
-
-  return <WorkspaceApp />;
+  return (
+    <>
+      {showBuilder ? <WorkspaceApp /> : <LandingPage onStartBuilding={startBuilding} />}
+      <AuthRequiredDialog
+        open={authRequiredOpen}
+        onClose={() => setAuthRequiredOpen(false)}
+        onAuthenticated={() => {
+          markCadioAuthenticated();
+          setAuthRequiredOpen(false);
+        }}
+      />
+    </>
+  );
 }
