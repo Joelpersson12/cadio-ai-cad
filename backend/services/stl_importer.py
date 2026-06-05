@@ -126,7 +126,13 @@ def _orient_smallest_axis_to_z(mesh: TriMesh) -> TriMesh:
     return oriented
 
 
-def import_stl_from_url(url: str, *, prefer_flat: bool = False) -> TriMesh | None:
+def import_stl_from_url(
+    url: str,
+    *,
+    prefer_flat: bool = False,
+    center_xy: bool = True,
+    shift_to_plate: bool = True,
+) -> TriMesh | None:
     """Fetch and parse an STL URL into Cadio's TriMesh format."""
     if not url.lower().endswith(".stl"):
         return None
@@ -137,6 +143,10 @@ def import_stl_from_url(url: str, *, prefer_flat: bool = False) -> TriMesh | Non
             return None
         if prefer_flat:
             mesh = _orient_smallest_axis_to_z(mesh)
-        return shift_mesh_to_buildplate(_center_xy(mesh))
+        if center_xy:
+            mesh = _center_xy(mesh)
+        if shift_to_plate:
+            mesh = shift_mesh_to_buildplate(mesh)
+        return mesh
     except Exception:
         return None

@@ -500,7 +500,13 @@ def _slot_count_from_source_file(source_file: dict[str, Any] | None, fallback: i
     return fallback
 
 
-def _try_import_source_stl(source_file: dict[str, Any] | None, *, prefer_flat: bool = False) -> TriMesh | None:
+def _try_import_source_stl(
+    source_file: dict[str, Any] | None,
+    *,
+    prefer_flat: bool = False,
+    center_xy: bool = True,
+    shift_to_plate: bool = True,
+) -> TriMesh | None:
     if not source_file:
         return None
     url = str(source_file.get("download_url") or "")
@@ -510,9 +516,220 @@ def _try_import_source_stl(source_file: dict[str, Any] | None, *, prefer_flat: b
     try:
         from backend.services.stl_importer import import_stl_from_url
 
-        return import_stl_from_url(url, prefer_flat=prefer_flat)
+        return import_stl_from_url(
+            url,
+            prefer_flat=prefer_flat,
+            center_xy=center_xy,
+            shift_to_plate=shift_to_plate,
+        )
     except Exception:
         return None
+
+
+def _translate_mesh(mesh: TriMesh, dx: float, dy: float, dz: float) -> TriMesh:
+    translated = TriMesh()
+    translated.verts = [(x + dx, y + dy, z + dz) for x, y, z in mesh.verts]
+    translated.tris = list(mesh.tris)
+    return translated
+
+
+def _mesh_extents(mesh: TriMesh) -> tuple[list[float], list[float]]:
+    if not mesh.verts:
+        return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+    mins = [min(vertex[index] for vertex in mesh.verts) for index in range(3)]
+    maxs = [max(vertex[index] for vertex in mesh.verts) for index in range(3)]
+    return mins, maxs
+
+
+def _normalize_mesh_group(meshes: list[TriMesh]) -> list[TriMesh]:
+    """Center an imported source assembly while preserving part offsets."""
+    non_empty = [mesh for mesh in meshes if mesh.verts]
+    if not non_empty:
+        return meshes
+    mins = [float("inf")] * 3
+    maxs = [float("-inf")] * 3
+    for mesh in non_empty:
+        mesh_mins, mesh_maxs = _mesh_extents(mesh)
+        for index in range(3):
+            mins[index] = min(mins[index], mesh_mins[index])
+            maxs[index] = max(maxs[index], mesh_maxs[index])
+    cx = (mins[0] + maxs[0]) / 2.0
+    cy = (mins[1] + maxs[1]) / 2.0
+    min_z = mins[2]
+    return [_translate_mesh(mesh, -cx, -cy, -min_z) for mesh in meshes]
+
+
+def _localize_mesh_part(mesh: TriMesh) -> tuple[TriMesh, list[float], dict[str, float]]:
+    """Convert a group-positioned mesh into local geometry plus transform."""
+    mins, maxs = _mesh_extents(mesh)
+    cx = (mins[0] + maxs[0]) / 2.0
+    cy = (mins[1] + maxs[1]) / 2.0
+    min_z = mins[2]
+    local = _translate_mesh(mesh, -cx, -cy, -min_z)
+    dimensions = {
+        "width": max(0.001, maxs[0] - mins[0]),
+        "depth": max(0.001, maxs[1] - mins[1]),
+        "height": max(0.001, maxs[2] - mins[2]),
+    }
+    return local, [cx, cy, min_z], dimensions
+
+
+def _source_file_name(source_file: dict[str, Any]) -> str:
+    return str(source_file.get("name") or "").strip()
+
+
+def _source_part_roles(source_file: dict[str, Any]) -> set[str]:
+    name = _source_file_name(source_file).lower()
+    roles: set[str] = set()
+    role_tokens = {
+        "base": ("base", "plate", "floor", "bottom"),
+        "body": ("body", "main", "holder", "mount", "bracket", "cup", "mug"),
+        "clamp": ("clamp", "desk", "table", "clip"),
+        "arm": ("arm", "link", "hinge", "joint", "support"),
+        "side": ("left", "right", "front", "rear", "back", "side"),
+        "rail": ("rail", "slide", "track", "guide"),
+        "cover": ("top", "cover", "cap", "lid"),
+    }
+    for role, tokens in role_tokens.items():
+        if any(token in name for token in tokens):
+            roles.add(role)
+    return roles
+
+
+def _source_file_is_bad_component(source_file: dict[str, Any]) -> bool:
+    name = _source_file_name(source_file).lower()
+    return any(
+        token in name
+        for token in (
+            "supported",
+            "supports",
+            "support_material",
+            "support material",
+            "tree_support",
+            "raft",
+            "gcode",
+            "profile",
+            "settings",
+            "test",
+            "calibration",
+            "old",
+            "backup",
+            "deprecated",
+            "preview",
+            "render",
+        )
+    )
+
+
+def _source_file_component_score(source_file: dict[str, Any], prompt: str, preferred_slots: int = 0) -> float:
+    if str(source_file.get("file_type") or "").lower() != "stl" or not source_file.get("download_url"):
+        return -9999.0
+    if _source_file_is_bad_component(source_file):
+        return -9999.0
+
+    name = _source_file_name(source_file).lower()
+    size = max(0, int(source_file.get("file_size") or 0))
+    prompt_words = {word for word in re.findall(r"[a-z0-9]+", (prompt or "").lower()) if len(word) > 2}
+    name_words = {word for word in re.findall(r"[a-z0-9]+", name) if len(word) > 2}
+    roles = _source_part_roles(source_file)
+    score = 40.0 + len(roles) * 16.0
+    if prompt_words:
+        score += 22.0 * (len(prompt_words & name_words) / len(prompt_words))
+    if size:
+        score += min(26.0, size / 160000.0)
+    if any(token in name for token in ("complete", "assembly", "all", "main", "body")):
+        score += 20.0
+    if preferred_slots >= 3 and any(token in name for token in ("x3", "3x", "triple", "three")):
+        score += 28.0
+    if any(token in name for token in ("screw", "bolt", "nut", "washer", "spacer", "pin")):
+        score -= 34.0
+    if "small" in name and "small" not in (prompt or "").lower():
+        score -= 10.0
+    return score
+
+
+def _select_source_assembly_files(
+    files: list[dict[str, Any]],
+    prompt: str,
+    preferred_slots: int = 0,
+    *,
+    max_parts: int = 6,
+) -> list[dict[str, Any]]:
+    """Pick a likely multi-part model file set without importing variants."""
+    candidates = [
+        source_file
+        for source_file in files
+        if _source_file_component_score(source_file, prompt, preferred_slots) > 0
+    ]
+    if len(candidates) < 2:
+        return []
+
+    candidates.sort(
+        key=lambda source_file: _source_file_component_score(source_file, prompt, preferred_slots),
+        reverse=True,
+    )
+
+    selected: list[dict[str, Any]] = []
+    selected_names: set[str] = set()
+    selected_roles: set[str] = set()
+    total_size = 0
+    for candidate in candidates:
+        name = _source_file_name(candidate).lower()
+        stem = re.sub(r"\.[a-z0-9]+$", "", name)
+        normalized_stem = re.sub(
+            r"\b(v\d+|rev\d+|small|medium|large|xl|left|right|front|rear|back|top|bottom)\b",
+            "",
+            stem,
+        )
+        normalized_stem = re.sub(r"[^a-z0-9]+", " ", normalized_stem).strip()
+        roles = _source_part_roles(candidate)
+        size = max(0, int(candidate.get("file_size") or 0))
+        if size and total_size + size > 46 * 1024 * 1024:
+            continue
+        if normalized_stem in selected_names and not roles:
+            continue
+        selected.append(candidate)
+        selected_names.add(normalized_stem)
+        selected_roles |= roles
+        total_size += size
+        if len(selected) >= max_parts:
+            break
+
+    complementary_pairs = (
+        {"base", "body"},
+        {"base", "clamp"},
+        {"body", "clamp"},
+        {"body", "side"},
+        {"base", "arm"},
+        {"base", "rail"},
+    )
+    has_complement = any(pair <= selected_roles for pair in complementary_pairs)
+    has_left_right = any("left" in _source_file_name(item).lower() for item in selected) and any(
+        "right" in _source_file_name(item).lower() for item in selected
+    )
+    if len(selected) >= 2 and (has_complement or has_left_right or len(selected_roles) >= 3):
+        return selected
+    return []
+
+
+def _try_import_source_stl_assembly(
+    source_files: list[dict[str, Any]],
+    *,
+    prefer_flat: bool = False,
+) -> list[tuple[dict[str, Any], TriMesh]]:
+    imported: list[tuple[dict[str, Any], TriMesh]] = []
+    for source_file in source_files:
+        shape = _try_import_source_stl(
+            source_file,
+            prefer_flat=prefer_flat,
+            center_xy=False,
+            shift_to_plate=False,
+        )
+        if shape is None:
+            return []
+        imported.append((source_file, shape))
+    normalized = _normalize_mesh_group([shape for _source_file, shape in imported])
+    return [(source_file, normalized[index]) for index, (source_file, _shape) in enumerate(imported)]
 
 
 def _mesh_dimensions(mesh: TriMesh) -> dict[str, float]:
@@ -587,6 +804,129 @@ def _create_imported_source_object(
     return source_obj
 
 
+def _source_group_id() -> str:
+    return f"source-{uuid.uuid4().hex[:10]}"
+
+
+def _source_part_name(source_example: dict[str, Any] | None, source_file: dict[str, Any], index: int) -> str:
+    file_name = _source_file_name(source_file)
+    title = file_name.rsplit(".", 1)[0] if file_name else ""
+    if not title:
+        title = str((source_example or {}).get("title") or "source_part")
+    title = re.sub(r"[^a-zA-Z0-9]+", "_", title).strip("_").lower()
+    return (title[:58] or "source_part") + f"_{index + 1}"
+
+
+def _create_imported_source_objects(
+    prompt: str,
+    imported_parts: list[tuple[dict[str, Any], TriMesh]],
+    source_example: dict[str, Any] | None,
+    source_files: list[dict[str, Any]],
+    *,
+    variant_index: int | None = None,
+    variant_count: int | None = None,
+) -> list[CadObject]:
+    group_id = _source_group_id()
+    selected_files = [source_file for source_file, _shape in imported_parts]
+    objects: list[CadObject] = []
+    color = _battery_brand_color(prompt) if any(
+        brand in (prompt or "").lower()
+        for brand in ("dewalt", "makita", "milwaukee", "ryobi", "bosch")
+    ) else "#a9aaad"
+
+    for index, (source_file, mesh) in enumerate(imported_parts):
+        local_mesh, position, dimensions = _localize_mesh_part(mesh)
+        params = dict(DEFAULT_PARAMETERS)
+        params.update(
+            {
+                "width": max(1.0, dimensions["width"]),
+                "depth": max(1.0, dimensions["depth"]),
+                "height": max(0.5, dimensions["height"]),
+                "thickness": max(0.5, min(12.0, dimensions["height"])),
+                "fillet_radius": 0.0,
+                "chamfer_size": 0.0,
+                "hole_count": 0.0,
+                "wall_thickness": 2.0,
+            }
+        )
+        source_obj = create_manual_object(
+            _source_part_name(source_example, source_file, index),
+            local_mesh,
+            params,
+        )
+        source_obj["transform"].position = position
+        source_obj["primitive"] = "imported_source_mesh"
+        source_obj["template_hint"] = None
+        source_obj["assembly_source"] = f"imported-stl-assembly:{(source_example or {}).get('source') or 'source'}"
+        source_obj["imported_source_mesh"] = True
+        source_obj["source_dimensions"] = dimensions
+        source_obj["source_group_id"] = group_id
+        source_obj["source_part_index"] = index
+        source_obj["source_part_count"] = len(imported_parts)
+        source_obj["source_model"] = {
+            "prompt": prompt,
+            "matched_example": source_example,
+            "files": source_files,
+            "selected_file": source_file,
+            "selected_files": selected_files,
+            "group_id": group_id,
+            "part_index": index,
+            "part_count": len(imported_parts),
+        }
+        if variant_index is not None:
+            source_obj["source_model"]["variant_index"] = variant_index
+        if variant_count is not None:
+            source_obj["source_model"]["variant_count"] = variant_count
+        source_obj["operation_history"] = [
+            {
+                "operation": "source_assembly_import",
+                "source": (source_example or {}).get("title"),
+                "selected_file": source_file.get("name"),
+                "part_index": index,
+                "part_count": len(imported_parts),
+            }
+        ]
+        source_obj["color"] = color
+        objects.append(source_obj)
+
+    return objects
+
+
+def _source_group_object_ids(session: Session, obj: CadObject | None) -> list[str]:
+    if not obj:
+        return []
+    group_id = obj.get("source_group_id")
+    if not group_id:
+        return [obj["id"]]
+    return [
+        oid
+        for oid in session.get("object_order", [])
+        if session["objects"].get(oid, {}).get("source_group_id") == group_id
+    ]
+
+
+def _source_group_objects(session: Session, obj: CadObject | None) -> list[CadObject]:
+    return [session["objects"][oid] for oid in _source_group_object_ids(session, obj) if oid in session["objects"]]
+
+
+def _remove_source_group_direct(session: Session, obj: CadObject | None) -> None:
+    for oid in list(_source_group_object_ids(session, obj)):
+        _remove_object_direct(session, oid)
+
+
+def _world_extents_for_objects(objects: list[CadObject]) -> tuple[list[float], list[float]]:
+    if not objects:
+        return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+    mins = [float("inf")] * 3
+    maxs = [float("-inf")] * 3
+    for obj in objects:
+        obj_mins, obj_maxs = _world_extents(obj)
+        for index in range(3):
+            mins[index] = min(mins[index], obj_mins[index])
+            maxs[index] = max(maxs[index], obj_maxs[index])
+    return mins, maxs
+
+
 def _try_replace_with_imported_source_model(
     session: Session,
     obj: CadObject,
@@ -606,6 +946,7 @@ def _try_replace_with_imported_source_model(
     except Exception:
         examples = []
 
+    ranked_assemblies: list[tuple[float, Any, list[dict[str, Any]], list[dict[str, Any]]]] = []
     ranked_candidates: list[tuple[float, Any, list[dict[str, Any]], dict[str, Any]]] = []
     for example_index, source_example_obj in enumerate(examples[:8]):
         source_files_obj = _rank_source_files(
@@ -614,6 +955,26 @@ def _try_replace_with_imported_source_model(
             preferred_slots,
         )
         source_files = [source_file.to_dict() for source_file in source_files_obj]
+        model_rank_bonus = max(0, len(examples) - example_index) * 34.0
+        title_score = _source_title_score(source_example_obj.title, prompt)
+        assembly_files = _select_source_assembly_files(
+            source_files,
+            prompt,
+            preferred_slots,
+            max_parts=6,
+        )
+        if len(assembly_files) >= 2:
+            assembly_score = (
+                model_rank_bonus
+                + title_score
+                + 90.0
+                + sum(_source_file_component_score(item, prompt, preferred_slots) for item in assembly_files[:4]) / 4.0
+                + min(40.0, len(assembly_files) * 8.0)
+            )
+            ranked_assemblies.append(
+                (assembly_score, source_example_obj, source_files, assembly_files)
+            )
+
         seen_ids: set[Any] = set()
         for candidate in source_files:
             if candidate.get("id") in seen_ids:
@@ -621,17 +982,46 @@ def _try_replace_with_imported_source_model(
             seen_ids.add(candidate.get("id"))
             if str(candidate.get("file_type") or "").lower() != "stl" or not candidate.get("download_url"):
                 continue
-            model_rank_bonus = max(0, len(examples) - example_index) * 34.0
             ranked_candidates.append(
                 (
                     model_rank_bonus
-                    + _source_title_score(source_example_obj.title, prompt)
+                    + title_score
                     + _source_file_score(candidate, prompt, preferred_slots),
                     source_example_obj,
                     source_files,
                     candidate,
                 )
             )
+
+    ranked_assemblies.sort(key=lambda item: item[0], reverse=True)
+    for _score, source_example_obj, source_files, assembly_files in ranked_assemblies:
+        imported_parts = _try_import_source_stl_assembly(
+            assembly_files,
+            prefer_flat=False,
+        )
+        if len(imported_parts) < 2:
+            continue
+        source_example = source_example_obj.to_dict()
+        source_objects = _create_imported_source_objects(
+            prompt,
+            imported_parts,
+            source_example,
+            source_files,
+        )
+        _remove_object_direct(session, obj["id"])
+        for source_obj in source_objects:
+            add_object(session, source_obj)
+        session["selected_object_id"] = ""
+        file_names = ", ".join(_source_file_name(file) for file in assembly_files[:4])
+        if len(assembly_files) > 4:
+            file_names += f", +{len(assembly_files) - 4} more"
+        return [
+            _source_signal_summary(prompt),
+            f"source-match: {source_example_obj.title}",
+            f"source-files: imported {len(source_objects)} separate STL parts",
+            f"source-parts: {file_names}",
+            "imported real multi-part Printables assembly as editable parts",
+        ], source_objects[0]
 
     ranked_candidates.sort(key=lambda item: item[0], reverse=True)
     for _score, source_example_obj, source_files, candidate in ranked_candidates:
@@ -720,6 +1110,38 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
         example = examples[index]
         files = _rank_source_files(resolve_printables_model_files(example.url, limit=24), prompt, 0)
         files_dicts = [source_file.to_dict() for source_file in files]
+        assembly_files = _select_source_assembly_files(files_dicts, prompt, 0, max_parts=6)
+        if len(assembly_files) >= 2:
+            imported_parts = _try_import_source_stl_assembly(
+                assembly_files,
+                prefer_flat=False,
+            )
+            if len(imported_parts) >= 2:
+                source_objects = _create_imported_source_objects(
+                    prompt,
+                    imported_parts,
+                    example.to_dict(),
+                    files_dicts,
+                    variant_index=index,
+                    variant_count=len(examples),
+                )
+                color = current.get("color")
+                _remove_source_group_direct(session, current)
+                for source_obj in source_objects:
+                    if color:
+                        source_obj["color"] = color
+                    add_object(session, source_obj)
+                session["selected_object_id"] = ""
+                file_names = ", ".join(_source_file_name(file) for file in assembly_files[:4])
+                if len(assembly_files) > 4:
+                    file_names += f", +{len(assembly_files) - 4} more"
+                return [
+                    f"{'previous' if step < 0 else 'next'} source model",
+                    f"source-match: {example.title}",
+                    f"source-files: imported {len(source_objects)} separate STL parts",
+                    f"source-parts: {file_names}",
+                ]
+
         candidates: list[dict[str, Any]] = []
         for candidate in files_dicts:
             if candidate.get("id") not in {item.get("id") for item in candidates}:
@@ -738,7 +1160,7 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
             source_obj["color"] = current.get("color", source_obj.get("color", "#a9aaad"))
             source_obj["source_model"]["variant_index"] = index
             source_obj["source_model"]["variant_count"] = len(examples)
-            _remove_object_direct(session, current["id"])
+            _remove_source_group_direct(session, current)
             add_object(session, source_obj)
             session["selected_object_id"] = ""
             return [
@@ -794,10 +1216,11 @@ def add_bottom_plate_from_prompt(session: Session, prompt: str) -> list[str]:
     target = _active_source_object(session) or get_object(session, session.get("selected_object_id"))
     if target is None:
         return ["bottom plate skipped: no target model"]
+    targets = _source_group_objects(session, target) or [target]
 
     margin = _plate_margin_from_prompt(prompt)
     plate_h = _plate_thickness_from_prompt(prompt)
-    mins, maxs = _world_extents(target)
+    mins, maxs = _world_extents_for_objects(targets)
     width = max(1.0, maxs[0] - mins[0] + margin * 2.0)
     depth = max(1.0, maxs[1] - mins[1] + margin * 2.0)
     cx = (mins[0] + maxs[0]) / 2.0
@@ -824,14 +1247,15 @@ def add_bottom_plate_from_prompt(session: Session, prompt: str) -> list[str]:
     plate["color"] = "#b8babd"
     plate["transform"].position = [cx, cy, 0.0]
 
-    target_min_z = _world_extents(target)[0][2]
-    target["transform"].position[2] += plate_h - target_min_z
+    target_min_z = mins[2]
+    for target_obj in targets:
+        target_obj["transform"].position[2] += plate_h - target_min_z
     add_object(session, plate)
     session["selected_object_id"] = plate["id"]
     return [
         f"added bottom plate {margin:g}mm outside target",
         f"plate size {width:.1f} x {depth:.1f} x {plate_h:.1f}mm",
-        "lifted source model onto the new plate",
+        f"lifted {len(targets)} source part{'s' if len(targets) != 1 else ''} onto the new plate",
     ]
 
 
@@ -1122,16 +1546,15 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
     if kind is None and "wall mount" in (prompt or "").lower() and any(word in recent_context for word in ("dewalt", "battery")):
         kind = "dewalt_battery_holder"
 
-    if kind not in {"dewalt_battery_holder", "battery_holder"}:
-        generic_actions, _source_obj = _try_replace_with_imported_source_model(
-            session,
-            obj,
-            prompt,
-            preferred_slots=0,
-            prefer_flat=_prefer_flat_for_prompt(prompt),
-        )
-        if generic_actions:
-            return generic_actions
+    generic_actions, _source_obj = _try_replace_with_imported_source_model(
+        session,
+        obj,
+        prompt,
+        preferred_slots=3 if kind in {"dewalt_battery_holder", "battery_holder"} else 0,
+        prefer_flat=_prefer_flat_for_prompt(prompt),
+    )
+    if generic_actions:
+        return generic_actions
 
     if kind not in {"phone_stand", "dewalt_battery_holder", "battery_holder"}:
         return []
