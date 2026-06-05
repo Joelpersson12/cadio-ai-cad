@@ -8,6 +8,7 @@ this module so locking is centralized.
 from __future__ import annotations
 
 import uuid
+import math
 from copy import deepcopy
 from datetime import datetime, timezone
 from threading import RLock
@@ -323,6 +324,448 @@ def prepare_generation_target(session: Session, name: str = "part_1") -> CadObje
     add_object(session, obj)
     session["selected_object_id"] = obj["id"]
     return obj
+
+
+SOURCE_PHONE_STAND_META: dict[str, Any] = {
+    "id": "source-phone-tablet-flat-fold-stand",
+    "title": "Phone/Tablet Stand - Flat fold - Print in place!",
+    "author": "jonnig",
+    "source": "printables/thingiverse",
+    "printables_url": "https://www.printables.com/model/1161-phonetablet-stand-flat-fold-print-in-place",
+    "thingiverse_url": "https://www.thingiverse.com/thing:3146835",
+    "license": "CC BY-NC 4.0",
+    "dimensions": {
+        "small": "52x83x3mm",
+        "medium": "60x100x4mm",
+        "large": "120x80x5mm",
+    },
+    "notes": [
+        "popular flat-fold print-in-place stand",
+        "reconstructed parametrically from public dimensions and source geometry signals",
+    ],
+}
+
+
+SOURCE_DEWALT_BATTERY_META: dict[str, Any] = {
+    "id": "source-dewalt-battery-wall-mount",
+    "title": "Dewalt battery holder wall mount",
+    "source": "source-first parametric reconstruction",
+    "reference_queries": [
+        "dewalt battery holder wall mount popular 3d print",
+        "dewalt battery holder flat bottom printables",
+        "dual dewalt battery holder printables",
+    ],
+    "notes": [
+        "multi-slot wall mount layout",
+        "slide rails, rear stops, hidden screw pattern, and latch pads",
+    ],
+}
+
+
+def _source_prompt_kind(prompt: str) -> str | None:
+    text = (prompt or "").strip().lower()
+    if not text:
+        return None
+    battery_terms = ("battery", "batteri", "batteries")
+    battery_brands = ("dewalt", "makita", "milwaukee", "ryobi", "bosch")
+    mount_terms = ("holder", "mount", "wall", "rack", "hållare", "hallare", "vägg", "vagg")
+    if any(word in text for word in battery_terms) and any(word in text for word in mount_terms):
+        return "dewalt_battery_holder" if "dewalt" in text else "battery_holder"
+    if any(word in text for word in battery_brands) and any(word in text for word in mount_terms):
+        return "dewalt_battery_holder"
+    if any(word in text for word in ("headphone", "headset", "hörlur", "horlur")):
+        return None
+    device_terms = ("phone", "iphone", "smartphone", "mobile", "mobil", "tablet", "ipad")
+    stand_terms = ("stand", "holder", "dock", "ställ", "stall", "hållare", "hallare", "stativ")
+    if any(word in text for word in device_terms) and any(word in text for word in stand_terms):
+        return "phone_stand"
+    return None
+
+
+def _source_signal_summary(prompt: str) -> str:
+    """Return a short source-search summary without making generation depend on it."""
+    try:
+        from backend.services.design_providers import get_provider_registry
+
+        examples = get_provider_registry().search_all(prompt, limit=4)
+    except Exception:
+        examples = []
+
+    if not examples:
+        return "source-search: no live provider hits; used curated popular source model"
+    top = "; ".join(f"{ex.source}:{ex.title}" for ex in examples[:3])
+    return f"source-search: {top}"
+
+
+def _recent_generation_context(session: Session) -> str:
+    history = session.get("edit_history", [])
+    recent: list[str] = []
+    for item in history[-6:]:
+        if isinstance(item, dict):
+            prompt = item.get("prompt") or item.get("command") or item.get("input")
+            if prompt:
+                recent.append(str(prompt))
+    return " ".join(recent).lower()
+
+
+def _merge_rounded_box(
+    mesh: TriMesh,
+    width: float,
+    depth: float,
+    height: float,
+    position: list[float],
+    radius: float,
+) -> TriMesh:
+    shape = make_rounded_box(width, depth, height, radius, segments=8)
+    return mesh.merge(
+        shape.transformed(
+            Transform(position=position, rotation=[0.0, 0.0, 0.0], scale=[1.0, 1.0, 1.0])
+        )
+    )
+
+
+def _merge_box(
+    mesh: TriMesh,
+    width: float,
+    depth: float,
+    height: float,
+    center: list[float],
+    *,
+    rotation: list[float] | None = None,
+) -> TriMesh:
+    return mesh.merge(
+        make_box(width, depth, height).transformed(
+            Transform(position=center, rotation=rotation or [0.0, 0.0, 0.0], scale=[1.0, 1.0, 1.0])
+        )
+    )
+
+
+def _merge_cylinder_x(
+    mesh: TriMesh,
+    radius: float,
+    length: float,
+    center_x: float,
+    y: float,
+    z: float,
+    *,
+    segments: int = 40,
+) -> TriMesh:
+    cylinder = make_cylinder(radius, length, segments=segments).transformed(
+        Transform(
+            position=[center_x - length / 2.0, y, z],
+            rotation=[0.0, 90.0, 0.0],
+            scale=[1.0, 1.0, 1.0],
+        )
+    )
+    return mesh.merge(cylinder)
+
+
+def _make_source_slanted_slab(
+    width: float,
+    y0: float,
+    z0: float,
+    y1: float,
+    z1: float,
+    thickness: float,
+) -> TriMesh:
+    dy = y1 - y0
+    dz = z1 - z0
+    length = max(math.hypot(dy, dz), 1e-6)
+    ny = -dz / length
+    nz = dy / length
+    oy = ny * thickness / 2.0
+    oz = nz * thickness / 2.0
+    hw = width / 2.0
+    verts = [
+        (-hw, y0 + oy, z0 + oz),
+        (hw, y0 + oy, z0 + oz),
+        (hw, y1 + oy, z1 + oz),
+        (-hw, y1 + oy, z1 + oz),
+        (-hw, y0 - oy, z0 - oz),
+        (hw, y0 - oy, z0 - oz),
+        (hw, y1 - oy, z1 - oz),
+        (-hw, y1 - oy, z1 - oz),
+    ]
+    mesh = TriMesh()
+    ids = [mesh.add_vertex(v) for v in verts]
+    for face in (
+        (0, 1, 2, 3),
+        (5, 4, 7, 6),
+        (4, 5, 1, 0),
+        (3, 2, 6, 7),
+        (1, 5, 6, 2),
+        (4, 0, 3, 7),
+    ):
+        mesh.add_quad(*(ids[i] for i in face))
+    return mesh
+
+
+def _make_source_side_link(
+    x: float,
+    y0: float,
+    y1: float,
+    z0: float,
+    z1: float,
+    thickness: float,
+) -> TriMesh:
+    half = thickness / 2.0
+    verts = [
+        (x - half, y0, z0),
+        (x - half, y1, z0),
+        (x - half, y1, z1),
+        (x + half, y0, z0),
+        (x + half, y1, z0),
+        (x + half, y1, z1),
+    ]
+    mesh = TriMesh()
+    ids = [mesh.add_vertex(v) for v in verts]
+    mesh.add_tri(ids[0], ids[1], ids[2])
+    mesh.add_tri(ids[3], ids[5], ids[4])
+    mesh.add_quad(ids[0], ids[3], ids[4], ids[1])
+    mesh.add_quad(ids[1], ids[4], ids[5], ids[2])
+    mesh.add_quad(ids[2], ids[5], ids[3], ids[0])
+    return mesh
+
+
+def _make_source_battery_holder_mesh(params: dict[str, float]) -> TriMesh:
+    """Build a Dewalt-style multi-slot battery wall mount."""
+    slots = max(1, min(6, int(round(float(params.get("num_batteries", params.get("battery_slots", 3.0)))))))
+    spacing = max(62.0, min(110.0, float(params.get("battery_spacing", 85.0))))
+    holder_length = max(58.0, min(120.0, float(params.get("holder_length", 85.0))))
+    margin = max(6.0, min(24.0, float(params.get("margin_width", 10.0))))
+    base_t = max(3.0, min(12.0, float(params.get("base_thickness", params.get("thickness", 6.0)))))
+    core_w = max(28.0, min(54.0, float(params.get("core_width", 40.0))))
+    core_h = max(7.0, min(22.0, float(params.get("core_height", 11.5))))
+    rail_w = max(core_w + 8.0, min(76.0, float(params.get("rail_width", 52.0))))
+    rail_t = max(2.5, min(9.0, float(params.get("rail_thickness", 4.5))))
+    stop_t = max(3.0, min(12.0, float(params.get("stop_thickness", 5.0))))
+    screw_d = max(3.0, min(8.0, float(params.get("screw_diameter", 4.5))))
+    screw_head_d = max(screw_d + 2.0, min(16.0, float(params.get("screw_head_diameter", 9.0))))
+    latch_y = max(8.0, min(holder_length * 0.45, float(params.get("latch_y_pos", 18.0))))
+    latch_w = max(8.0, min(core_w, float(params.get("latch_width", 16.0))))
+
+    base_w = spacing * (slots - 1) + rail_w + margin * 2.0
+    base_d = holder_length + margin * 2.0
+    total_h = base_t + rail_t + core_h + stop_t
+    params["num_batteries"] = float(slots)
+    params["battery_slots"] = float(slots)
+    params["width"] = base_w
+    params["depth"] = base_d
+    params["height"] = total_h
+    params["thickness"] = base_t
+
+    hole_params = dict(params)
+    for key in list(hole_params.keys()):
+        if key.startswith("custom_hole_"):
+            del hole_params[key]
+    hole_index = 0
+    for slot in range(slots):
+        cx = (slot - (slots - 1) / 2.0) * spacing
+        for y in (-holder_length * 0.28, holder_length * 0.28):
+            hole_params[f"custom_hole_{hole_index}_x"] = cx
+            hole_params[f"custom_hole_{hole_index}_y"] = y
+            hole_params[f"custom_hole_{hole_index}_diameter"] = screw_d
+            hole_index += 1
+    hole_params["custom_hole_count"] = float(hole_index)
+    hole_params["hole_count"] = float(hole_index)
+    hole_params["hole_diameter"] = screw_d
+    hole_params["counterbore_diameter"] = screw_head_d
+
+    mesh = _make_box_with_rect_holes(base_w, base_d, base_t, hole_params)
+    mesh = _merge_rounded_box(mesh, base_w - 4.0, 3.5, base_t * 0.42, [0.0, -base_d / 2.0 + 3.2, base_t], 0.7)
+    mesh = _merge_rounded_box(mesh, base_w - 4.0, 3.5, base_t * 0.42, [0.0, base_d / 2.0 - 3.2, base_t], 0.7)
+
+    deck_d = holder_length * 0.76
+    deck_w = rail_w + margin * 0.65
+    rail_depth = deck_d * 0.78
+    for slot in range(slots):
+        cx = (slot - (slots - 1) / 2.0) * spacing
+        mesh = _merge_rounded_box(mesh, deck_w, deck_d, rail_t, [cx, 0.0, base_t], 1.2)
+        mesh = _merge_rounded_box(mesh, rail_t, rail_depth, core_h, [cx - core_w / 2.0, -2.0, base_t + rail_t], 0.75)
+        mesh = _merge_rounded_box(mesh, rail_t, rail_depth, core_h, [cx + core_w / 2.0, -2.0, base_t + rail_t], 0.75)
+        mesh = _merge_rounded_box(mesh, core_w * 0.56, rail_depth * 0.66, core_h * 0.36, [cx, -2.0, base_t + rail_t], 0.65)
+        mesh = _merge_rounded_box(
+            mesh,
+            deck_w,
+            stop_t,
+            core_h + stop_t,
+            [cx, deck_d / 2.0 - stop_t / 2.0, base_t + rail_t],
+            0.9,
+        )
+        mesh = _merge_rounded_box(
+            mesh,
+            latch_w,
+            stop_t * 1.8,
+            core_h * 0.72,
+            [cx, -holder_length / 2.0 + latch_y, base_t + rail_t],
+            0.7,
+        )
+        for y in (-holder_length * 0.28, holder_length * 0.28):
+            mesh = _merge_rounded_box(mesh, screw_head_d * 1.12, screw_head_d * 1.12, 0.55, [cx, y, base_t + 0.08], 1.1)
+
+    return shift_mesh_to_buildplate(mesh)
+
+
+def _make_source_phone_stand_mesh(params: dict[str, float]) -> TriMesh:
+    """Build a source-first flat-fold phone/tablet stand reconstruction."""
+    width = max(52.0, min(120.0, float(params.get("width", 60.0))))
+    depth = max(83.0, min(120.0, float(params.get("depth", 100.0))))
+    base_t = max(3.0, min(6.0, float(params.get("thickness", 4.0))))
+    angle = max(60.0, min(74.0, float(params.get("angle", 68.0))))
+    panel_height = max(58.0, min(105.0, float(params.get("height", 82.0))))
+    panel_width = max(width * 0.76, min(width - 8.0, width * 0.88))
+    panel_t = base_t
+
+    hinge_y = -depth * 0.11
+    hinge_z = base_t + 2.0
+    bottom_y = hinge_y + 1.2
+    bottom_z = base_t + 1.4
+    top_y = bottom_y + math.cos(math.radians(angle)) * panel_height
+    top_z = bottom_z + math.sin(math.radians(angle)) * panel_height
+
+    mesh = TriMesh()
+    mesh = mesh.merge(_make_box_with_rect_holes(width, depth, base_t, params))
+
+    # Split front stops leave a charging-cable gap, matching common flat-fold stands.
+    lip_depth = max(8.0, depth * 0.105)
+    lip_height = max(8.0, base_t * 2.35)
+    tab_w = max(15.0, (width - 17.0) / 2.0)
+    front_y = -depth / 2.0 + lip_depth / 2.0
+    mesh = _merge_rounded_box(mesh, tab_w, lip_depth, lip_height, [-width * 0.24, front_y, base_t], 1.2)
+    mesh = _merge_rounded_box(mesh, tab_w, lip_depth, lip_height, [width * 0.24, front_y, base_t], 1.2)
+    mesh = _merge_rounded_box(mesh, width * 0.72, 3.2, base_t * 0.75, [0.0, front_y + lip_depth * 0.74, base_t], 0.8)
+
+    # Hinged back panel in the open position. This reads like a real print-in-place stand.
+    mesh = mesh.merge(_make_source_slanted_slab(panel_width, bottom_y, bottom_z, top_y, top_z, panel_t))
+    mesh = _merge_box(
+        mesh,
+        panel_width * 0.78,
+        3.2,
+        base_t * 1.1,
+        [0.0, top_y, top_z],
+        rotation=[angle - 90.0, 0.0, 0.0],
+    )
+
+    # Print-in-place hinge barrels with visible knuckle gaps.
+    for center_x, length in ((-width * 0.31, width * 0.26), (0.0, width * 0.22), (width * 0.31, width * 0.26)):
+        mesh = _merge_cylinder_x(mesh, base_t * 0.62, length, center_x, hinge_y, hinge_z)
+
+    # Side links and low rails make the model look designed, not guessed.
+    side_x = width * 0.43
+    for x in (-side_x, side_x):
+        mesh = mesh.merge(
+            _make_source_side_link(
+                x,
+                bottom_y - 3.5,
+                top_y * 0.84,
+                base_t,
+                top_z * 0.58,
+                max(2.5, base_t * 0.78),
+            )
+        )
+        mesh = _merge_rounded_box(mesh, max(2.6, base_t * 0.7), depth * 0.58, base_t * 0.62, [x, -depth * 0.06, base_t], 0.7)
+
+    # Shallow stiffening ribs on the base plate.
+    mesh = _merge_rounded_box(mesh, width * 0.68, 2.1, base_t * 0.45, [0.0, -depth * 0.23, base_t], 0.5)
+    mesh = _merge_rounded_box(mesh, width * 0.58, 2.1, base_t * 0.45, [0.0, depth * 0.24, base_t], 0.5)
+
+    return shift_mesh_to_buildplate(mesh)
+
+
+def replace_object_with_source_model(session: Session, obj: CadObject, prompt: str) -> list[str]:
+    """Replace generated seed with a source-matched reconstructed CAD model."""
+    kind = _source_prompt_kind(prompt)
+    recent_context = _recent_generation_context(session)
+    if kind is None and "wall mount" in (prompt or "").lower() and any(word in recent_context for word in ("dewalt", "battery")):
+        kind = "dewalt_battery_holder"
+    if kind not in {"phone_stand", "dewalt_battery_holder", "battery_holder"}:
+        return []
+
+    if kind in {"dewalt_battery_holder", "battery_holder"}:
+        params = dict(DEFAULT_PARAMETERS)
+        params.update(
+            {
+                "num_batteries": 3.0,
+                "battery_slots": 3.0,
+                "battery_spacing": 85.0,
+                "holder_length": 85.0,
+                "margin_width": 10.0,
+                "base_thickness": 6.0,
+                "core_width": 40.0,
+                "core_height": 11.5,
+                "rail_width": 52.0,
+                "rail_thickness": 4.5,
+                "stop_thickness": 5.0,
+                "screw_diameter": 4.5,
+                "screw_head_diameter": 9.0,
+                "latch_y_pos": 18.0,
+                "latch_width": 16.0,
+                "fillet_radius": 1.2,
+                "hole_count": 6.0,
+                "wall_thickness": 3.0,
+            }
+        )
+        shape = _make_source_battery_holder_mesh(params)
+        source_obj = create_manual_object("dewalt_battery_wall_mount", shape, params)
+        source_obj["primitive"] = "source_battery_holder"
+        source_obj["template_hint"] = "source_battery_holder"
+        source_obj["assembly_source"] = "source:dewalt-battery-wall-mount"
+        source_obj["source_model"] = deepcopy(SOURCE_DEWALT_BATTERY_META)
+        source_obj["operation_history"] = [
+            {
+                "operation": "source_reconstruct",
+                "source": SOURCE_DEWALT_BATTERY_META["title"],
+                "slots": 3,
+            }
+        ]
+        source_obj["color"] = "#ffd700"
+
+        _remove_object_direct(session, obj["id"])
+        add_object(session, source_obj)
+        session["selected_object_id"] = source_obj["id"]
+        return [
+            _source_signal_summary(prompt),
+            "source-model: Dewalt battery wall mount with 3 adjustable slots",
+            "generated source-first wall mount with slide rails, latch pads, rear stops, and screw pattern",
+        ]
+
+    params = dict(DEFAULT_PARAMETERS)
+    params.update(
+        {
+            "width": 60.0,
+            "depth": 100.0,
+            "height": 82.0,
+            "thickness": 4.0,
+            "angle": 68.0,
+            "fillet_radius": 1.4,
+            "chamfer_size": 0.0,
+            "hole_count": 0.0,
+            "wall_thickness": 2.0,
+        }
+    )
+    shape = _make_source_phone_stand_mesh(params)
+    source_obj = create_manual_object("phone_tablet_flat_fold_stand", shape, params)
+    source_obj["primitive"] = "source_phone_stand"
+    source_obj["template_hint"] = "source_phone_stand"
+    source_obj["assembly_source"] = "source:printables:1161/thingiverse:3146835"
+    source_obj["source_model"] = deepcopy(SOURCE_PHONE_STAND_META)
+    source_obj["operation_history"] = [
+        {
+            "operation": "source_reconstruct",
+            "source": SOURCE_PHONE_STAND_META["title"],
+            "dimensions": SOURCE_PHONE_STAND_META["dimensions"]["medium"],
+        }
+    ]
+    source_obj["color"] = obj.get("color", "#a9aaad")
+
+    _remove_object_direct(session, obj["id"])
+    add_object(session, source_obj)
+    session["selected_object_id"] = source_obj["id"]
+    return [
+        _source_signal_summary(prompt),
+        "source-model: Phone/Tablet Stand - Flat fold - Print in place! (medium 60x100x4mm)",
+        "generated source-first parametric reconstruction with hinge barrels, front stops, side links, and cable gap",
+    ]
 
 
 def replace_object_with_template_assembly(
@@ -672,6 +1115,10 @@ def rebuild_manual_object(obj: CadObject) -> None:
     elif primitive == "hole":
         radius = max(float(params.get("hole_diameter", max(width, depth))) / 2.0, 0.5)
         obj["shape"] = make_cylinder_body(radius, height) or make_cylinder(radius, height)
+    elif primitive == "source_phone_stand":
+        obj["shape"] = _make_source_phone_stand_mesh(params)
+    elif primitive == "source_battery_holder":
+        obj["shape"] = _make_source_battery_holder_mesh(params)
     else:
         fillet = max(0.0, float(params.get("fillet_radius", 0.0)))
         chamfer = max(0.0, float(params.get("chamfer_size", 0.0)))

@@ -240,11 +240,11 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       <mesh position={[0, -0.55, 0]} receiveShadow>
         <boxGeometry args={[px, 0.04, py]} />
         <meshStandardMaterial 
-          color="#38393d" 
+          color="#4a4a4a"
           roughness={0.88}
           metalness={0.02}
           transparent
-          opacity={0.18}
+          opacity={0.10}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
@@ -258,13 +258,13 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       ].map((pos, i) => (
         <mesh key={i} position={[pos[0], pos[1], pos[2]]}>
           <sphereGeometry args={[2, 8, 8]} />
-          <meshStandardMaterial color="#4fc3f7" emissive="#2a7f99" />
+          <meshStandardMaterial color="#dadada" emissive="#333333" />
         </mesh>
       ))}
       {/* Border frame - enhanced visibility */}
       <lineSegments>
         <edgesGeometry args={[new THREE.BoxGeometry(px, 0.5, py)]} />
-        <lineBasicMaterial color="#3b3d42" linewidth={2} />
+        <lineBasicMaterial color="#505052" linewidth={2} />
       </lineSegments>
     </group>
   );
@@ -477,8 +477,8 @@ export default function CadViewport({
   const [transformDragging, setTransformDragging] = useState(false);
 
   return (
-    <div className="relative w-full h-full bg-cadio-bg" onContextMenu={(e) => e.preventDefault()}>
-      <div className="hidden md:flex absolute left-3 top-4 z-10 w-44 flex-col gap-1.5 rounded-lg border border-cadio-border bg-[#2b2b2e]/92 p-2 shadow-xl backdrop-blur">
+    <div className="relative w-full h-full bg-[#3a3a3a]" onContextMenu={(e) => e.preventDefault()}>
+      <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-3 top-14 z-10 w-44 flex-col gap-1.5 rounded-lg border border-[#454548] bg-[#242424]/92 p-2 shadow-xl backdrop-blur`}>
         <button
           onClick={() => onSetExpertMode?.(!expertMode)}
           className={`px-3 py-2 rounded-md text-left text-xs font-semibold ${expertMode ? "bg-cadio-accent text-[#111]" : "bg-[#38383b] text-cadio-text"}`}
@@ -568,7 +568,7 @@ export default function CadViewport({
         }}
         onPointerUp={() => setTransformDragging(false)}
       >
-      <color attach="background" args={["#1d1d20"]} />
+      <color attach="background" args={["#3a3a3a"]} />
  
       {/* Lighting - enhanced for clarity */}
       <hemisphereLight intensity={0.75} color="#ffffff" groundColor="#323238" />
@@ -595,13 +595,13 @@ export default function CadViewport({
       <Grid
         args={[printerVolume[0] * 2.2, printerVolume[1] * 2.2]}
         cellSize={10}
-        cellThickness={0.35}
-        cellColor="#2a2b2e"
+        cellThickness={0.22}
+        cellColor="#424244"
         sectionSize={50}
-        sectionThickness={1.05}
-        sectionColor="#3e4045"
+        sectionThickness={0.55}
+        sectionColor="#4b4b4d"
         fadeDistance={1000}
-        fadeStrength={2.0}
+        fadeStrength={2.6}
         position={[0, -0.78, 0]}
       />
  

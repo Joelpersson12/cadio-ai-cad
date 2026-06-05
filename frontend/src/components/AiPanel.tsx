@@ -1,65 +1,68 @@
-/** AI command panel - Shapr3D-inspired design with mobile support. */
+/** Adam/CADAM-style prompt and iteration panel. */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useCadStore } from "../stores/cadStore";
-import ExampleBrowser from "./ExampleBrowser";
-import type { ExampleObject } from "./ExampleBrowser";
+
+const AI_MODELS = [
+  "Gemini 3.1 Pro",
+  "Claude Opus 4.8",
+  "GPT-5.5",
+  "Gemini 3.5 Flash",
+];
 
 const QUICK_COMMANDS = [
-  "Make it taller",
-  "Make it wider",
-  "Add rounded corners",
-  "Add mounting holes",
-  "Make it thicker",
-  "Mirror geometry",
-  "Optimize for printing",
-  "Duplicate object",
+  "Create wall mount",
+  "Add hanging hook",
+  "Adjust slot spacing",
+  "Make 3 slots",
+  "Add screw holes",
+  "Make it stronger",
 ];
+
+function creationTitle(prompt: string) {
+  const text = prompt.trim();
+  if (!text) return "Untitled creation";
+  return text
+    .split(/\s+/)
+    .slice(0, 5)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
 
 export default function AiPanel() {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [history, setHistory] = useState<string[]>([]);
-  const [showExamples, setShowExamples] = useState(true);
-  const { status, runPrompt } = useCadStore();
+  const [selectedModel, setSelectedModel] = useState(AI_MODELS[0]);
+  const { status, runPrompt, editHistory, objects } = useCadStore();
+
+  const latestPrompt = useMemo(() => {
+    const latest = editHistory[editHistory.length - 1];
+    const value = latest?.prompt ?? latest?.command ?? latest?.input;
+    return typeof value === "string" ? value : "";
+  }, [editHistory]);
+
+  const latestActions = useMemo(() => {
+    const latest = editHistory[editHistory.length - 1];
+    const actions = latest?.actions;
+    return Array.isArray(actions) ? actions.map(String).slice(0, 3) : [];
+  }, [editHistory]);
+
+  const run = async (text: string) => {
+    const cleaned = text.trim();
+    if (!cleaned || isLoading) return;
+    setIsLoading(true);
+    setPrompt("");
+    try {
+      await runPrompt(cleaned);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e?: FormEvent<HTMLFormElement>) => {
     e?.preventDefault();
-    const text = prompt.trim();
-    if (!text || isLoading) return;
-    setIsLoading(true);
-    setHistory((h) => [text, ...h.slice(0, 9)]);
-    setPrompt("");
-    try {
-      await runPrompt(text);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleQuick = async (cmd: string) => {
-    if (isLoading) return;
-    setIsLoading(true);
-    setHistory((h) => [cmd, ...h.slice(0, 9)]);
-    try {
-      await runPrompt(cmd);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleExampleSelect = async (example: ExampleObject) => {
-    if (isLoading) return;
-    setIsLoading(true);
-    setHistory((h) => [example.prompt, ...h.slice(0, 9)]);
-    try {
-      await runPrompt(example.prompt);
-      setShowExamples(false); // Hide examples after selection
-    } finally {
-      setIsLoading(false);
-    }
+    await run(prompt);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -70,120 +73,100 @@ export default function AiPanel() {
   };
 
   return (
-    <div className="flex flex-col gap-4 h-full">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-cadio-accent animate-pulse" />
-        <h2 className="text-sm font-semibold text-cadio-text tracking-wide uppercase">
-          AI Copilot
-        </h2>
+    <div className="flex h-full flex-col gap-4">
+      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] shadow-2xl">
+        <div className="aspect-[4/3] overflow-hidden rounded-t-lg bg-[#3a3a3a]">
+          <div className="grid h-full place-items-center text-center text-sm text-[#9d9d9d]">
+            <div>
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl border border-[#555] bg-[#2a2a2a] text-xl">
+                C
+              </div>
+              <p>{objects.length ? `${objects.length} editable part${objects.length > 1 ? "s" : ""}` : "No model yet"}</p>
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-[#303033] px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="grid h-5 w-5 place-items-center rounded border border-[#555] text-[11px]">◇</span>
+            <span className="truncate">{creationTitle(latestPrompt || "New Creation")}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Example objects browser */}
-      {showExamples && (
-        <div>
-          <p className="text-xs text-cadio-muted mb-2 uppercase tracking-wider">
-            Get Inspired
+      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-4 text-sm leading-relaxed text-white">
+        {latestActions.length ? (
+          <div className="space-y-2">
+            {latestActions.map((action) => (
+              <p key={action}>{action}</p>
+            ))}
+          </div>
+        ) : (
+          <p>
+            Describe what you want to print. Cadio will search for source patterns,
+            build parametric geometry, and expose the useful dimensions on the right.
           </p>
-          <ExampleBrowser onSelectExample={handleExampleSelect} isLoading={isLoading} />
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {QUICK_COMMANDS.map((cmd) => (
           <button
-            onClick={() => setShowExamples(false)}
-            className="w-full mt-2 text-xs px-2 py-1 rounded text-cadio-muted hover:text-cadio-text bg-[#1a2535] hover:bg-[#243048] transition-all"
+            key={cmd}
+            onClick={() => void run(cmd)}
+            disabled={isLoading}
+            className="rounded-full border border-[#38383a] bg-[#242424] px-3 py-2 text-xs font-semibold text-white hover:border-[#555] hover:bg-[#2d2d2f] disabled:opacity-40"
           >
-            Hide Examples
+            {cmd}
           </button>
-        </div>
-      )}
-      {!showExamples && (
-        <button
-          onClick={() => setShowExamples(true)}
-          className="w-full rounded-md bg-[#2b2b2e] px-3 py-2 text-left text-xs font-semibold text-cadio-text hover:bg-[#38383b] transition-all"
-        >
-          Get Inspired
-        </button>
-      )}
+        ))}
+      </div>
 
-      {/* Divider */}
-      <div className="border-t border-cadio-border" />
-
-      {/* Prompt input */}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-        <p className="text-xs text-cadio-muted uppercase tracking-wider">Describe changes</p>
+      <form
+        onSubmit={handleSubmit}
+        className="mt-auto rounded-2xl border border-[#38383a] bg-[#151515] p-3 shadow-2xl"
+      >
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="e.g. Make it 50% taller and add holes..."
-          rows={3}
+          placeholder="Keep iterating with Cadio..."
+          rows={2}
           disabled={isLoading}
-          className="w-full rounded-lg border border-cadio-border bg-[#111827] text-cadio-text p-3 text-sm resize-none focus:outline-none focus:border-cadio-accent transition-colors disabled:opacity-50"
+          className="h-16 w-full resize-none bg-transparent px-1 text-sm text-white outline-none placeholder:text-[#858585] disabled:opacity-50"
         />
-        <motion.button
-          type="submit"
-          disabled={isLoading || !prompt.trim()}
-          whileTap={{ scale: 0.97 }}
-          className="w-full rounded-lg bg-cadio-accent text-[#081225] py-2.5 font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {isLoading ? (
-            <>
-              <span className="w-4 h-4 border-2 border-[#081225]/30 border-t-[#081225] rounded-full animate-spin" />
-              Generating...
-            </>
-          ) : (
-            "Apply Command ↵"
-          )}
-        </motion.button>
-      </form>
-
-      {/* Quick edits */}
-      <div>
-        <p className="text-xs text-cadio-muted mb-2 uppercase tracking-wider">Quick edits</p>
-        <div className="flex flex-wrap gap-1.5">
-          {QUICK_COMMANDS.map((cmd) => (
-            <button
-              key={cmd}
-              onClick={() => void handleQuick(cmd)}
-              disabled={isLoading}
-              className="px-2.5 py-1.5 rounded-md text-xs bg-[#1a2535] text-cadio-muted hover:text-cadio-text hover:bg-[#243048] transition-all disabled:opacity-40"
-            >
-              {cmd}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Status */}
-      <AnimatePresence>
-        {status && (
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="text-xs text-cadio-accent bg-cadio-accent/10 rounded-lg px-3 py-2"
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-[#333] bg-[#202020] text-[#bdbdbd]"
+            title="Add image reference"
           >
-            {status}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* History */}
-      {history.length > 0 && (
-        <div className="mt-auto">
-          <p className="text-xs text-cadio-muted mb-2 uppercase tracking-wider">Recent</p>
-          <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-            {history.map((h, i) => (
-              <button
-                key={i}
-                onClick={() => void handleQuick(h)}
-                disabled={isLoading}
-                className="text-left px-2.5 py-1.5 rounded text-xs text-cadio-muted hover:text-cadio-text hover:bg-[#1a2535] transition-all disabled:opacity-40 truncate"
-              >
-                Reuse {h}
-              </button>
-            ))}
+            ▧
+          </button>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="h-9 rounded-lg border border-[#333] bg-[#202020] px-3 text-xs font-semibold text-white outline-none"
+            >
+              {AI_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={!prompt.trim() || isLoading}
+              className="grid h-9 w-9 place-items-center rounded-lg bg-[#3d3d3f] text-white hover:bg-[#505052] disabled:opacity-40"
+              title="Generate"
+            >
+              {isLoading ? "…" : "↑"}
+            </button>
           </div>
         </div>
-      )}
+      </form>
+
+      {status && <p className="text-xs text-[#8f8f8f]">{status}</p>}
     </div>
   );
 }

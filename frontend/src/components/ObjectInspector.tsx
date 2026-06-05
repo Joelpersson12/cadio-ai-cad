@@ -1,68 +1,116 @@
-/** Object inspector panel - parameters, features, hierarchy, transforms. */
+/** Adam/CADAM-style parameter inspector. */
 
-import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useCadStore } from "../stores/cadStore";
-import type { PrinterProfile, TransformMode } from "../utils/types";
+import type { PrinterProfile } from "../utils/types";
 import { exportUrl } from "../utils/api";
 
-function NumberInput({
-  label,
-  value,
-  onChange,
-  step = 1,
-  min = 0,
-}: {
+type ParamMeta = {
   label: string;
+  min: number;
+  max: number;
+  step: number;
+  unit?: string;
+};
+
+const PARAM_META: Record<string, ParamMeta> = {
+  num_batteries: { label: "Num Batteries", min: 1, max: 6, step: 1 },
+  battery_slots: { label: "Num Slots", min: 1, max: 6, step: 1 },
+  battery_spacing: { label: "Battery Spacing", min: 60, max: 120, step: 1, unit: "mm" },
+  holder_length: { label: "Holder Length", min: 55, max: 125, step: 1, unit: "mm" },
+  margin_width: { label: "Margin Width", min: 4, max: 25, step: 0.5, unit: "mm" },
+  base_thickness: { label: "Base Thickness", min: 3, max: 12, step: 0.5, unit: "mm" },
+  core_width: { label: "Core Width", min: 28, max: 54, step: 0.5, unit: "mm" },
+  core_height: { label: "Core Height", min: 7, max: 22, step: 0.5, unit: "mm" },
+  rail_width: { label: "Rail Width", min: 42, max: 76, step: 0.5, unit: "mm" },
+  rail_thickness: { label: "Rail Thickness", min: 2.5, max: 9, step: 0.25, unit: "mm" },
+  stop_thickness: { label: "Stop Thickness", min: 3, max: 12, step: 0.5, unit: "mm" },
+  screw_diameter: { label: "Screw Diameter", min: 3, max: 8, step: 0.25, unit: "mm" },
+  screw_head_diameter: { label: "Screw Head Diameter", min: 6, max: 16, step: 0.25, unit: "mm" },
+  latch_y_pos: { label: "Latch Y Pos", min: 8, max: 44, step: 0.5, unit: "mm" },
+  latch_width: { label: "Latch Width", min: 8, max: 40, step: 0.5, unit: "mm" },
+  width: { label: "Width", min: 20, max: 320, step: 1, unit: "mm" },
+  depth: { label: "Depth", min: 20, max: 240, step: 1, unit: "mm" },
+  height: { label: "Height", min: 3, max: 260, step: 1, unit: "mm" },
+  thickness: { label: "Thickness", min: 1, max: 30, step: 0.5, unit: "mm" },
+  angle: { label: "Angle", min: 40, max: 80, step: 0.5, unit: "deg" },
+  fillet_radius: { label: "Fillet Radius", min: 0, max: 12, step: 0.25, unit: "mm" },
+  chamfer_size: { label: "Chamfer Size", min: 0, max: 12, step: 0.25, unit: "mm" },
+  wall_thickness: { label: "Wall Thickness", min: 0.5, max: 12, step: 0.25, unit: "mm" },
+  hole_count: { label: "Hole Count", min: 0, max: 12, step: 1 },
+  hole_diameter: { label: "Hole Diameter", min: 1, max: 16, step: 0.25, unit: "mm" },
+};
+
+const BATTERY_ORDER = [
+  "num_batteries",
+  "battery_spacing",
+  "holder_length",
+  "margin_width",
+  "base_thickness",
+  "core_width",
+  "core_height",
+  "rail_width",
+  "rail_thickness",
+  "stop_thickness",
+  "screw_diameter",
+  "screw_head_diameter",
+  "latch_y_pos",
+  "latch_width",
+];
+
+const DEFAULT_ORDER = [
+  "width",
+  "depth",
+  "height",
+  "thickness",
+  "angle",
+  "fillet_radius",
+  "chamfer_size",
+  "wall_thickness",
+  "hole_count",
+  "hole_diameter",
+];
+
+function formatValue(value: number, step: number) {
+  if (Number.isInteger(step)) return String(Math.round(value));
+  return Number(value).toFixed(step < 0.5 ? 2 : 1).replace(/\.0$/, "");
+}
+
+function ParameterRow({
+  paramKey,
+  value,
+  meta,
+  onChange,
+}: {
+  paramKey: string;
   value: number;
-  onChange: (v: number) => void;
-  step?: number;
-  min?: number;
+  meta: ParamMeta;
+  onChange: (key: string, value: number) => void;
 }) {
-  const [draft, setDraft] = useState(String(Number.isFinite(value) ? value : 0));
-  const [focused, setFocused] = useState(false);
-
-  useEffect(() => {
-    if (!focused) {
-      setDraft(String(Number.isFinite(value) ? value : 0));
-    }
-  }, [focused, value]);
-
-  const commit = () => {
-    const next = Number(draft);
-    if (Number.isFinite(next)) {
-      onChange(next);
-    } else {
-      setDraft(String(Number.isFinite(value) ? value : 0));
-    }
-  };
-
+  const display = formatValue(value, meta.step);
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs text-cadio-muted">{label}</span>
+    <div className="grid grid-cols-[82px_1fr_58px_26px] items-center gap-3 py-2">
+      <label className="text-xs leading-tight text-[#b9b9b9]">{meta.label}</label>
+      <input
+        type="range"
+        min={meta.min}
+        max={meta.max}
+        step={meta.step}
+        value={Number.isFinite(value) ? value : meta.min}
+        onChange={(e) => onChange(paramKey, Number(e.target.value))}
+        className="h-2 w-full accent-[#245b70]"
+      />
       <input
         type="number"
-        min={min}
-        step={step}
-        value={draft}
-        onFocus={() => setFocused(true)}
-        onBlur={() => {
-          setFocused(false);
-          commit();
-        }}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.currentTarget.blur();
-          }
-          if (e.key === "Escape") {
-            setDraft(String(Number.isFinite(value) ? value : 0));
-            e.currentTarget.blur();
-          }
-        }}
-        className="rounded-lg border border-cadio-border bg-[#121723] text-cadio-text px-3 py-1.5 text-sm focus:outline-none focus:border-cadio-accent"
+        min={meta.min}
+        max={meta.max}
+        step={meta.step}
+        value={display}
+        onChange={(e) => onChange(paramKey, Number(e.target.value))}
+        className="h-7 rounded-lg border-0 bg-[#2b2b2c] px-2 text-center text-xs font-semibold text-white outline-none"
       />
-    </label>
+      <span className="text-xs text-[#9f9f9f]">{meta.unit ?? ""}</span>
+    </div>
   );
 }
 
@@ -70,280 +118,130 @@ export default function ObjectInspector() {
   const {
     objects,
     selectedObjectId,
-    selectedObjectIds,
     bounds,
     printer,
     printers,
-    printAssistant,
     sessionId,
-    transformMode,
-    setTransformMode,
-    selectAllObjects,
-    onSelectObject,
-    onDeleteObject,
     patchParam,
     patchAppearance,
-    onToggleFeature,
-    onTransformCommit,
     setPrinter,
     undo,
     redo,
   } = useCadStore();
-  const [partsOpen, setPartsOpen] = useState(true);
-  const [positionOpen, setPositionOpen] = useState(false);
 
-  const selectedObject = objects.find((o) => o.id === selectedObjectId);
+  const selectedObject = objects.find((o) => o.id === selectedObjectId) ?? objects[0];
   const selectedPrinter = printers[printer] as PrinterProfile | undefined;
-  const params = selectedObject?.parameters ?? {};
-  const features = selectedObject?.feature_tree ?? [];
-  const transform = selectedObject?.transform;
 
-  const patchTransformVector = (
-    key: "position" | "rotation" | "scale",
-    index: number,
-    value: number,
-  ) => {
-    if (!selectedObject || !transform) return;
-    const next = [...transform[key]] as [number, number, number];
-    next[index] = value;
-    void onTransformCommit(selectedObject.id, { [key]: next });
-  };
+  const parameterKeys = useMemo(() => {
+    if (!selectedObject) return [];
+    const params = selectedObject.parameters;
+    const order = "num_batteries" in params || "battery_spacing" in params ? BATTERY_ORDER : DEFAULT_ORDER;
+    const ordered = order.filter((key) => key in params);
+    const extras = Object.keys(params)
+      .filter((key) => key in PARAM_META && !ordered.includes(key))
+      .slice(0, 6);
+    return [...ordered, ...extras];
+  }, [selectedObject]);
+
+  const color = selectedObject?.color ?? "#ffd700";
 
   return (
-    <div className="flex flex-col gap-3 text-sm">
-      <div className="flex items-center gap-1.5">
+    <div className="flex h-full flex-col bg-[#1d1d1e] text-white">
+      <div className="flex h-14 items-center justify-between border-b border-[#303033] px-6">
+        <h2 className="text-lg font-semibold">Parameters</h2>
         <button
-          onClick={() => void undo()}
-          className="rounded-md bg-[#333336] px-3 py-1.5 text-sm text-cadio-text hover:bg-[#44454a]"
-          title="Undo"
+          onClick={() => window.location.reload()}
+          className="grid h-8 w-8 place-items-center rounded-lg text-[#bdbdbd] hover:bg-[#2a2a2b] hover:text-white"
+          title="Refresh"
         >
-          Undo
-        </button>
-        <button
-          onClick={() => void redo()}
-          className="rounded-md bg-[#333336] px-3 py-1.5 text-sm text-cadio-text hover:bg-[#44454a]"
-          title="Redo"
-        >
-          Redo
+          ↻
         </button>
       </div>
 
-      {/* Object hierarchy */}
-      <button
-        onClick={() => setPartsOpen((open) => !open)}
-        className="flex items-center justify-between rounded-md bg-[#2b2b2e] px-3 py-2 text-left text-sm font-semibold text-cadio-text"
-      >
-        <span>Parts</span>
-        <span>{partsOpen ? "^" : "v"}</span>
-      </button>
-      {partsOpen && (
-        <div className="flex flex-col gap-1">
-          <button
-            onClick={selectAllObjects}
-            className="w-full rounded-md bg-[#333336] px-3 py-1.5 text-left text-xs text-cadio-muted hover:bg-[#44454a] hover:text-cadio-text"
-          >
-            Select all parts
+      <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="mb-5 flex gap-2">
+          <button onClick={() => void undo()} className="rounded-lg bg-[#2a2a2b] px-3 py-2 text-xs font-semibold hover:bg-[#343436]">
+            Undo
           </button>
-          {objects.map((o) => (
-            <motion.button
-              key={o.id}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => void onSelectObject(o.id)}
-              className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${
-                selectedObjectIds.includes(o.id)
-                  ? "bg-cadio-accent text-[#081225] font-semibold"
-                  : "bg-[#2b2b2e] text-cadio-muted hover:bg-[#3a3a3d]"
-              }`}
-            >
-              {o.name}
-            </motion.button>
-          ))}
+          <button onClick={() => void redo()} className="rounded-lg bg-[#2a2a2b] px-3 py-2 text-xs font-semibold hover:bg-[#343436]">
+            Redo
+          </button>
         </div>
-      )}
 
-      {/* Transform tools */}
-      <h3 className="text-sm font-semibold text-cadio-text mt-2">Transform</h3>
-      <div className="grid grid-cols-4 gap-1.5">
-        {(["off", "translate", "rotate", "scale"] as TransformMode[]).map((mode) => (
-          <button
-            key={mode}
-            onClick={() => setTransformMode(mode)}
-            className={`px-2 py-1.5 rounded-lg text-xs capitalize transition-colors ${
-              transformMode === mode
-                ? "bg-cadio-accent text-[#111] font-semibold"
-                : "bg-[#333336] text-cadio-muted hover:bg-[#44454a]"
-            }`}
+        <label className="mb-5 block">
+          <span className="mb-2 block text-xs text-[#a9a9a9]">Printer</span>
+          <select
+            value={printer}
+            onChange={(e) => void setPrinter(e.target.value)}
+            className="w-full rounded-lg border border-[#333] bg-[#252526] px-3 py-2 text-sm text-white outline-none"
           >
-            {mode === "translate" ? "Move" : mode}
-          </button>
-        ))}
-      </div>
-      <button
-        onClick={() => void onDeleteObject()}
-        className="w-full rounded-lg bg-[#333336] text-cadio-danger py-1.5 text-xs hover:bg-[#403033] transition-colors"
-      >
-        Delete Selected
-      </button>
-
-      {transform && (
-        <div className="flex flex-col gap-2 rounded-lg border border-cadio-border bg-[#202023] p-2">
-          <button
-            onClick={() => setPositionOpen((open) => !open)}
-            className="flex items-center justify-between text-xs uppercase tracking-wider text-cadio-muted"
-          >
-            <span>Position</span>
-            <span>{positionOpen ? "^" : "v"}</span>
-          </button>
-          {positionOpen && (
-            <div className="grid grid-cols-3 gap-1.5">
-              {["X", "Y", "Z"].map((axis, i) => (
-                <NumberInput
-                  key={`pos-${axis}`}
-                  label={axis}
-                  value={transform.position[i] ?? 0}
-                  onChange={(v) => patchTransformVector("position", i, v)}
-                  step={1}
-                  min={-500}
-                />
-              ))}
-            </div>
+            {Object.entries(printers).map(([key, p]) => (
+              <option value={key} key={key}>
+                {(p as PrinterProfile).name}
+              </option>
+            ))}
+          </select>
+          {selectedPrinter && (
+            <span className="mt-1 block text-[11px] text-[#898989]">
+              {selectedPrinter.build_volume[0]} x {selectedPrinter.build_volume[1]} x {selectedPrinter.build_volume[2]} mm
+            </span>
           )}
-          <p className="text-xs text-cadio-muted uppercase tracking-wider">Rotation</p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {["X", "Y", "Z"].map((axis, i) => (
-              <NumberInput
-                key={`rot-${axis}`}
-                label={axis}
-                value={transform.rotation[i] ?? 0}
-                onChange={(v) => patchTransformVector("rotation", i, v)}
-                step={5}
-                min={-360}
-              />
-            ))}
+        </label>
+
+        <section className="border-t border-[#303033] py-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Dimensions</h3>
+            <span className="text-[10px] text-[#858585]">{parameterKeys.length}</span>
           </div>
-          <p className="text-xs text-cadio-muted uppercase tracking-wider">Scale</p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {["X", "Y", "Z"].map((axis, i) => (
-              <NumberInput
-                key={`scale-${axis}`}
-                label={axis}
-                value={transform.scale[i] ?? 1}
-                onChange={(v) => patchTransformVector("scale", i, Math.max(0.05, v))}
-                step={0.1}
-                min={0.05}
+          {selectedObject ? (
+            parameterKeys.map((key) => (
+              <ParameterRow
+                key={key}
+                paramKey={key}
+                value={Number(selectedObject.parameters[key] ?? PARAM_META[key].min)}
+                meta={PARAM_META[key]}
+                onChange={(paramKey, value) => void patchParam(paramKey, value)}
               />
-            ))}
+            ))
+          ) : (
+            <p className="text-sm text-[#9f9f9f]">Create or select a model to edit parameters.</p>
+          )}
+        </section>
+
+        <section className="border-t border-[#303033] py-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Colors</h3>
+            <span className="text-[10px] text-[#858585]">1</span>
           </div>
-        </div>
-      )}
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#b9b9b9]">Holder</span>
+            <label className="flex items-center gap-2 rounded-lg bg-[#2a2a2b] px-3 py-2">
+              <input
+                type="color"
+                value={color}
+                onChange={(e) => void patchAppearance({ color: e.target.value })}
+                className="h-5 w-5 rounded-full border-0 bg-transparent p-0"
+              />
+              <span className="font-mono text-xs uppercase text-white">{color}</span>
+            </label>
+          </div>
+        </section>
 
-      {/* Parameters */}
-      <h3 className="text-sm font-semibold text-cadio-text mt-2">Parameters</h3>
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-cadio-muted">Printer</span>
-        <select
-          value={printer}
-          onChange={(e) => void setPrinter(e.target.value)}
-          className="rounded-lg border border-cadio-border bg-[#121723] text-cadio-text px-3 py-1.5 text-sm focus:outline-none"
-        >
-          {Object.entries(printers).map(([key, p]) => (
-            <option value={key} key={key}>
-              {(p as PrinterProfile).name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <NumberInput label="Width" value={params.width ?? 0} onChange={(v) => void patchParam("width", v)} />
-      <NumberInput label="Depth" value={params.depth ?? 0} onChange={(v) => void patchParam("depth", v)} />
-      <NumberInput label="Height" value={params.height ?? 0} onChange={(v) => void patchParam("height", v)} />
-      <NumberInput label="Thickness" value={params.thickness ?? 0} onChange={(v) => void patchParam("thickness", v)} />
-      <NumberInput label="Fillet Radius" value={params.fillet_radius ?? 0} onChange={(v) => void patchParam("fillet_radius", v)} step={0.5} />
-      <NumberInput label="Hole Count" value={params.hole_count ?? 0} onChange={(v) => void patchParam("hole_count", v)} />
-      <NumberInput label="Wall Thickness" value={params.wall_thickness ?? 0} onChange={(v) => void patchParam("wall_thickness", v)} step={0.2} />
-
-      <h3 className="text-sm font-semibold text-cadio-text mt-2">Material</h3>
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-cadio-muted">Material</span>
-        <select
-          value={selectedObject?.material ?? "PLA"}
-          onChange={(e) => void patchAppearance({ material: e.target.value })}
-          className="rounded-lg border border-cadio-border bg-[#202023] text-cadio-text px-3 py-1.5 text-sm focus:outline-none"
-        >
-          {["PLA", "PETG", "ABS", "ASA", "TPU", "Nylon", "PC", "PVA", "Resin"].map((material) => (
-            <option key={material} value={material}>{material}</option>
-          ))}
-        </select>
-        {selectedPrinter && (
-          <span className="text-[11px] text-cadio-muted">
-            {selectedPrinter.build_volume[0]} x {selectedPrinter.build_volume[1]} x {selectedPrinter.build_volume[2]} mm
-          </span>
-        )}
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-cadio-muted">Color</span>
-        <input
-          type="color"
-          value={selectedObject?.color ?? "#b8babd"}
-          onChange={(e) => void patchAppearance({ color: e.target.value })}
-          className="h-10 rounded-lg border border-cadio-border bg-[#121723] px-2 py-1"
-        />
-      </label>
-
-      {/* Feature tree */}
-      <h3 className="text-sm font-semibold text-cadio-text mt-2">Features</h3>
-      <div className="flex flex-col gap-1.5">
-        {features.map((f) => (
-          <label key={f.id} className="flex items-center gap-2 text-cadio-muted text-xs cursor-pointer">
-            <input
-              type="checkbox"
-              checked={f.enabled}
-              onChange={(e) => void onToggleFeature(f.id, e.target.checked)}
-              className="accent-cadio-accent"
-            />
-            <span>{f.type.replace(/_/g, " ")}</span>
-          </label>
-        ))}
+        <section className="border-t border-[#303033] py-5 text-xs text-[#9f9f9f]">
+          <p>Bounds: {bounds.x?.toFixed(1)} x {bounds.y?.toFixed(1)} x {bounds.z?.toFixed(1)} mm</p>
+          <p>Parts: {objects.length}</p>
+        </section>
       </div>
 
-      {/* Print assistant */}
-      <h3 className="text-sm font-semibold text-cadio-text mt-2">Print Analysis</h3>
-      {printAssistant.warnings.map((w) => (
-        <p key={w} className="text-xs text-cadio-danger">! {w}</p>
-      ))}
-      {printAssistant.checks.map((c) => (
-        <p key={c} className="text-xs text-cadio-success">+ {c}</p>
-      ))}
-      {printAssistant.hints.map((h) => (
-        <p key={h} className="text-xs text-cadio-muted">* {h}</p>
-      ))}
-      <p className="text-xs text-cadio-muted">
-        Score: {printAssistant.printability_score}/100
-      </p>
-
-      {/* Scene info */}
-      <h3 className="text-sm font-semibold text-cadio-text mt-2">Info</h3>
-      <p className="text-xs text-cadio-muted">Objects: {objects.length}</p>
-      <p className="text-xs text-cadio-muted">
-        Bounds: {bounds.x?.toFixed(1)} x {bounds.y?.toFixed(1)} x{" "}
-        {bounds.z?.toFixed(1)} mm
-      </p>
-
-      {/* Export */}
-      <h3 className="text-sm font-semibold text-cadio-text mt-2">Export</h3>
-      <div className="grid grid-cols-2 gap-1.5">
-        {["stl", "3mf", "obj", "amf"].map((fmt) => (
-          <a
-            key={fmt}
-            href={sessionId ? exportUrl(sessionId, fmt) : "#"}
-            className={`flex items-center justify-center rounded-lg py-1.5 text-xs uppercase font-semibold transition-colors ${
-              sessionId
-                ? "bg-[#273046] text-cadio-text hover:bg-[#354058]"
-                : "bg-[#1a1f2e] text-cadio-muted cursor-not-allowed"
-            }`}
-          >
-            {fmt}
-          </a>
-        ))}
+      <div className="border-t border-[#303033] p-5">
+        <a
+          href={sessionId ? exportUrl(sessionId, "stl") : "#"}
+          className={`flex h-12 items-center justify-center rounded-lg text-sm font-semibold ${
+            sessionId ? "bg-[#e8e8e8] text-[#171717] hover:bg-white" : "bg-[#333] text-[#777]"
+          }`}
+        >
+          ⇩ STL
+        </a>
       </div>
     </div>
   );

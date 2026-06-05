@@ -64,6 +64,7 @@ from backend.services.session_manager import (
     add_object,
     split_object_by_line,
     replace_object_with_research_assembly,
+    replace_object_with_source_model,
     replace_object_with_template_assembly,
     save_undo_snapshot,
     undo_session,
@@ -226,42 +227,46 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                         session,
                         f"generated_{len(session['edit_history']) + 1}",
                     )
-                parsed = parse_ai_command(data.prompt, session, obj)
-                obj["parameters"] = parsed["parameters"]
-                obj["feature_tree"] = parsed["feature_tree"]
-                obj["transform"] = parsed["transform"]
-                rebuild_object(obj)
+                source_actions = [] if edit_only else replace_object_with_source_model(session, obj, data.prompt)
+                if source_actions:
+                    actions = source_actions
+                else:
+                    parsed = parse_ai_command(data.prompt, session, obj)
+                    obj["parameters"] = parsed["parameters"]
+                    obj["feature_tree"] = parsed["feature_tree"]
+                    obj["transform"] = parsed["transform"]
+                    rebuild_object(obj)
 
-                assembly_actions = replace_object_with_template_assembly(
-                    session,
-                    obj,
-                    None if edit_only else parsed.get("template"),
-                    parsed["parameters"],
-                )
-                research_actions = []
-                if not assembly_actions and not edit_only:
-                    research_actions = replace_object_with_research_assembly(
+                    assembly_actions = replace_object_with_template_assembly(
                         session,
                         obj,
-                        parsed.get("research_brief"),
+                        None if edit_only else parsed.get("template"),
                         parsed["parameters"],
                     )
-                if assembly_actions or research_actions:
-                    actions = parsed["actions"] + assembly_actions + research_actions
-                else:
-                    # Validate generated geometry
-                    validation = GeometryValidator.validate(obj["shape"])
-                    if not validation.is_valid:
-                        logger.warning(f"Generated model failed validation: {validation.issues}")
-                        # Add validation info to actions
-                        actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
+                    research_actions = []
+                    if not assembly_actions and not edit_only:
+                        research_actions = replace_object_with_research_assembly(
+                            session,
+                            obj,
+                            parsed.get("research_brief"),
+                            parsed["parameters"],
+                        )
+                    if assembly_actions or research_actions:
+                        actions = parsed["actions"] + assembly_actions + research_actions
                     else:
-                        actions = parsed["actions"]
-                        if validation.warnings:
-                            actions += [f"Note: {w}" for w in validation.warnings]
+                        # Validate generated geometry
+                        validation = GeometryValidator.validate(obj["shape"])
+                        if not validation.is_valid:
+                            logger.warning(f"Generated model failed validation: {validation.issues}")
+                            # Add validation info to actions
+                            actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
+                        else:
+                            actions = parsed["actions"]
+                            if validation.warnings:
+                                actions += [f"Note: {w}" for w in validation.warnings]
 
-                    # Store validation metrics
-                    obj["validation"] = validation.to_dict()
+                        # Store validation metrics
+                        obj["validation"] = validation.to_dict()
 
             if session.get("fit"):
                 auto_fit_session(session)

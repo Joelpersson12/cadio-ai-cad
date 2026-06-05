@@ -8,7 +8,21 @@ import AiPanel from "./components/AiPanel";
 import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
 import type { ExampleObject } from "./components/ExampleBrowser";
-import { exportUrl } from "./utils/api";
+
+function promptFromHistory(item: Record<string, unknown> | undefined) {
+  const value = item?.prompt ?? item?.command ?? item?.input;
+  return typeof value === "string" ? value : "";
+}
+
+function creationName(prompt: string) {
+  if (!prompt.trim()) return "Untitled Project";
+  return prompt
+    .trim()
+    .split(/\s+/)
+    .slice(0, 5)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
 
 // Mobile examples sheet for inspiration
 function MobileExamplesSheet({
@@ -172,6 +186,7 @@ export default function App() {
     selectionMode,
     sketchHeight,
     operationAmount,
+    editHistory,
     loadPrinters,
     applyScenePayload,
     onSelectObject,
@@ -193,7 +208,6 @@ export default function App() {
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
     await runPrompt(example.prompt);
@@ -215,151 +229,129 @@ export default function App() {
       ]
     : [220, 220, 250];
 
-  const menuItems: Record<string, Array<{
-    label: string;
-    onClick?: () => void;
-    href?: string;
-    disabled?: boolean;
-    muted?: boolean;
-  }>> = {
-    File: [
-      { label: "New Part", onClick: () => void runPrompt("new part") },
-      { label: "Export STL", href: sessionId ? exportUrl(sessionId, "stl") : undefined, disabled: !sessionId },
-      { label: "Export 3MF", href: sessionId ? exportUrl(sessionId, "3mf") : undefined, disabled: !sessionId },
-      { label: "Export OBJ", href: sessionId ? exportUrl(sessionId, "obj") : undefined, disabled: !sessionId },
-    ],
-    Edit: [
-      { label: "Undo", onClick: () => void undo() },
-      { label: "Redo", onClick: () => void redo() },
-      { label: "Duplicate", onClick: () => void runPrompt("Duplicate object") },
-      { label: "Delete Selected", onClick: () => void onDeleteObject() },
-    ],
-    Item: [
-      { label: "Select All Parts", onClick: selectAllObjects },
-      { label: "Transform Off", onClick: () => setTransformMode("off") },
-      { label: "Move", onClick: () => setTransformMode("translate") },
-      { label: "Rotate", onClick: () => setTransformMode("rotate") },
-      { label: "Scale", onClick: () => setTransformMode("scale") },
-    ],
-    View: [
-      { label: expertMode ? "Exit Modeling" : "Enter Modeling", onClick: () => setExpertMode(!expertMode) },
-      { label: "Body Selection", onClick: () => setSelectionMode("body") },
-      { label: "Face Selection", onClick: () => setSelectionMode("face") },
-      { label: "Edge Selection", onClick: () => setSelectionMode("edge") },
-    ],
-    Help: [
-      { label: "LMB: select or sketch", muted: true },
-      { label: "RMB: rotate camera", muted: true },
-      { label: "Scroll button: pan camera", muted: true },
-      { label: "Wheel: zoom", muted: true },
-    ],
-  };
+  const latestPrompt = promptFromHistory(editHistory[editHistory.length - 1]);
+  const projectTitle = creationName(latestPrompt);
+  const creations = editHistory
+    .slice(-5)
+    .reverse()
+    .map((item, index) => ({
+      id: `${index}-${promptFromHistory(item)}`,
+      title: creationName(promptFromHistory(item)),
+    }));
 
   return (
     <div className="w-full h-full relative bg-cadio-bg text-cadio-text">
       {/* Desktop layout */}
-      <div className="hidden md:grid w-full h-full grid-rows-[38px_1fr] overflow-hidden bg-[#1f1f20]">
-        <header className="flex items-center justify-between border-b border-[#353538] bg-[#242426] px-3 text-[13px] text-[#f4f4f4]">
-          <div className="flex h-full items-center gap-4">
-            <div className="flex items-center gap-2 font-semibold">
-              <span className="grid h-5 w-5 place-items-center rounded bg-[#2f7fff] text-[11px] text-white">C</span>
-              <span>Untitled Project</span>
-              <span className="text-[#8f9094]">{objects.length} parts</span>
-            </div>
-            <nav className="relative flex h-full items-center gap-1 text-[#d7d7da]">
-              {Object.entries(menuItems).map(([menu, entries]) => (
-                <div key={menu} className="relative">
-                  <button
-                    onClick={() => setActiveMenu((current) => (current === menu ? null : menu))}
-                    className={`rounded px-2 py-1 ${activeMenu === menu ? "bg-[#3a3a3d]" : "hover:bg-[#343437]"}`}
-                  >
-                    {menu}
-                  </button>
-                  {activeMenu === menu && (
-                    <div className="absolute left-0 top-8 z-50 min-w-44 rounded-md border border-[#45464a] bg-[#2c2c2f] p-1 shadow-2xl">
-                      {entries.map((entry) => {
-                        const className = `block w-full rounded px-3 py-2 text-left text-xs ${
-                          entry.disabled
-                            ? "cursor-not-allowed text-[#68696d]"
-                            : entry.muted
-                              ? "cursor-default text-[#a6a7ab]"
-                              : "text-[#f2f2f3] hover:bg-[#3d3d42]"
-                        }`;
-                        if (entry.href && !entry.disabled) {
-                          return (
-                            <a
-                              key={entry.label}
-                              href={entry.href}
-                              className={className}
-                              onClick={() => setActiveMenu(null)}
-                            >
-                              {entry.label}
-                            </a>
-                          );
-                        }
-                        return (
-                          <button
-                            key={entry.label}
-                            disabled={entry.disabled || entry.muted}
-                            className={className}
-                            onClick={() => {
-                              entry.onClick?.();
-                              setActiveMenu(null);
-                            }}
-                          >
-                            {entry.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </nav>
+      <div className="hidden md:grid h-full w-full grid-cols-[272px_380px_minmax(0,1fr)_330px] overflow-hidden bg-[#171717] text-white">
+        <aside className="flex min-h-0 flex-col border-r border-[#272729] bg-[#171717] px-6 py-5">
+          <div className="mb-7 flex items-center gap-2">
+            <span className="text-[34px] font-black leading-none tracking-[-0.06em] text-white">cadio</span>
+            <span className="grid h-6 w-6 place-items-center rounded-md bg-[#20a7ff] text-xs font-black text-[#111]">C</span>
           </div>
-          <div className="flex items-center gap-3 text-xs text-[#bfc0c4]">
+          <button
+            onClick={() => void runPrompt("new part")}
+            className="mb-7 flex h-10 items-center justify-center gap-2 rounded-full border border-[#18a8ff] px-4 text-sm font-semibold text-white hover:bg-[#0e2633]"
+          >
+            <span className="text-xl leading-none">+</span>
+            New Creation
+          </button>
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-sm text-[#858585]">
+              <span className="text-lg">▦</span>
+              Creations
+            </div>
+            <div className="ml-3 border-l border-[#3a3a3a] pl-3">
+              {(creations.length ? creations : [{ id: "empty", title: "Dewalt Battery Holder 3D..." }]).map((creation) => (
+                <button
+                  key={creation.id}
+                  className="block w-full truncate py-2 text-left text-xs text-[#8d8d8d] hover:text-white"
+                >
+                  {creation.title}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-auto space-y-5 text-sm text-[#7f7f7f]">
+            <button className="block hover:text-white">GitHub</button>
+            <button className="block hover:text-white">Discord</button>
+            <div className="flex items-center gap-3 pt-3">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-[#28a6ff] to-[#b94cff]" />
+              <div>
+                <div className="font-semibold text-white">Joel Persson</div>
+                <div className="text-xs">fgdgfdggdgd@gmail.com</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <section className="grid min-h-0 grid-rows-[56px_1fr] border-r border-[#252527] bg-[#202020]">
+          <header className="flex items-center justify-between px-5">
+            <button className="grid h-8 w-8 place-items-center rounded-lg text-[#aaa] hover:bg-[#2b2b2c]">◫</button>
+            <div className="min-w-0 px-4 text-center text-sm font-semibold">
+              <div className="truncate">{projectTitle}</div>
+              <div className="text-[11px] text-[#858585]">{objects.length} parts</div>
+            </div>
+            <button className="text-sm font-semibold hover:text-[#18a8ff]">Share</button>
+          </header>
+          <div className="min-h-0 overflow-y-auto px-4 pb-4">
+            <AiPanel />
+          </div>
+        </section>
+
+        <main className="relative min-h-0 overflow-hidden bg-[#3a3a3a]">
+          <div className="absolute right-4 top-3 z-10 flex items-center gap-2 text-xs text-white/90">
             <span>{printerProfile?.name ?? "Printer"}</span>
-            <span className="rounded bg-[#303033] px-2 py-1">
+            <span className="rounded bg-[#2c2c2d] px-2 py-1">
               {printerVolume[0]} x {printerVolume[1]} x {printerVolume[2]} mm
             </span>
-            <span className="rounded bg-[#303033] px-2 py-1 text-[#67d6f5]">{status || "Ready"}</span>
+            <span className="rounded bg-[#2c2c2d] px-2 py-1 text-[#67d6f5]">{status || "Ready"}</span>
           </div>
-        </header>
+          <div className="absolute left-4 top-3 z-10 flex items-center gap-2">
+            <button
+              onClick={() => setExpertMode(!expertMode)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                expertMode ? "bg-white text-[#171717]" : "bg-[#262626] text-white hover:bg-[#333]"
+              }`}
+            >
+              Modeling
+            </button>
+            <button onClick={() => setTransformMode("translate")} className="rounded-full bg-[#262626] px-3 py-1.5 text-xs text-white hover:bg-[#333]">
+              Move
+            </button>
+            <button onClick={() => setTransformMode("rotate")} className="rounded-full bg-[#262626] px-3 py-1.5 text-xs text-white hover:bg-[#333]">
+              Rotate
+            </button>
+            <button onClick={() => setTransformMode("off")} className="rounded-full bg-[#262626] px-3 py-1.5 text-xs text-white hover:bg-[#333]">
+              Off
+            </button>
+          </div>
+          <CadViewport
+            objects={objects}
+            selectedObjectId={selectedObjectId}
+            selectedObjectIds={selectedObjectIds}
+            onSelectObject={(id) => void onSelectObject(id)}
+            transformMode={transformMode}
+            onTransformCommit={(id, t) => void onTransformCommit(id, t)}
+            printerVolume={printerVolume}
+            bounds={bounds}
+            expertMode={expertMode}
+            expertTool={expertTool}
+            selectionMode={selectionMode}
+            sketchHeight={sketchHeight}
+            operationAmount={operationAmount}
+            onSetExpertMode={setExpertMode}
+            onSetExpertTool={setExpertTool}
+            onSetSelectionMode={setSelectionMode}
+            onSetSketchHeight={setSketchHeight}
+            onSetOperationAmount={setOperationAmount}
+            onApplyExpertOperation={(op, amount, objectId) => void applyExpertOperation(op, amount, objectId)}
+            onCreatePrimitive={(payload) => void createPrimitive(payload)}
+          />
+        </main>
 
-        <div className="grid min-h-0 grid-cols-[280px_1fr_320px] gap-0 overflow-hidden">
-          <aside className="border-r border-[#343438] bg-[#282829] p-3 overflow-y-auto">
-            <AiPanel />
-          </aside>
-
-          <main className="min-h-0 overflow-hidden bg-[#202022]">
-            <CadViewport
-              objects={objects}
-              selectedObjectId={selectedObjectId}
-              selectedObjectIds={selectedObjectIds}
-              onSelectObject={(id) => void onSelectObject(id)}
-              transformMode={transformMode}
-              onTransformCommit={(id, t) => void onTransformCommit(id, t)}
-              printerVolume={printerVolume}
-              bounds={bounds}
-              expertMode={expertMode}
-              expertTool={expertTool}
-              selectionMode={selectionMode}
-              sketchHeight={sketchHeight}
-              operationAmount={operationAmount}
-              onSetExpertMode={setExpertMode}
-              onSetExpertTool={setExpertTool}
-              onSetSelectionMode={setSelectionMode}
-              onSetSketchHeight={setSketchHeight}
-              onSetOperationAmount={setOperationAmount}
-              onApplyExpertOperation={(op, amount, objectId) => void applyExpertOperation(op, amount, objectId)}
-              onCreatePrimitive={(payload) => void createPrimitive(payload)}
-            />
-          </main>
-
-          <aside className="border-l border-[#343438] bg-[#282829] p-3 overflow-y-auto">
-            <ObjectInspector />
-          </aside>
-        </div>
+        <aside className="min-h-0 overflow-hidden border-l border-[#303033] bg-[#1d1d1e]">
+          <ObjectInspector />
+        </aside>
       </div>
 
       {/* Mobile layout */}
