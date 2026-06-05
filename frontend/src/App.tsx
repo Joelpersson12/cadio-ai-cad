@@ -344,6 +344,50 @@ function MobileEditSheet({
   );
 }
 
+function MobileModelVariantBar() {
+  const { objects, switchSourceModel, status } = useCadStore();
+  const [loadingDirection, setLoadingDirection] = useState<"next" | "previous" | null>(null);
+
+  if (!objects.length) return null;
+
+  const switchModel = async (direction: "next" | "previous") => {
+    if (loadingDirection) return;
+    setLoadingDirection(direction);
+    try {
+      await switchSourceModel(direction);
+    } finally {
+      setLoadingDirection(null);
+    }
+  };
+
+  const loading = Boolean(loadingDirection);
+
+  return (
+    <div className="border-t border-cadio-border bg-[#181819]/95 px-3 py-2 backdrop-blur-sm">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cadio-muted">Model variants</span>
+        <span className="max-w-[45%] truncate text-[11px] text-cadio-muted">{status}</span>
+      </div>
+      <div className="grid grid-cols-[0.85fr_1.15fr] gap-2">
+        <button
+          onClick={() => void switchModel("previous")}
+          disabled={loading}
+          className="h-11 rounded-xl border border-[#333] bg-[#242426] px-3 text-sm font-semibold text-cadio-text disabled:opacity-45"
+        >
+          {loadingDirection === "previous" ? "Loading..." : "Previous"}
+        </button>
+        <button
+          onClick={() => void switchModel("next")}
+          disabled={loading}
+          className="h-11 rounded-xl border border-[#28c7df] bg-[#28c7df] px-3 text-sm font-black text-[#081225] shadow-[0_0_18px_rgba(40,199,223,0.22)] disabled:opacity-45"
+        >
+          {loadingDirection === "next" ? "Loading..." : "Next model"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function WorkspaceApp() {
   const {
     sessionId,
@@ -783,6 +827,8 @@ function WorkspaceApp() {
             showMeasurements={showMeasurements}
           />
         </div>
+
+        <MobileModelVariantBar />
 
         {/* Bottom AI input bar */}
         <div className="border-t border-cadio-border bg-cadio-panel/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur-sm">
