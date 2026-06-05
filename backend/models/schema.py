@@ -136,6 +136,7 @@ class TransformUpdateRequest(BaseModel):
     position: list[float] | None = None
     rotation: list[float] | None = None
     scale: list[float] | None = None
+    snap: str | None = None
 
 
 class PrimitiveCreateRequest(BaseModel):

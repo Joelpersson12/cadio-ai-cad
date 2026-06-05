@@ -232,6 +232,7 @@ export default function App() {
     applyExpertOperation,
     selectAllObjects,
     onDeleteObject,
+    snapSelectedObjects,
     undo,
     redo,
     runPrompt,
@@ -384,6 +385,22 @@ export default function App() {
                       {mode.label}
                     </button>
                   ))}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => void snapSelectedObjects("on_plate")}
+                    disabled={!selectedObjectId}
+                    className="rounded-lg border border-[#303033] bg-[#222] px-3 py-2 text-left text-xs font-semibold text-[#e6e6e6] hover:border-[#28c7df] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    On plate
+                  </button>
+                  <button
+                    onClick={() => void snapSelectedObjects("center_on_plate")}
+                    disabled={!selectedObjectId}
+                    className="rounded-lg border border-[#303033] bg-[#222] px-3 py-2 text-left text-xs font-semibold text-[#e6e6e6] hover:border-[#28c7df] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    Center on plate
+                  </button>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">

@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 from backend.services.cad_engine import TriMesh, shift_mesh_to_buildplate
 
 
-MAX_STL_BYTES = 16 * 1024 * 1024
+MAX_STL_BYTES = 32 * 1024 * 1024
 
 
 def _fetch_bytes(url: str, timeout: float = 12.0) -> bytes:

@@ -89,6 +89,7 @@ export async function updateObjectTransform(payload: {
   position?: [number, number, number];
   rotation?: [number, number, number];
   scale?: [number, number, number];
+  snap?: "on_plate" | "center_on_plate";
 }): Promise<ScenePayload> {
   return request<ScenePayload>("/api/object/transform", {
     method: "POST",

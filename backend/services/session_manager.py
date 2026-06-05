@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 import math
+import re
 from copy import deepcopy
 from datetime import datetime, timezone
 from threading import RLock
@@ -397,33 +398,58 @@ def _source_signal_summary(prompt: str) -> str:
     return f"source-search: {top}"
 
 
-def _select_source_file(files: list[Any], prompt: str, preferred_slots: int) -> Any | None:
+def _source_file_value(source_file: Any, key: str, default: Any = None) -> Any:
+    if isinstance(source_file, dict):
+        return source_file.get(key, default)
+    return getattr(source_file, key, default)
+
+
+def _source_file_score(source_file: Any, prompt: str, preferred_slots: int = 0) -> float:
     text = (prompt or "").lower()
+    prompt_words = {word for word in re.findall(r"[a-z0-9]+", text) if len(word) > 2}
+    name = str(_source_file_value(source_file, "name", "") or "").lower()
+    file_type = str(_source_file_value(source_file, "file_type", "") or "").lower()
+    size = max(0, int(_source_file_value(source_file, "file_size", 0) or 0))
+    name_words = {word for word in re.findall(r"[a-z0-9]+", name) if len(word) > 2}
+    value = 0.0
+    if file_type == "stl":
+        value += 90.0
+    elif file_type == "3mf":
+        value += 45.0
+    elif file_type in {"step", "stp"}:
+        value += 28.0
+    else:
+        value -= 30.0
+    if prompt_words:
+        value += 26.0 * (len(prompt_words & name_words) / len(prompt_words))
+    if size:
+        value += min(28.0, size / 120000.0)
+    if preferred_slots >= 3 and any(token in name for token in ("x3", "3x", "triple", "three")):
+        value += 60.0
+    if preferred_slots == 1 and any(token in name for token in ("x1", "single", "one")):
+        value += 60.0
+    if "bestfit" in name or "best-fit" in name:
+        value += 22.0
+    if "holder" in name:
+        value += 8.0
+    if "dewalt" in text and ("dw" in name or "dewalt" in name):
+        value += 8.0
+    if any(token in name for token in ("support", "raft", "gcode", "profile", "test", "old")):
+        value -= 24.0
+    if file_type == "step":
+        value += 6.0
+    return value
 
-    def score(source_file: Any) -> float:
-        name = str(getattr(source_file, "name", "") or "").lower()
-        file_type = str(getattr(source_file, "file_type", "") or "").lower()
-        value = 0.0
-        if file_type in {"stl", "step", "stp", "3mf"}:
-            value += 20.0
-        if preferred_slots >= 3 and any(token in name for token in ("x3", "3x", "triple", "three")):
-            value += 60.0
-        if preferred_slots <= 1 and any(token in name for token in ("x1", "single", "one")):
-            value += 60.0
-        if "bestfit" in name or "best-fit" in name:
-            value += 22.0
-        if "holder" in name:
-            value += 8.0
-        if "dewalt" in text and ("dw" in name or "dewalt" in name):
-            value += 8.0
-        if file_type == "step":
-            value += 6.0
-        return value
-
-    return max(files, key=score) if files else None
+def _rank_source_files(files: list[Any], prompt: str, preferred_slots: int = 0) -> list[Any]:
+    return sorted(files, key=lambda source_file: _source_file_score(source_file, prompt, preferred_slots), reverse=True)
 
 
-def _source_file_evidence(prompt: str, preferred_slots: int) -> tuple[dict[str, Any] | None, list[dict[str, Any]], dict[str, Any] | None]:
+def _select_source_file(files: list[Any], prompt: str, preferred_slots: int = 0) -> Any | None:
+    ranked = _rank_source_files(files, prompt, preferred_slots)
+    return ranked[0] if ranked else None
+
+
+def _source_file_evidence(prompt: str, preferred_slots: int = 0) -> tuple[dict[str, Any] | None, list[dict[str, Any]], dict[str, Any] | None]:
     try:
         from backend.services.design_providers import get_provider_registry, resolve_printables_model_files
 
@@ -437,7 +463,8 @@ def _source_file_evidence(prompt: str, preferred_slots: int) -> tuple[dict[str, 
         return None, [], None
 
     files = resolve_printables_model_files(top.url, limit=20) if top.source == "printables" else []
-    selected = _select_source_file(files, prompt, preferred_slots)
+    files = _rank_source_files(files, prompt, preferred_slots)
+    selected = files[0] if files else None
     return (
         top.to_dict(),
         [source_file.to_dict() for source_file in files],
@@ -456,7 +483,7 @@ def _slot_count_from_source_file(source_file: dict[str, Any] | None, fallback: i
     return fallback
 
 
-def _try_import_source_stl(source_file: dict[str, Any] | None) -> TriMesh | None:
+def _try_import_source_stl(source_file: dict[str, Any] | None, *, prefer_flat: bool = False) -> TriMesh | None:
     if not source_file:
         return None
     url = str(source_file.get("download_url") or "")
@@ -466,9 +493,118 @@ def _try_import_source_stl(source_file: dict[str, Any] | None) -> TriMesh | None
     try:
         from backend.services.stl_importer import import_stl_from_url
 
-        return import_stl_from_url(url, prefer_flat=True)
+        return import_stl_from_url(url, prefer_flat=prefer_flat)
     except Exception:
         return None
+
+
+def _mesh_dimensions(mesh: TriMesh) -> dict[str, float]:
+    if not mesh.verts:
+        return {"width": 1.0, "depth": 1.0, "height": 1.0}
+    xs = [vertex[0] for vertex in mesh.verts]
+    ys = [vertex[1] for vertex in mesh.verts]
+    zs = [vertex[2] for vertex in mesh.verts]
+    return {
+        "width": max(xs) - min(xs),
+        "depth": max(ys) - min(ys),
+        "height": max(zs) - min(zs),
+    }
+
+
+def _title_to_object_name(prompt: str, source_example: dict[str, Any] | None) -> str:
+    title = str((source_example or {}).get("title") or prompt or "source model").strip()
+    title = re.sub(r"[^a-zA-Z0-9]+", "_", title).strip("_").lower()
+    return title[:64] or "source_model"
+
+
+def _create_imported_source_object(
+    prompt: str,
+    shape: TriMesh,
+    source_example: dict[str, Any] | None,
+    source_files: list[dict[str, Any]],
+    selected_source_file: dict[str, Any] | None,
+) -> CadObject:
+    dimensions = _mesh_dimensions(shape)
+    params = dict(DEFAULT_PARAMETERS)
+    params.update(
+        {
+            "width": max(1.0, dimensions["width"]),
+            "depth": max(1.0, dimensions["depth"]),
+            "height": max(0.5, dimensions["height"]),
+            "thickness": max(0.5, min(12.0, dimensions["height"])),
+            "fillet_radius": 0.0,
+            "chamfer_size": 0.0,
+            "hole_count": 0.0,
+            "wall_thickness": 2.0,
+        }
+    )
+    source_obj = create_manual_object(_title_to_object_name(prompt, source_example), shape, params)
+    source_obj["primitive"] = "imported_source_mesh"
+    source_obj["template_hint"] = None
+    source_obj["assembly_source"] = f"imported-stl:{(source_example or {}).get('source') or 'source'}"
+    source_obj["imported_source_mesh"] = True
+    source_obj["source_model"] = {
+        "prompt": prompt,
+        "matched_example": source_example,
+        "files": source_files,
+        "selected_file": selected_source_file,
+    }
+    source_obj["operation_history"] = [
+        {
+            "operation": "source_import",
+            "source": (source_example or {}).get("title"),
+            "selected_file": (selected_source_file or {}).get("name"),
+        }
+    ]
+    source_obj["color"] = _battery_brand_color(prompt) if any(
+        brand in (prompt or "").lower() for brand in ("dewalt", "makita", "milwaukee", "ryobi", "bosch")
+    ) else "#a9aaad"
+    return source_obj
+
+
+def _try_replace_with_imported_source_model(
+    session: Session,
+    obj: CadObject,
+    prompt: str,
+    *,
+    preferred_slots: int = 0,
+    prefer_flat: bool = False,
+) -> tuple[list[str], CadObject | None]:
+    source_example, source_files, selected_source_file = _source_file_evidence(prompt, preferred_slots=preferred_slots)
+    candidates: list[dict[str, Any]] = []
+    for candidate in [selected_source_file, *source_files]:
+        if isinstance(candidate, dict) and candidate.get("id") not in {item.get("id") for item in candidates}:
+            candidates.append(candidate)
+
+    imported_shape = None
+    imported_file = selected_source_file
+    for candidate in candidates:
+        imported_shape = _try_import_source_stl(candidate, prefer_flat=prefer_flat)
+        if imported_shape is not None:
+            imported_file = candidate
+            break
+
+    if imported_shape is None:
+        return [], None
+
+    source_obj = _create_imported_source_object(
+        prompt,
+        imported_shape,
+        source_example,
+        source_files,
+        imported_file,
+    )
+    _remove_object_direct(session, obj["id"])
+    add_object(session, source_obj)
+    session["selected_object_id"] = ""
+    selected_file_name = (imported_file or {}).get("name")
+    source_title = (source_example or {}).get("title") or "source model"
+    return [
+        _source_signal_summary(prompt),
+        f"source-match: {source_title}",
+        f"source-files: selected {selected_file_name}" if selected_file_name else "source-files: selected public STL",
+        "imported real Printables STL mesh as starting geometry",
+    ], source_obj
 
 
 def _battery_brand(prompt: str) -> str:
@@ -776,6 +912,17 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
     recent_context = _recent_generation_context(session)
     if kind is None and "wall mount" in (prompt or "").lower() and any(word in recent_context for word in ("dewalt", "battery")):
         kind = "dewalt_battery_holder"
+
+    if kind not in {"dewalt_battery_holder", "battery_holder"}:
+        generic_actions, _source_obj = _try_replace_with_imported_source_model(
+            session,
+            obj,
+            prompt,
+            preferred_slots=0,
+        )
+        if generic_actions:
+            return generic_actions
+
     if kind not in {"phone_stand", "dewalt_battery_holder", "battery_holder"}:
         return []
 
@@ -807,7 +954,7 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
                 "wall_thickness": 3.0,
             }
         )
-        imported_shape = _try_import_source_stl(selected_source_file)
+        imported_shape = _try_import_source_stl(selected_source_file, prefer_flat=True)
         shape = imported_shape or _make_source_battery_holder_mesh(params)
         source_obj = create_manual_object(f"{brand}_battery_wall_mount", shape, params)
         source_obj["primitive"] = "source_battery_holder"
@@ -1251,6 +1398,8 @@ def rebuild_manual_object(obj: CadObject) -> None:
         obj["shape"] = _make_source_phone_stand_mesh(params)
     elif primitive == "source_battery_holder":
         obj["shape"] = _make_source_battery_holder_mesh(params)
+    elif primitive == "imported_source_mesh":
+        obj["shape"] = shift_mesh_to_buildplate(obj["shape"])
     else:
         fillet = max(0.0, float(params.get("fillet_radius", 0.0)))
         chamfer = max(0.0, float(params.get("chamfer_size", 0.0)))
@@ -1675,6 +1824,31 @@ def get_selected_object(session: Session) -> CadObject:
 def get_object(session: Session, object_id: str | None) -> CadObject | None:
     oid = object_id or session["selected_object_id"]
     return session["objects"].get(oid)
+
+
+def _world_extents(obj: CadObject) -> tuple[list[float], list[float]]:
+    mesh = obj["shape"].transformed(obj["transform"])
+    if not mesh.verts:
+        return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+    mins = [min(vertex[index] for vertex in mesh.verts) for index in range(3)]
+    maxs = [max(vertex[index] for vertex in mesh.verts) for index in range(3)]
+    return mins, maxs
+
+
+def place_object_on_plate(obj: CadObject) -> None:
+    """Move the object so its transformed bottom face sits on Z=0."""
+    mins, _maxs = _world_extents(obj)
+    obj["transform"].position[2] -= mins[2]
+
+
+def center_object_on_plate(obj: CadObject) -> None:
+    """Center the transformed object on the build plate and put it on Z=0."""
+    mins, maxs = _world_extents(obj)
+    center_x = (mins[0] + maxs[0]) / 2.0
+    center_y = (mins[1] + maxs[1]) / 2.0
+    obj["transform"].position[0] -= center_x
+    obj["transform"].position[1] -= center_y
+    place_object_on_plate(obj)
 
 
 def add_object(session: Session, obj: CadObject) -> None:

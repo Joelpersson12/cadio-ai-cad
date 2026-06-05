@@ -1,8 +1,8 @@
 """Design provider interfaces for external design sources.
 
-Providers return metadata only: titles, source URLs, images, and popularity
-signals. Cadio uses these as inspiration signals for its own parametric CAD
-generation; it does not copy or download model files.
+Providers return titles, source URLs, images, popularity signals, and when a
+site exposes public model files, file manifests that can seed Cadio with a
+real source mesh before falling back to generated CAD.
 """
 
 from __future__ import annotations
@@ -162,6 +162,50 @@ def _printables_download_url(preview_path: Any, name: str) -> str | None:
     return f"https://files.printables.com/{folder.lstrip('/')}/{filename}"
 
 
+def _printables_graphql_download_url(model_id: str, file_id: str, file_type: str) -> str | None:
+    if not model_id or not file_id or file_type != "stl":
+        return None
+    payload = json.dumps(
+        {
+            "query": (
+                "mutation GetDownloadLink($id: ID!, $modelId: ID!, $fileType: DownloadFileTypeEnum!, "
+                "$source: DownloadSourceEnum!) { getDownloadLink(id: $id, printId: $modelId, "
+                "fileType: $fileType, source: $source) { ok output { link ttl count } errors { field messages } } }"
+            ),
+            "variables": {
+                "id": str(file_id),
+                "modelId": str(model_id),
+                "fileType": "stl",
+                "source": "model_detail",
+            },
+        }
+    ).encode("utf-8")
+    req = Request(
+        "https://api.printables.com/graphql/",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": (
+                "Mozilla/5.0 (compatible; CadioBot/1.0; "
+                "+https://cadio-ai-cad-production.up.railway.app)"
+            ),
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(req, timeout=8.0) as res:
+            data = json.loads(res.read().decode("utf-8", errors="replace"))
+    except Exception:
+        return None
+    link = (
+        data.get("data", {})
+        .get("getDownloadLink", {})
+        .get("output", {})
+        .get("link")
+    )
+    return str(link) if isinstance(link, str) and link.startswith("http") else None
+
+
 def _walk_json(value: Any):
     yield value
     if isinstance(value, dict):
@@ -289,8 +333,13 @@ def _query_variants(query: str) -> list[str]:
         add("cdi box holder bracket")
     if {"holder", "mount", "bracket", "rack"} & words:
         add(f"{normalized} 3d print")
+        add(f"{normalized} printable")
+        add(f"popular {normalized} stl")
+    elif normalized:
+        add(f"{normalized} 3d print")
+        add(f"{normalized} stl")
 
-    return variants[:4]
+    return variants[:6]
 
 
 def _design_score(query: str, design: ExampleDesign) -> float:
@@ -365,6 +414,8 @@ def resolve_printables_model_files(model_url: str, limit: int = 20) -> list[Sour
 
     normalized = model_url.split("?")[0].rstrip("/")
     files_url = normalized if normalized.endswith("/files") else f"{normalized}/files"
+    model_id_match = re.search(r"/model/(\d+)", normalized)
+    model_id = model_id_match.group(1) if model_id_match else ""
     cache_key = files_url.lower()
     cached = _FILE_CACHE.get(cache_key)
     if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
@@ -405,6 +456,9 @@ def resolve_printables_model_files(model_url: str, limit: int = 20) -> list[Sour
                     if not name or not file_id:
                         continue
                     suffix = name.rsplit(".", 1)[-1].lower() if "." in name else list_key.rstrip("s")
+                    download_url = _printables_download_url(item.get("filePreviewPath"), name)
+                    if download_url is None and suffix == "stl":
+                        download_url = _printables_graphql_download_url(model_id, file_id, suffix)
                     source_file = SourceModelFile(
                         id=file_id,
                         name=name,
@@ -412,7 +466,7 @@ def resolve_printables_model_files(model_url: str, limit: int = 20) -> list[Sour
                         file_type=suffix,
                         file_size=int(item.get("fileSize") or 0),
                         preview_url=_media_url(item.get("filePreviewPath")),
-                        download_url=_printables_download_url(item.get("filePreviewPath"), name),
+                        download_url=download_url,
                         order=int(item.get("order") or 0),
                     )
                     files[file_id] = source_file

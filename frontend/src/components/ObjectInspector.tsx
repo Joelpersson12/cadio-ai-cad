@@ -125,6 +125,7 @@ export default function ObjectInspector() {
     patchParam,
     patchAppearance,
     setPrinter,
+    snapSelectedObjects,
     undo,
     redo,
   } = useCadStore();
@@ -187,6 +188,28 @@ export default function ObjectInspector() {
             </span>
           )}
         </label>
+
+        <section className="border-t border-[#303033] py-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Placement</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => void snapSelectedObjects("on_plate")}
+              disabled={!selectedObjectId}
+              className="rounded-lg bg-[#2a2a2b] px-3 py-2 text-xs font-semibold hover:bg-[#343436] disabled:opacity-35"
+            >
+              On plate
+            </button>
+            <button
+              onClick={() => void snapSelectedObjects("center_on_plate")}
+              disabled={!selectedObjectId}
+              className="rounded-lg bg-[#2a2a2b] px-3 py-2 text-xs font-semibold hover:bg-[#343436] disabled:opacity-35"
+            >
+              Center on plate
+            </button>
+          </div>
+        </section>
 
         <section className="border-t border-[#303033] py-5">
           <div className="mb-3 flex items-center justify-between">

@@ -82,6 +82,7 @@ interface CadState {
       scale?: [number, number, number];
     },
   ) => Promise<void>;
+  snapSelectedObjects: (snap: "on_plate" | "center_on_plate") => Promise<void>;
   createPrimitive: (payload: {
     primitive: ExpertTool;
     center: [number, number];
@@ -296,6 +297,33 @@ export const useCadStore = create<CadState>((set, get) => ({
         ...transform,
       });
       get().applyScenePayload(data);
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Error" });
+    }
+  },
+
+  snapSelectedObjects: async (snap) => {
+    const { sessionId, selectedObjectId, selectedObjectIds } = get();
+    const targets = selectedObjectIds.length > 0 ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : [];
+    if (!sessionId || !targets.length) return;
+    try {
+      let data: ScenePayload | null = null;
+      for (const objectId of targets) {
+        data = await apiUpdateTransform({
+          session_id: sessionId,
+          object_id: objectId,
+          snap,
+        });
+      }
+      if (data) {
+        get().applyScenePayload(data);
+        const stillPresent = targets.filter((id) => data?.objects.some((object) => object.id === id));
+        set({
+          selectedObjectIds: stillPresent,
+          selectedObjectId: stillPresent.includes(selectedObjectId) ? selectedObjectId : stillPresent[0] || "",
+          status: snap === "center_on_plate" ? "Centered on plate" : "Placed on plate",
+        });
+      }
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });
     }

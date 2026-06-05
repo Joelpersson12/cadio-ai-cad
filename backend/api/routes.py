@@ -52,6 +52,7 @@ from backend.services.session_manager import (
     add_mounting_holes_to_session,
     apply_expert_operation,
     bump_version,
+    center_object_on_plate,
     create_object,
     create_primitive_object,
     get_object,
@@ -59,6 +60,7 @@ from backend.services.session_manager import (
     get_selected_object,
     get_session,
     prepare_generation_target,
+    place_object_on_plate,
     rebuild_object,
     remove_object,
     add_object,
@@ -585,6 +587,11 @@ async def update_transform(
                 t.rotation = [float(v) for v in data.rotation]
             if data.scale and len(data.scale) == 3:
                 t.scale = [max(0.001, float(v)) for v in data.scale]
+            snap = (data.snap or "").strip().lower().replace("-", "_")
+            if snap in {"plate", "on_plate", "build_plate"}:
+                place_object_on_plate(obj)
+            elif snap in {"center", "center_plate", "center_on_plate"}:
+                center_object_on_plate(obj)
 
             bump_version(session)
             payload = build_scene_payload(session, include_mesh=True)
