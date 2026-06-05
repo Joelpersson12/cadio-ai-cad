@@ -17,7 +17,9 @@ const VIEW_COLORS = {
   hoveredBody: "#cfd1d2",
   edgeSubtle: "#202124",
   edgeStrong: "#e7faff",
-  edgeSelected: "#9eefff",
+  edgeSelected: "#f7fdff",
+  edgeSelectedInk: "#043642",
+  edgeSelectedDetail: "#d8fbff",
   edgeHover: "#38d5f4",
 };
 
@@ -201,21 +203,34 @@ function ScaledMesh({
         polygonOffsetUnits={1}
       />
     </mesh>
-    <lineSegments>
-      <edgesGeometry args={[geometry, 24]} />
+    <lineSegments renderOrder={selected ? 4 : 1}>
+      <edgesGeometry args={[geometry, selected ? 12 : 24]} />
       <lineBasicMaterial
-        color={selected ? VIEW_COLORS.edgeSelected : hovered ? VIEW_COLORS.edgeHover : VIEW_COLORS.edgeSubtle}
+        color={selected ? VIEW_COLORS.edgeSelectedInk : hovered ? VIEW_COLORS.edgeHover : VIEW_COLORS.edgeSubtle}
         transparent
-        opacity={selected ? 0.86 : hovered ? 0.72 : 0.28}
+        opacity={selected ? 0.98 : hovered ? 0.72 : 0.28}
+        depthTest
       />
     </lineSegments>
-    {((selected && selectionMode !== "body") || (hovered && expertMode && selectionMode === "edge")) && (
-      <lineSegments>
+    {selected && (
+      <lineSegments renderOrder={5}>
         <edgesGeometry args={[geometry, 8]} />
         <lineBasicMaterial
-          color={selectionMode === "edge" ? VIEW_COLORS.edgeStrong : selectionMode === "face" ? "#b9a7ff" : VIEW_COLORS.edgeSelected}
+          color={VIEW_COLORS.edgeSelected}
+          transparent
+          opacity={0.78}
+          depthTest
+        />
+      </lineSegments>
+    )}
+    {((selected && selectionMode !== "body") || (hovered && expertMode && selectionMode === "edge")) && (
+      <lineSegments renderOrder={6}>
+        <edgesGeometry args={[geometry, 8]} />
+        <lineBasicMaterial
+          color={selectionMode === "edge" ? VIEW_COLORS.edgeStrong : selectionMode === "face" ? "#b9a7ff" : VIEW_COLORS.edgeSelectedDetail}
           transparent
           opacity={hovered && !selected ? 1 : 0.9}
+          depthTest
         />
       </lineSegments>
     )}

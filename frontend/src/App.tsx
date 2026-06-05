@@ -9,6 +9,7 @@ import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
 import type { ExampleObject } from "./components/ExampleBrowser";
 import type { ExpertTool, MaterialProfile, SelectionMode, TransformMode } from "./utils/types";
+import { exportUrl } from "./utils/api";
 
 function promptFromHistory(item: Record<string, unknown> | undefined) {
   const value = item?.prompt ?? item?.command ?? item?.input;
@@ -53,6 +54,13 @@ const TRANSFORM_MODES: Array<{ id: TransformMode; label: string }> = [
   { id: "translate", label: "Move" },
   { id: "rotate", label: "Rotate" },
   { id: "scale", label: "Scale" },
+];
+
+const EXPORT_FORMATS = [
+  { value: "stl", label: "STL", hint: "Most slicers" },
+  { value: "3mf", label: "3MF", hint: "Modern slicers" },
+  { value: "obj", label: "OBJ", hint: "Mesh editors" },
+  { value: "amf", label: "AMF", hint: "Legacy printers" },
 ];
 
 const FALLBACK_MATERIAL_ENTRIES: Array<[string, MaterialProfile]> = [
@@ -105,7 +113,7 @@ function MobileExamplesSheet({
         className={`fixed bottom-0 left-0 right-0 z-50 md:hidden bg-[#16202e] border-t border-cadio-border rounded-t-2xl transition-transform duration-300 ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
-        style={{ maxHeight: "80vh", overflowY: "auto" }}
+        style={{ maxHeight: "80dvh", overflowY: "auto" }}
       >
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-2">
@@ -118,6 +126,72 @@ function MobileExamplesSheet({
             onSelectExample={handleSelect}
             isLoading={isLoading}
           />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MobileExportSheet({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { sessionId, printSettings, objects } = useCadStore();
+  const [format, setFormat] = useState("stl");
+
+  return (
+    <>
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={onClose}
+        />
+      )}
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t border-cadio-border bg-[#1f1f20] transition-transform duration-300 md:hidden ${
+          open ? "translate-y-0" : "translate-y-full"
+        }`}
+        style={{ maxHeight: "70dvh", overflowY: "auto" }}
+      >
+        <div className="flex justify-center pb-2 pt-3">
+          <div className="h-1 w-10 rounded-full bg-cadio-border" />
+        </div>
+        <div className="flex flex-col gap-4 px-5 pb-8">
+          <div>
+            <h3 className="text-sm font-semibold text-cadio-text">Export</h3>
+            <p className="mt-1 text-xs text-cadio-muted">
+              {objects.length || 0} parts
+              {printSettings ? `, ${printSettings.scale.recommended_scale_percent.toFixed(1)}% suggested scale` : ""}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {EXPORT_FORMATS.map((item) => (
+              <button
+                key={item.value}
+                onClick={() => setFormat(item.value)}
+                className={`rounded-xl border px-3 py-3 text-left ${
+                  format === item.value
+                    ? "border-cadio-accent bg-[#14323a] text-white"
+                    : "border-cadio-border bg-[#282829] text-cadio-text"
+                }`}
+              >
+                <span className="block text-sm font-semibold">{item.label}</span>
+                <span className="mt-1 block text-[11px] text-cadio-muted">{item.hint}</span>
+              </button>
+            ))}
+          </div>
+          <a
+            href={sessionId ? exportUrl(sessionId, format) : "#"}
+            download={sessionId ? `cadio-${sessionId}.${format}` : undefined}
+            className={`flex h-12 items-center justify-center rounded-xl text-sm font-semibold ${
+              sessionId ? "bg-[#e8e8e8] text-[#171717]" : "bg-[#333] text-[#777]"
+            }`}
+          >
+            Download {format.toUpperCase()}
+          </a>
         </div>
       </div>
     </>
@@ -154,7 +228,7 @@ function MobileEditSheet({
         className={`fixed bottom-0 left-0 right-0 z-50 md:hidden bg-[#16202e] border-t border-cadio-border rounded-t-2xl transition-transform duration-300 ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
-        style={{ maxHeight: "70vh", overflowY: "auto" }}
+        style={{ maxHeight: "70dvh", overflowY: "auto" }}
       >
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-2">
@@ -301,6 +375,7 @@ export default function App() {
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
+  const [mobileExportOpen, setMobileExportOpen] = useState(false);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
     await runPrompt(example.prompt);
@@ -591,16 +666,25 @@ export default function App() {
       </div>
 
       {/* Mobile layout */}
-      <div className="md:hidden w-full h-full flex flex-col">
+      <div className="md:hidden flex h-[100dvh] w-full flex-col bg-[#202022]">
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-2 bg-cadio-panel/90 border-b border-cadio-border backdrop-blur-sm">
-          <span className="text-sm font-bold text-cadio-text tracking-widest">CADIO</span>
-          <div className="flex gap-2">
+        <div className="flex items-center justify-between border-b border-cadio-border bg-cadio-panel/95 px-4 py-2 backdrop-blur-sm">
+          <div className="min-w-0">
+            <span className="block text-sm font-bold tracking-widest text-cadio-text">CADIO</span>
+            <span className="block truncate text-[11px] text-cadio-muted">{projectTitle}</span>
+          </div>
+          <div className="flex shrink-0 gap-2">
             <button
               onClick={() => setMobileExamplesOpen(true)}
               className="px-3 py-1.5 rounded-lg bg-[#1a2535] text-cadio-accent text-xs font-semibold hover:bg-[#243048]"
             >
               Ideas
+            </button>
+            <button
+              onClick={() => setMobileExportOpen(true)}
+              className="rounded-lg bg-[#2b2b2d] px-3 py-1.5 text-xs font-semibold text-cadio-text"
+            >
+              Export
             </button>
             <button
               onClick={() => setMobileEditOpen(true)}
@@ -633,17 +717,13 @@ export default function App() {
           >
             Center
           </button>
-          {TRANSFORM_MODES.map((mode) => (
-            <button
-              key={mode.id}
-              onClick={() => setTransformMode(mode.id)}
-              className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold ${
-                transformMode === mode.id ? "bg-cadio-accent text-[#101010]" : "bg-[#2b2b2d] text-cadio-text"
-              }`}
-            >
-              {mode.label}
-            </button>
-          ))}
+          <button
+            onClick={() => void onDeleteObject()}
+            disabled={!selectedObjectId}
+            className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-[#ff8b8b] disabled:opacity-35"
+          >
+            Delete
+          </button>
         </div>
 
         {/* Viewport - takes most space */}
@@ -662,7 +742,7 @@ export default function App() {
         </div>
 
         {/* Bottom AI input bar */}
-        <div className="bg-cadio-panel/90 border-t border-cadio-border backdrop-blur-sm px-3 py-2">
+        <div className="border-t border-cadio-border bg-cadio-panel/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur-sm">
           <MobileAiBar />
         </div>
       </div>
@@ -672,6 +752,11 @@ export default function App() {
         open={mobileExamplesOpen}
         onClose={() => setMobileExamplesOpen(false)}
         onSelectExample={handleMobileExampleSelect}
+      />
+
+      <MobileExportSheet
+        open={mobileExportOpen}
+        onClose={() => setMobileExportOpen(false)}
       />
 
       {/* Mobile edit sheet */}

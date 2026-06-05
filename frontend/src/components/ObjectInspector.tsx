@@ -27,6 +27,13 @@ const FALLBACK_MATERIAL_ENTRIES: Array<[string, MaterialProfile]> = [
   ],
 ];
 
+const EXPORT_FORMATS = [
+  { value: "stl", label: "STL", hint: "Most slicers" },
+  { value: "3mf", label: "3MF", hint: "Modern slicers" },
+  { value: "obj", label: "OBJ", hint: "Mesh editors" },
+  { value: "amf", label: "AMF", hint: "Legacy printers" },
+];
+
 const PARAM_META: Record<string, ParamMeta> = {
   num_batteries: { label: "Num Batteries", min: 1, max: 6, step: 1 },
   battery_slots: { label: "Num Slots", min: 1, max: 6, step: 1 },
@@ -166,6 +173,7 @@ function ParameterRow({
 }
 
 export default function ObjectInspector() {
+  const [exportFormat, setExportFormat] = useState("stl");
   const {
     objects,
     selectedObjectId,
@@ -427,13 +435,31 @@ export default function ObjectInspector() {
       </div>
 
       <div className="border-t border-[#303033] p-5">
+        <label className="mb-3 block">
+          <span className="mb-2 block text-xs text-[#a9a9a9]">Download format</span>
+          <select
+            value={exportFormat}
+            onChange={(e) => setExportFormat(e.target.value)}
+            className="w-full rounded-lg border border-[#333] bg-[#252526] px-3 py-2 text-sm text-white outline-none"
+          >
+            {EXPORT_FORMATS.map((format) => (
+              <option value={format.value} key={format.value}>
+                {format.label} - {format.hint}
+              </option>
+            ))}
+          </select>
+        </label>
         <a
-          href={sessionId ? exportUrl(sessionId, "stl") : "#"}
+          href={sessionId ? exportUrl(sessionId, exportFormat) : "#"}
+          download={sessionId ? `cadio-${sessionId}.${exportFormat}` : undefined}
           className={`flex h-12 items-center justify-center rounded-lg text-sm font-semibold ${
             sessionId ? "bg-[#e8e8e8] text-[#171717] hover:bg-white" : "bg-[#333] text-[#777]"
           }`}
         >
+          <span>Download {exportFormat.toUpperCase()}</span>
+          <span className="hidden">
           ⇩ STL
+          </span>
         </a>
       </div>
     </div>
