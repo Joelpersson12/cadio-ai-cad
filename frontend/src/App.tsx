@@ -8,6 +8,7 @@ import AiPanel from "./components/AiPanel";
 import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
 import type { ExampleObject } from "./components/ExampleBrowser";
+import { exportUrl } from "./utils/api";
 
 // Mobile examples sheet for inspiration
 function MobileExamplesSheet({
@@ -175,6 +176,7 @@ export default function App() {
     applyScenePayload,
     onSelectObject,
     onTransformCommit,
+    setTransformMode,
     setExpertMode,
     setExpertTool,
     setSelectionMode,
@@ -182,11 +184,16 @@ export default function App() {
     setOperationAmount,
     createPrimitive,
     applyExpertOperation,
+    selectAllObjects,
+    onDeleteObject,
+    undo,
+    redo,
     runPrompt,
   } = useCadStore();
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
     await runPrompt(example.prompt);
@@ -208,6 +215,46 @@ export default function App() {
       ]
     : [220, 220, 250];
 
+  const menuItems: Record<string, Array<{
+    label: string;
+    onClick?: () => void;
+    href?: string;
+    disabled?: boolean;
+    muted?: boolean;
+  }>> = {
+    File: [
+      { label: "New Part", onClick: () => void runPrompt("new part") },
+      { label: "Export STL", href: sessionId ? exportUrl(sessionId, "stl") : undefined, disabled: !sessionId },
+      { label: "Export 3MF", href: sessionId ? exportUrl(sessionId, "3mf") : undefined, disabled: !sessionId },
+      { label: "Export OBJ", href: sessionId ? exportUrl(sessionId, "obj") : undefined, disabled: !sessionId },
+    ],
+    Edit: [
+      { label: "Undo", onClick: () => void undo() },
+      { label: "Redo", onClick: () => void redo() },
+      { label: "Duplicate", onClick: () => void runPrompt("Duplicate object") },
+      { label: "Delete Selected", onClick: () => void onDeleteObject() },
+    ],
+    Item: [
+      { label: "Select All Parts", onClick: selectAllObjects },
+      { label: "Transform Off", onClick: () => setTransformMode("off") },
+      { label: "Move", onClick: () => setTransformMode("translate") },
+      { label: "Rotate", onClick: () => setTransformMode("rotate") },
+      { label: "Scale", onClick: () => setTransformMode("scale") },
+    ],
+    View: [
+      { label: expertMode ? "Exit Modeling" : "Enter Modeling", onClick: () => setExpertMode(!expertMode) },
+      { label: "Body Selection", onClick: () => setSelectionMode("body") },
+      { label: "Face Selection", onClick: () => setSelectionMode("face") },
+      { label: "Edge Selection", onClick: () => setSelectionMode("edge") },
+    ],
+    Help: [
+      { label: "LMB: select or sketch", muted: true },
+      { label: "RMB: rotate camera", muted: true },
+      { label: "Scroll button: pan camera", muted: true },
+      { label: "Wheel: zoom", muted: true },
+    ],
+  };
+
   return (
     <div className="w-full h-full relative bg-cadio-bg text-cadio-text">
       {/* Desktop layout */}
@@ -219,11 +266,54 @@ export default function App() {
               <span>Untitled Project</span>
               <span className="text-[#8f9094]">{objects.length} parts</span>
             </div>
-            <nav className="flex h-full items-center gap-1 text-[#d7d7da]">
-              {["File", "Edit", "Item", "View", "Help"].map((item) => (
-                <button key={item} className="rounded px-2 py-1 hover:bg-[#343437]">
-                  {item}
-                </button>
+            <nav className="relative flex h-full items-center gap-1 text-[#d7d7da]">
+              {Object.entries(menuItems).map(([menu, entries]) => (
+                <div key={menu} className="relative">
+                  <button
+                    onClick={() => setActiveMenu((current) => (current === menu ? null : menu))}
+                    className={`rounded px-2 py-1 ${activeMenu === menu ? "bg-[#3a3a3d]" : "hover:bg-[#343437]"}`}
+                  >
+                    {menu}
+                  </button>
+                  {activeMenu === menu && (
+                    <div className="absolute left-0 top-8 z-50 min-w-44 rounded-md border border-[#45464a] bg-[#2c2c2f] p-1 shadow-2xl">
+                      {entries.map((entry) => {
+                        const className = `block w-full rounded px-3 py-2 text-left text-xs ${
+                          entry.disabled
+                            ? "cursor-not-allowed text-[#68696d]"
+                            : entry.muted
+                              ? "cursor-default text-[#a6a7ab]"
+                              : "text-[#f2f2f3] hover:bg-[#3d3d42]"
+                        }`;
+                        if (entry.href && !entry.disabled) {
+                          return (
+                            <a
+                              key={entry.label}
+                              href={entry.href}
+                              className={className}
+                              onClick={() => setActiveMenu(null)}
+                            >
+                              {entry.label}
+                            </a>
+                          );
+                        }
+                        return (
+                          <button
+                            key={entry.label}
+                            disabled={entry.disabled || entry.muted}
+                            className={className}
+                            onClick={() => {
+                              entry.onClick?.();
+                              setActiveMenu(null);
+                            }}
+                          >
+                            {entry.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               ))}
             </nav>
           </div>

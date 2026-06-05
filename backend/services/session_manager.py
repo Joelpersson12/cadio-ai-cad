@@ -233,6 +233,58 @@ def _create_cylinder_component(
     return obj
 
 
+def _make_triangular_prism(width: float, depth: float, height: float) -> TriMesh:
+    """Create a right-triangle side gusset extruded along X."""
+    mesh = TriMesh()
+    hw = width / 2.0
+    hd = depth / 2.0
+    points = [
+        (-hw, -hd, 0.0),
+        (-hw, hd, 0.0),
+        (-hw, hd, height),
+        (hw, -hd, 0.0),
+        (hw, hd, 0.0),
+        (hw, hd, height),
+    ]
+    ids = [mesh.add_vertex(point) for point in points]
+    mesh.add_tri(ids[0], ids[2], ids[1])
+    mesh.add_tri(ids[3], ids[4], ids[5])
+    mesh.add_quad(ids[0], ids[3], ids[5], ids[2])
+    mesh.add_quad(ids[1], ids[2], ids[5], ids[4])
+    mesh.add_quad(ids[0], ids[1], ids[4], ids[3])
+    return mesh
+
+
+def _create_gusset_component(
+    name: str,
+    width: float,
+    depth: float,
+    height: float,
+    position: list[float],
+    params: dict[str, float],
+    *,
+    color: str = "#a9aaad",
+) -> CadObject:
+    part_params = dict(DEFAULT_PARAMETERS)
+    part_params.update(params)
+    part_params.update({
+        "width": float(width),
+        "depth": float(depth),
+        "height": float(height),
+        "thickness": float(width),
+    })
+    obj = create_manual_object(name, _make_triangular_prism(width, depth, height), part_params)
+    obj["primitive"] = "gusset"
+    obj["template_component"] = True
+    obj["color"] = color
+    obj["transform"] = Transform(
+        position=[float(position[0]), float(position[1]), float(position[2])],
+        rotation=[0.0, 0.0, 0.0],
+        scale=[1.0, 1.0, 1.0],
+    )
+    return obj
+
+
 def _remove_object_direct(session: Session, object_id: str) -> None:
     if object_id in session["objects"]:
         del session["objects"][object_id]
@@ -307,18 +359,27 @@ def replace_object_with_template_assembly(
             _create_box_component("headphone_cable_notch", width * 0.45, thickness * 1.3, thickness * 1.2, [0.0, -depth / 2.0 + thickness, thickness], params, color=color),
         ]
     elif name == "phone stand":
-        width = max(78.0, min(130.0, float(params.get("width", 92.0))))
-        depth = max(75.0, min(130.0, float(params.get("depth", 92.0))))
-        height = max(92.0, min(170.0, float(params.get("height", 122.0))))
-        thickness = max(5.0, min(12.0, float(params.get("thickness", 7.0))))
-        angle = max(60.0, min(74.0, float(params.get("angle", 68.0))))
+        params = dict(params)
+        params["fillet_radius"] = max(2.5, float(params.get("fillet_radius", 3.0)))
+        width = max(76.0, min(115.0, float(params.get("width", 88.0))))
+        depth = max(72.0, min(112.0, float(params.get("depth", 84.0))))
+        height = max(92.0, min(145.0, float(params.get("height", 116.0))))
+        thickness = max(5.5, min(10.0, float(params.get("thickness", 7.0))))
+        angle = max(62.0, min(72.0, float(params.get("angle", 68.0))))
+        lip_depth = max(10.0, thickness * 1.55)
+        lip_height = max(12.0, thickness * 2.0)
+        panel_width = width * 0.78
+        panel_height = height * 0.88
+        gusset_height = height * 0.46
+        gusset_depth = depth * 0.56
+        brace_x = width * 0.38
         parts = [
-            _create_box_component("phone_base", width, depth, thickness, [0.0, 0.0, 0.0], params, color=color),
-            _create_box_component("phone_left_lip", width * 0.36, thickness * 1.45, thickness * 2.0, [-width * 0.26, -depth / 2.0 + thickness, thickness], params, color=color),
-            _create_box_component("phone_right_lip", width * 0.36, thickness * 1.45, thickness * 2.0, [width * 0.26, -depth / 2.0 + thickness, thickness], params, color=color),
-            _create_box_component("phone_back_support", width * 0.70, thickness, height, [0.0, -depth * 0.05, thickness], params, rotation=[angle - 90.0, 0.0, 0.0], color=color),
-            _create_box_component("phone_left_rail", max(thickness * 0.65, 4.5), depth * 0.54, thickness * 1.25, [-width * 0.41, -depth * 0.02, thickness], params, color=color),
-            _create_box_component("phone_right_rail", max(thickness * 0.65, 4.5), depth * 0.54, thickness * 1.25, [width * 0.41, -depth * 0.02, thickness], params, color=color),
+            _create_box_component("phone_base_plate", width, depth, thickness, [0.0, 0.0, 0.0], params, color=color),
+            _create_box_component("phone_left_front_tab", width * 0.34, lip_depth, lip_height, [-width * 0.27, -depth / 2.0 + lip_depth / 2.0, thickness], params, color=color),
+            _create_box_component("phone_right_front_tab", width * 0.34, lip_depth, lip_height, [width * 0.27, -depth / 2.0 + lip_depth / 2.0, thickness], params, color=color),
+            _create_box_component("phone_back_panel", panel_width, thickness, panel_height, [0.0, -depth * 0.06, thickness], params, rotation=[angle - 90.0, 0.0, 0.0], color=color),
+            _create_gusset_component("phone_left_side_support", thickness * 1.15, gusset_depth, gusset_height, [-brace_x, -depth * 0.03, thickness], params, color=color),
+            _create_gusset_component("phone_right_side_support", thickness * 1.15, gusset_depth, gusset_height, [brace_x, -depth * 0.03, thickness], params, color=color),
         ]
     elif name == "battery holder":
         slots = max(1, min(4, int(round(float(params.get("battery_slots", 1.0))))))
