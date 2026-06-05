@@ -2,7 +2,7 @@
  
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Grid, GizmoHelper, GizmoViewport, OrbitControls, TransformControls } from "@react-three/drei";
+import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
 
@@ -21,12 +21,202 @@ const VIEW_COLORS = {
   edgeSelectedInk: "#043642",
   edgeSelectedDetail: "#d8fbff",
   edgeHover: "#38d5f4",
+  measure: "#f8fafc",
+  measureAccent: "#facc15",
 };
 
 function visibleBodyColor(obj: CadObject, selected: boolean, hovered: boolean) {
   if (selected) return VIEW_COLORS.selectedBody;
   if (hovered) return obj.color && obj.color !== "#a9aaad" ? obj.color : VIEW_COLORS.hoveredBody;
   return obj.color && obj.color !== "#a9aaad" ? obj.color : VIEW_COLORS.neutralBody;
+}
+
+type MeasurementSpec = {
+  id: string;
+  name: string;
+  min: THREE.Vector3;
+  max: THREE.Vector3;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+  widthMm: number;
+  depthMm: number;
+  heightMm: number;
+  longSideMm: number;
+  shortSideMm: number;
+  offset: number;
+};
+
+function formatMm(value: number) {
+  if (!Number.isFinite(value)) return "0 mm";
+  const rounded = Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(1);
+  return `${rounded.replace(/\.0$/, "")} mm`;
+}
+
+function meshBounds(obj: CadObject) {
+  if (!obj.mesh?.positions.length) return null;
+  const min = new THREE.Vector3(Infinity, Infinity, Infinity);
+  const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  const source = obj.mesh.positions;
+  for (let i = 0; i < source.length; i += 3) {
+    const point = new THREE.Vector3(source[i], source[i + 2], source[i + 1]);
+    min.min(point);
+    max.max(point);
+  }
+  if (![min.x, min.y, min.z, max.x, max.y, max.z].every(Number.isFinite)) return null;
+  return { min, max };
+}
+
+function objectScaleFactor(bounds: { min: THREE.Vector3; max: THREE.Vector3 }, printerVolume: [number, number, number]) {
+  const sx = bounds.max.x - bounds.min.x;
+  const sy = bounds.max.y - bounds.min.y;
+  const sz = bounds.max.z - bounds.min.z;
+  const [printerWidth, printerDepth, printerHeight] = printerVolume;
+  return Math.min(
+    printerWidth / (sx || 1),
+    printerHeight / (sy || 1),
+    printerDepth / (sz || 1),
+    1,
+  );
+}
+
+function makeMeasurementSpec(obj: CadObject, printerVolume: [number, number, number]): MeasurementSpec | null {
+  const bounds = meshBounds(obj);
+  if (!bounds) return null;
+  const scaleFactor = objectScaleFactor(bounds, printerVolume);
+  const t = obj.transform;
+  const sx = t?.scale?.[0] ?? 1;
+  const sy = t?.scale?.[1] ?? 1;
+  const sz = t?.scale?.[2] ?? 1;
+  const rawWidth = bounds.max.x - bounds.min.x;
+  const rawHeight = bounds.max.y - bounds.min.y;
+  const rawDepth = bounds.max.z - bounds.min.z;
+  const widthMm = Math.abs(rawWidth * sx);
+  const depthMm = Math.abs(rawDepth * sy);
+  const heightMm = Math.abs(rawHeight * sz);
+  const displayBaseScale = Math.max(scaleFactor * Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz), 1), 0.01);
+
+  return {
+    id: obj.id,
+    name: obj.name,
+    min: bounds.min,
+    max: bounds.max,
+    position: [
+      (t?.position?.[0] ?? 0) * scaleFactor,
+      (t?.position?.[2] ?? 0) * scaleFactor,
+      (t?.position?.[1] ?? 0) * scaleFactor,
+    ],
+    rotation: [
+      THREE.MathUtils.degToRad(t?.rotation?.[0] ?? 0),
+      THREE.MathUtils.degToRad(t?.rotation?.[2] ?? 0),
+      THREE.MathUtils.degToRad(t?.rotation?.[1] ?? 0),
+    ],
+    scale: [
+      sx * scaleFactor,
+      sz * scaleFactor,
+      sy * scaleFactor,
+    ],
+    widthMm,
+    depthMm,
+    heightMm,
+    longSideMm: Math.max(widthMm, depthMm),
+    shortSideMm: Math.min(widthMm, depthMm),
+    offset: Math.max(8 / displayBaseScale, Math.max(rawWidth, rawDepth, rawHeight) * 0.035),
+  };
+}
+
+function DimensionLine({
+  start,
+  end,
+  label,
+  color = VIEW_COLORS.measure,
+}: {
+  start: [number, number, number];
+  end: [number, number, number];
+  label: string;
+  color?: string;
+}) {
+  const midpoint: [number, number, number] = [
+    (start[0] + end[0]) / 2,
+    (start[1] + end[1]) / 2,
+    (start[2] + end[2]) / 2,
+  ];
+  return (
+    <group>
+      <line>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            args={[new Float32Array([...start, ...end]), 3]}
+          />
+        </bufferGeometry>
+        <lineBasicMaterial color={color} transparent opacity={0.96} depthTest={false} />
+      </line>
+      {[start, end].map((point, index) => (
+        <mesh key={index} position={point}>
+          <sphereGeometry args={[1.5, 10, 10]} />
+          <meshBasicMaterial color={color} depthTest={false} />
+        </mesh>
+      ))}
+      <Html position={midpoint} center distanceFactor={12} style={{ pointerEvents: "none" }}>
+        <div className="whitespace-nowrap rounded-md border border-white/20 bg-[#111]/90 px-2 py-1 text-[11px] font-semibold text-white shadow-lg">
+          {label}
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+function MeasurementOverlay({ specs }: { specs: MeasurementSpec[] }) {
+  return (
+    <>
+      {specs.map((spec) => {
+        const { min, max, offset } = spec;
+        const baseY = min.y - offset;
+        const frontZ = min.z - offset;
+        const sideX = max.x + offset;
+        return (
+          <group
+            key={spec.id}
+            position={spec.position}
+            rotation={spec.rotation}
+            scale={spec.scale}
+          >
+            <group position={[(min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2]}>
+              <lineSegments renderOrder={18}>
+                <edgesGeometry args={[new THREE.BoxGeometry(max.x - min.x, max.y - min.y, max.z - min.z)]} />
+                <lineBasicMaterial color={VIEW_COLORS.measureAccent} transparent opacity={0.8} depthTest={false} />
+              </lineSegments>
+            </group>
+            <DimensionLine
+              start={[min.x, baseY, frontZ]}
+              end={[max.x, baseY, frontZ]}
+              label={`Width ${formatMm(spec.widthMm)}`}
+              color={VIEW_COLORS.measureAccent}
+            />
+            <DimensionLine
+              start={[sideX, baseY, min.z]}
+              end={[sideX, baseY, max.z]}
+              label={`Depth ${formatMm(spec.depthMm)}`}
+            />
+            <DimensionLine
+              start={[sideX, min.y, frontZ]}
+              end={[sideX, max.y, frontZ]}
+              label={`Height ${formatMm(spec.heightMm)}`}
+            />
+            <Html position={[(min.x + max.x) / 2, max.y + offset, (min.z + max.z) / 2]} center distanceFactor={14} style={{ pointerEvents: "none" }}>
+              <div className="min-w-44 rounded-lg border border-[#facc15]/50 bg-[#111]/92 px-3 py-2 text-[11px] text-white shadow-xl">
+                <div className="mb-1 truncate font-semibold text-[#facc15]">{spec.name}</div>
+                <div>Long side: {formatMm(spec.longSideMm)}</div>
+                <div>Short side: {formatMm(spec.shortSideMm)}</div>
+                <div>Height: {formatMm(spec.heightMm)}</div>
+              </div>
+            </Html>
+          </group>
+        );
+      })}
+    </>
+  );
 }
  
 // ---------------------------------------------------------------------------
@@ -379,6 +569,7 @@ interface CadViewportProps {
   onSetOperationAmount?: (amount: number) => void;
   onApplyExpertOperation?: (operation: string, amountOverride?: number, objectIdOverride?: string) => void;
   mobileMode?: boolean;
+  showMeasurements?: boolean;
 }
 
 function SketchPlane({
@@ -516,6 +707,7 @@ export default function CadViewport({
   onSetOperationAmount,
   onApplyExpertOperation,
   mobileMode = false,
+  showMeasurements = false,
 }: CadViewportProps) {
   const [edgeOperation, setEdgeOperation] = useState("chamfer");
   const [edgeInput, setEdgeInput] = useState<{
@@ -526,6 +718,14 @@ export default function CadViewport({
     value: string;
   } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
+  const measurementSpecs = useMemo(() => {
+    if (!showMeasurements) return [];
+    const selectedIds = new Set(selectedObjectIds.length ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : []);
+    const targets = selectedIds.size ? objects.filter((obj) => selectedIds.has(obj.id)) : objects;
+    return targets
+      .map((obj) => makeMeasurementSpec(obj, printerVolume))
+      .filter((spec): spec is MeasurementSpec => Boolean(spec));
+  }, [objects, printerVolume, selectedObjectId, selectedObjectIds, showMeasurements]);
 
   return (
     <div
@@ -689,6 +889,7 @@ export default function CadViewport({
           mobileMode={mobileMode}
         />
       ))}
+      {showMeasurements && <MeasurementOverlay specs={measurementSpecs} />}
  
       {/* Camera auto-fit */}
       <CameraController bounds={bounds} fitKey={objects.length ? objects.map((o) => o.id).join("|") : "empty"} />
@@ -723,6 +924,16 @@ export default function CadViewport({
         />
       </GizmoHelper>
       </Canvas>
+      {showMeasurements && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[min(340px,calc(100%-1.5rem))] rounded-lg border border-[#facc15]/40 bg-[#151515]/88 px-3 py-2 text-xs text-white shadow-xl backdrop-blur">
+          <div className="font-semibold text-[#facc15]">Real measurements</div>
+          <div className="mt-1 text-[#d7d7d8]">
+            {measurementSpecs.length
+              ? `${measurementSpecs.length} ${measurementSpecs.length === 1 ? "part" : "parts"} measured in mm`
+              : "Create or select a model to measure."}
+          </div>
+        </div>
+      )}
       {edgeInput && (
         <form
           onSubmit={(e) => {

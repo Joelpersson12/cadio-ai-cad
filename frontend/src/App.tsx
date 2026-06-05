@@ -384,6 +384,7 @@ function WorkspaceApp() {
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
+  const [showMeasurements, setShowMeasurements] = useState(false);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
     await runPrompt(example.prompt);
@@ -436,6 +437,18 @@ function WorkspaceApp() {
           >
             <span className="text-xl leading-none">+</span>
             New Creation
+          </button>
+          <button
+            onClick={() => setShowMeasurements((value) => !value)}
+            className={`mb-5 flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold ${
+              showMeasurements
+                ? "border-[#facc15] bg-[#3a3214] text-[#ffe58a]"
+                : "border-[#303033] bg-[#222] text-[#e6e6e6] hover:border-[#facc15] hover:text-white"
+            }`}
+            title="Show real model measurements"
+          >
+            <span className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[11px]">mm</span>
+            Measure
           </button>
           <div className="mb-5">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#858585]">Mode</div>
@@ -665,6 +678,7 @@ function WorkspaceApp() {
             onSetOperationAmount={setOperationAmount}
             onApplyExpertOperation={(op, amount, objectId) => void applyExpertOperation(op, amount, objectId)}
             onCreatePrimitive={(payload) => void createPrimitive(payload)}
+            showMeasurements={showMeasurements}
           />
         </main>
 
@@ -723,6 +737,14 @@ function WorkspaceApp() {
             Select all
           </button>
           <button
+            onClick={() => setShowMeasurements((value) => !value)}
+            className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold ${
+              showMeasurements ? "bg-[#facc15] text-[#171717]" : "bg-[#2b2b2d] text-cadio-text"
+            }`}
+          >
+            mm
+          </button>
+          <button
             onClick={() => void snapSelectedObjects("on_plate")}
             disabled={!objects.length}
             className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text disabled:opacity-35"
@@ -758,6 +780,7 @@ function WorkspaceApp() {
             bounds={bounds}
             expertMode={false}
             mobileMode
+            showMeasurements={showMeasurements}
           />
         </div>
 
