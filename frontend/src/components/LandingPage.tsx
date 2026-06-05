@@ -1,7 +1,8 @@
-import { Canvas, useFrame } from "@react-three/fiber";
-import { RoundedBox } from "@react-three/drei";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import makitaBatteryStlUrl from "../assets/makita-battery.stl?url";
 import { markCadioAuthenticated } from "../utils/auth";
 
 type Language = "en" | "sv" | "es" | "fr" | "it" | "de" | "pt";
@@ -17,7 +18,7 @@ const languageOptions: Array<{ value: Language; label: string }> = [
   { value: "pt", label: "PT" },
 ];
 
-const heroPrompt = "Clean black geometric CAD concept";
+const heroPrompt = "Makita Battery Holder";
 
 const copy = {
   en: {
@@ -689,6 +690,7 @@ const copy = {
 
 function HeroModel() {
   const groupRef = useRef<THREE.Group>(null);
+  const rawGeometry = useLoader(STLLoader, makitaBatteryStlUrl);
   const bodyMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
@@ -698,12 +700,12 @@ function HeroModel() {
       }),
     [],
   );
-  const highlightMaterial = useMemo(
+  const edgeMaterial = useMemo(
     () =>
-      new THREE.MeshStandardMaterial({
-        color: "#2b2f33",
-        roughness: 0.38,
-        metalness: 0.24,
+      new THREE.LineBasicMaterial({
+        color: "#596168",
+        transparent: true,
+        opacity: 0.34,
       }),
     [],
   );
@@ -718,66 +720,45 @@ function HeroModel() {
       }),
     [],
   );
-  const cutMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#050607",
-        roughness: 0.72,
-        metalness: 0.04,
-      }),
-    [],
-  );
+  const { edgeGeometry, geometry, scale } = useMemo(() => {
+    const normalized = rawGeometry.clone();
+    normalized.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+    normalized.computeVertexNormals();
+    normalized.computeBoundingBox();
+
+    const box = normalized.boundingBox ?? new THREE.Box3().setFromBufferAttribute(normalized.attributes.position as THREE.BufferAttribute);
+    const center = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    box.getCenter(center);
+    box.getSize(size);
+
+    normalized.translate(-center.x, -box.min.y, -center.z);
+    normalized.computeBoundingBox();
+
+    const longestSide = Math.max(size.x, size.y, size.z, 1);
+    return {
+      edgeGeometry: new THREE.EdgesGeometry(normalized, 22),
+      geometry: normalized,
+      scale: 4.25 / longestSide,
+    };
+  }, [rawGeometry]);
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
-    groupRef.current.rotation.y = -0.44 + Math.sin(clock.elapsedTime * 0.24) * 0.07;
-    groupRef.current.rotation.x = 0.42 + Math.sin(clock.elapsedTime * 0.18) * 0.028;
+    groupRef.current.rotation.y = -0.5 + Math.sin(clock.elapsedTime * 0.24) * 0.065;
+    groupRef.current.rotation.x = 0.36 + Math.sin(clock.elapsedTime * 0.18) * 0.024;
   });
 
   return (
-    <group ref={groupRef} position={[0.15, -0.3, 0]}>
-      <RoundedBox args={[4.35, 0.32, 2.65]} radius={0.16} smoothness={10} position={[0, 0, 0]} castShadow receiveShadow>
-        <primitive object={bodyMaterial} attach="material" />
-      </RoundedBox>
-      <RoundedBox args={[3.45, 0.26, 1.78]} radius={0.12} smoothness={8} position={[-0.18, 0.38, 0.02]} castShadow receiveShadow>
-        <primitive object={highlightMaterial} attach="material" />
-      </RoundedBox>
-      <RoundedBox args={[2.15, 0.24, 1.08]} radius={0.1} smoothness={8} position={[-0.78, 0.7, -0.12]} castShadow receiveShadow>
-        <primitive object={bodyMaterial} attach="material" />
-      </RoundedBox>
-      <RoundedBox args={[3.05, 0.05, 0.09]} radius={0.025} smoothness={5} position={[0, 0.58, 0.82]} castShadow receiveShadow>
-        <primitive object={accentMaterial} attach="material" />
-      </RoundedBox>
-      <RoundedBox args={[1.1, 0.06, 0.09]} radius={0.025} smoothness={5} position={[-1.28, 0.88, -0.62]} castShadow receiveShadow>
-        <primitive object={accentMaterial} attach="material" />
-      </RoundedBox>
-
-      <mesh material={bodyMaterial} position={[0.95, 0.86, 0.06]} rotation={[0, Math.PI / 6, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.62, 0.62, 0.46, 6]} />
+    <group ref={groupRef} position={[0.15, -0.35, 0]}>
+      <group scale={scale} position={[0, 0.02, 0]}>
+        <mesh geometry={geometry} material={bodyMaterial} castShadow receiveShadow />
+        <lineSegments geometry={edgeGeometry} material={edgeMaterial} />
+      </group>
+      <mesh material={accentMaterial} position={[0, 0.04, -1.65]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.045, 0.045, 3.7, 48]} />
       </mesh>
-      <mesh material={cutMaterial} position={[0.95, 1.11, 0.06]} rotation={[Math.PI / 2, 0, Math.PI / 6]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.22, 0.22, 0.035, 48]} />
-      </mesh>
-
-      <mesh material={highlightMaterial} position={[-0.42, 1.32, -0.02]} rotation={[0, 0, -0.55]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.18, 0.18, 2.28, 40]} />
-      </mesh>
-      <RoundedBox args={[1.55, 0.22, 0.48]} radius={0.09} smoothness={8} position={[-1.12, 1.92, -0.12]} rotation={[0, 0, -0.55]} castShadow receiveShadow>
-        <primitive object={bodyMaterial} attach="material" />
-      </RoundedBox>
-      <mesh material={accentMaterial} position={[-1.62, 2.2, -0.12]} rotation={[Math.PI / 2, 0, -0.55]} castShadow receiveShadow>
-        <torusGeometry args={[0.22, 0.028, 12, 54]} />
-      </mesh>
-
-      {[-1.46, -0.08, 1.34].map((x) => (
-        <mesh key={x} material={cutMaterial} position={[x, 0.61, 0.28]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.12, 0.12, 0.04, 36]} />
-        </mesh>
-      ))}
-      <mesh material={highlightMaterial} position={[0.24, 0.2, -0.78]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.14, 0.14, 2.8, 56]} />
-      </mesh>
-      <gridHelper args={[8, 18, "#45484b", "#323436"]} position={[0, -0.23, 0]} />
+      <gridHelper args={[8, 18, "#45484b", "#323436"]} position={[0, -0.02, 0]} />
     </group>
   );
 }
