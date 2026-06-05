@@ -7,6 +7,7 @@ import CadViewport from "./components/CadViewport";
 import AiPanel from "./components/AiPanel";
 import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
+import LandingPage from "./components/LandingPage";
 import type { ExampleObject } from "./components/ExampleBrowser";
 import type { ExpertTool, MaterialProfile, SelectionMode, TransformMode } from "./utils/types";
 import { exportUrl } from "./utils/api";
@@ -336,7 +337,7 @@ function MobileEditSheet({
   );
 }
 
-export default function App() {
+function WorkspaceApp() {
   const {
     sessionId,
     objects,
@@ -816,4 +817,31 @@ function MobileAiBar() {
       </button>
     </div>
   );
+}
+
+export default function App() {
+  const [showBuilder, setShowBuilder] = useState(() => window.location.hash === "#builder");
+
+  useEffect(() => {
+    const syncFromHash = () => setShowBuilder(window.location.hash === "#builder");
+    window.addEventListener("hashchange", syncFromHash);
+    window.addEventListener("popstate", syncFromHash);
+    return () => {
+      window.removeEventListener("hashchange", syncFromHash);
+      window.removeEventListener("popstate", syncFromHash);
+    };
+  }, []);
+
+  const startBuilding = () => {
+    if (window.location.hash !== "#builder") {
+      window.history.pushState(null, "", "#builder");
+    }
+    setShowBuilder(true);
+  };
+
+  if (!showBuilder) {
+    return <LandingPage onStartBuilding={startBuilding} />;
+  }
+
+  return <WorkspaceApp />;
 }
