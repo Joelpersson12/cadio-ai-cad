@@ -691,6 +691,4 @@ def get_template_for_prompt(prompt: str) -> ProductTemplate | None:
     if best_key:
         return PRODUCT_TEMPLATES[best_key]
 
-    if "stand" in words:
-        return PRODUCT_TEMPLATES["phone_stand"]
     return None

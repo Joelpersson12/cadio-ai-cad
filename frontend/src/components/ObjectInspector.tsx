@@ -117,14 +117,14 @@ export default function ObjectInspector() {
           className="rounded-md bg-[#333336] px-3 py-1.5 text-sm text-cadio-text hover:bg-[#44454a]"
           title="Undo"
         >
-          ←
+          Undo
         </button>
         <button
           onClick={() => void redo()}
           className="rounded-md bg-[#333336] px-3 py-1.5 text-sm text-cadio-text hover:bg-[#44454a]"
           title="Redo"
         >
-          →
+          Redo
         </button>
       </div>
 

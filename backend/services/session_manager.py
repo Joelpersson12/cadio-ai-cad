@@ -617,6 +617,128 @@ def _set_feature_enabled(features: list[Feature], feature_type: str, enabled: bo
     features.append(Feature(id=feature_type, type=feature_type, enabled=enabled))
 
 
+def _is_base_like(obj: CadObject) -> bool:
+    name = str(obj.get("name", "")).lower()
+    primitive = str(obj.get("primitive", "")).lower()
+    params = obj.get("parameters", {})
+    width = float(params.get("width", 0.0))
+    depth = float(params.get("depth", 0.0))
+    height = float(params.get("height", params.get("thickness", 0.0)))
+    explicit = any(
+        token in name
+        for token in (
+            "base",
+            "plate",
+            "floor",
+            "mount",
+            "back_plate",
+            "holder_base",
+            "battery_mount",
+            "electronics_base",
+        )
+    )
+    flat = primitive == "rectangle" and width >= 25.0 and depth >= 20.0 and height <= max(18.0, min(width, depth) * 0.35)
+    return explicit or flat
+
+
+def _mounting_hole_positions(width: float, depth: float, count: int) -> list[tuple[float, float]]:
+    count = max(2, min(4, int(count)))
+    if count >= 4 and width >= 55.0 and depth >= 45.0:
+        return [
+            (-width * 0.32, -depth * 0.26),
+            (width * 0.32, -depth * 0.26),
+            (-width * 0.32, depth * 0.26),
+            (width * 0.32, depth * 0.26),
+        ]
+    if count == 3:
+        return [
+            (-width * 0.30, 0.0),
+            (0.0, 0.0),
+            (width * 0.30, 0.0),
+        ]
+    return [
+        (-width * 0.28, 0.0),
+        (width * 0.28, 0.0),
+    ]
+
+
+def _apply_mounting_holes_to_object(
+    obj: CadObject,
+    *,
+    count: int,
+    diameter: float,
+    counterbore_diameter: float,
+) -> None:
+    params = obj["parameters"]
+    width = max(1.0, float(params.get("width", 80.0)))
+    depth = max(1.0, float(params.get("depth", 70.0)))
+    height = max(0.5, float(params.get("height", params.get("thickness", 8.0))))
+    safe_diameter = max(1.0, min(float(diameter), min(width, depth) * 0.45))
+    safe_counterbore = max(safe_diameter + 1.0, min(float(counterbore_diameter), min(width, depth) * 0.7))
+    safe_depth = max(0.6, min(height * 0.45, safe_diameter * 0.45, 3.0))
+    positions = _mounting_hole_positions(width, depth, count)
+
+    # Replace generated holes with explicit holes so future parameter changes
+    # keep the same layout instead of drifting.
+    for key in list(params.keys()):
+        if key.startswith("custom_hole_"):
+            del params[key]
+
+    for index, (x, y) in enumerate(positions):
+        params[f"custom_hole_{index}_x"] = x
+        params[f"custom_hole_{index}_y"] = y
+        params[f"custom_hole_{index}_diameter"] = safe_diameter
+
+    params["custom_hole_count"] = float(len(positions))
+    params["hole_count"] = float(len(positions))
+    params["hole_diameter"] = safe_diameter
+    params["counterbore_diameter"] = safe_counterbore
+    params["counterbore_depth"] = safe_depth
+    _set_feature_enabled(obj["feature_tree"], "mount_holes", True)
+
+    if obj.get("manual"):
+        rebuild_manual_object(obj)
+    else:
+        rebuild_object(obj)
+
+
+def add_mounting_holes_to_session(
+    session: Session,
+    selected: CadObject | None,
+    *,
+    count: int = 2,
+    diameter: float = 5.0,
+    counterbore_diameter: float = 9.0,
+) -> list[str]:
+    """Add predictable mounting holes to base-like bodies without regenerating."""
+    candidates: list[CadObject] = []
+    if selected and _is_base_like(selected):
+        candidates = [selected]
+    else:
+        candidates = [
+            session["objects"][oid]
+            for oid in session["object_order"]
+            if _is_base_like(session["objects"][oid])
+        ]
+        if not candidates and selected:
+            candidates = [selected]
+
+    if not candidates:
+        return ["mounting holes skipped: no editable base body found"]
+
+    for target in candidates:
+        target_count = 4 if count >= 4 or float(target["parameters"].get("width", 0.0)) >= 150.0 else max(2, count)
+        _apply_mounting_holes_to_object(
+            target,
+            count=target_count,
+            diameter=diameter,
+            counterbore_diameter=counterbore_diameter,
+        )
+
+    names = ", ".join(str(target.get("name", "part")) for target in candidates[:4])
+    return [f"added mounting holes with counterbore to {names}"]
+
+
 def apply_expert_operation(
     obj: CadObject,
     operation: str,

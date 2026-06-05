@@ -12,6 +12,61 @@ from backend.services.session_manager import CadObject, Session
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
+CREATE_PATTERNS = (
+    r"\b(create|generate|build|design)\b",
+    r"\bmake\s+(a|an|one)\b",
+    r"\b(skapa|generera|bygg|rita)\b",
+    r"\bgör\s+(en|ett)\b",
+)
+
+EDIT_PATTERNS = (
+    r"\b(add|remove|delete|change|modify|edit|increase|decrease|resize|scale|rotate|move)\b",
+    r"\b(make it|taller|wider|thicker|thinner|rounded|fillet|chamfer|extrude|shell|mirror|holes?)\b",
+    r"\b(lägg till|ta bort|ändra|redigera|flytta|rotera|skala|hål|rund|fasa|tjockare|bredare|högre)\b",
+    r"\bgör\s+(den|det)\b",
+)
+
+
+def is_new_model_prompt(prompt: str) -> bool:
+    text = prompt.strip().lower()
+    return any(re.search(pattern, text) for pattern in CREATE_PATTERNS)
+
+
+def is_edit_only_prompt(prompt: str) -> bool:
+    text = prompt.strip().lower()
+    has_edit = any(re.search(pattern, text) for pattern in EDIT_PATTERNS)
+    return has_edit and not is_new_model_prompt(text)
+
+
+def is_mounting_hole_edit(prompt: str) -> bool:
+    text = prompt.strip().lower()
+    if not is_edit_only_prompt(text):
+        return False
+    return any(
+        phrase in text
+        for phrase in (
+            "mounting hole",
+            "mounting holes",
+            "add holes",
+            "holes",
+            "hål",
+            "skruvhål",
+            "monteringshål",
+        )
+    )
+
+
+def parse_hole_edit(prompt: str) -> dict[str, float]:
+    text = prompt.strip().lower()
+    count_match = re.search(r"\b([2-4])\s*(?:x\s*)?(?:mounting\s*)?(?:holes?|hål)\b", text)
+    diameter_match = re.search(r"\b(\d+(?:\.\d+)?)\s*mm\s*(?:holes?|hål|screw|skruv)", text)
+    counterbore_match = re.search(r"\b(?:counterbore|sänka|försänkning)\s*(\d+(?:\.\d+)?)\s*mm", text)
+    return {
+        "count": float(count_match.group(1)) if count_match else 2.0,
+        "diameter": float(diameter_match.group(1)) if diameter_match else 5.0,
+        "counterbore_diameter": float(counterbore_match.group(1)) if counterbore_match else 9.0,
+    }
+
 SYSTEM_PROMPT = """You are a professional CAD assistant that converts natural language into realistic 3D model parameters.
 
 Your role: Create practical, printable objects with appropriate dimensions and structural features.
@@ -372,8 +427,9 @@ def parse_ai_command(
     """
     from backend.services.product_templates import get_template_for_prompt
     
+    edit_only = is_edit_only_prompt(prompt)
     # Detect if prompt is requesting a specific product template
-    template = get_template_for_prompt(prompt)
+    template = None if edit_only else get_template_for_prompt(prompt)
     
     # If template found, use template defaults as base
     if template:
@@ -392,12 +448,16 @@ def parse_ai_command(
     else:
         params = dict(obj["parameters"])
         features = [_coerce_feature(f) for f in obj["feature_tree"]]
-        external_actions = _external_design_signals(prompt, params)
-        from backend.services.design_brief import build_design_brief
+        external_actions = [] if edit_only else _external_design_signals(prompt, params)
+        if edit_only:
+            research_brief = None
+            brief_actions = []
+        else:
+            from backend.services.design_brief import build_design_brief
 
-        research_brief = build_design_brief(prompt)
-        brief_actions = _apply_research_brief(research_brief, params, features)
-        obj["template_hint"] = None
+            research_brief = build_design_brief(prompt)
+            brief_actions = _apply_research_brief(research_brief, params, features)
+            obj["template_hint"] = None
     
     src_transform: Transform = obj["transform"]
     transform = Transform(
@@ -460,4 +520,5 @@ def parse_ai_command(
         "actions": actions,
         "template": template.name if template else None,
         "research_brief": research_brief,
+        "mode": "edit" if edit_only else "create",
     }

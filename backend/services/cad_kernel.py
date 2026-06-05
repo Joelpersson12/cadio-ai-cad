@@ -60,9 +60,11 @@ def to_trimesh(value: Any, tolerance: float = 0.08) -> TriMesh | None:
     return mesh
 
 
-def _hole_specs(params: dict[str, float]) -> list[tuple[float, float, float]]:
+def _hole_specs(params: dict[str, float]) -> list[tuple[float, float, float, float, float]]:
     count = max(0, int(params.get("custom_hole_count", 0.0)))
-    specs: list[tuple[float, float, float]] = []
+    specs: list[tuple[float, float, float, float, float]] = []
+    counterbore_diameter = max(0.0, float(params.get("counterbore_diameter", 0.0)))
+    counterbore_depth = max(0.0, float(params.get("counterbore_depth", 0.0)))
     for index in range(count):
         x_key = f"custom_hole_{index}_x"
         y_key = f"custom_hole_{index}_y"
@@ -70,7 +72,7 @@ def _hole_specs(params: dict[str, float]) -> list[tuple[float, float, float]]:
         if x_key not in params or y_key not in params:
             continue
         diameter = max(0.5, float(params.get(d_key, params.get("hole_diameter", 5.0))))
-        specs.append((float(params[x_key]), float(params[y_key]), diameter))
+        specs.append((float(params[x_key]), float(params[y_key]), diameter, counterbore_diameter, counterbore_depth))
     generated_count = max(0, int(round(params.get("hole_count", 0.0)))) - len(specs)
     if generated_count > 0:
         width = max(1.0, float(params.get("width", 80.0)))
@@ -78,14 +80,14 @@ def _hole_specs(params: dict[str, float]) -> list[tuple[float, float, float]]:
         diameter = max(1.0, float(params.get("hole_diameter", 5.0)))
         spacing = width / (generated_count + 1)
         for index in range(generated_count):
-            specs.append((-width / 2.0 + spacing * (index + 1), depth * 0.18, diameter))
+            specs.append((-width / 2.0 + spacing * (index + 1), depth * 0.18, diameter, counterbore_diameter, counterbore_depth))
     return specs
 
 
 def _cut_vertical_holes(body: Any, params: dict[str, float], height: float):
     if not CADQUERY_AVAILABLE:
         return body
-    for x, y, diameter in _hole_specs(params):
+    for x, y, diameter, counterbore_diameter, counterbore_depth in _hole_specs(params):
         cutter = (
             cq.Workplane("XY")
             .center(x, y)
@@ -94,6 +96,15 @@ def _cut_vertical_holes(body: Any, params: dict[str, float], height: float):
             .translate((0.0, 0.0, -2.0))
         )
         body = body.cut(cutter)
+        if counterbore_diameter > diameter and counterbore_depth > 0:
+            recess = (
+                cq.Workplane("XY")
+                .center(x, y)
+                .circle(counterbore_diameter / 2.0)
+                .extrude(counterbore_depth + 2.0)
+                .translate((0.0, 0.0, max(0.0, height - counterbore_depth)))
+            )
+            body = body.cut(recess)
     return body
 
 

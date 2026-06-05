@@ -5,14 +5,14 @@ export default {
     extend: {
       colors: {
         cadio: {
-          bg: "#1c1c1f",
-          panel: "#262628",
-          border: "#3a3a3d",
-          text: "#f2f2f3",
-          muted: "#a7a8ab",
-          accent: "#31bce6",
-          "accent-hover": "#5bd6f6",
-          selected: "#28c4ea",
+          bg: "#202022",
+          panel: "#282829",
+          border: "#3b3b3f",
+          text: "#f3f3f4",
+          muted: "#a7a8ac",
+          accent: "#2bb8dc",
+          "accent-hover": "#69d9f5",
+          selected: "#27c2e8",
           danger: "#ff6b6b",
           success: "#4ecdc4",
         },

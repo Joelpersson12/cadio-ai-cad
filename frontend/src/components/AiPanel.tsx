@@ -178,7 +178,7 @@ export default function AiPanel() {
                 disabled={isLoading}
                 className="text-left px-2.5 py-1.5 rounded text-xs text-cadio-muted hover:text-cadio-text hover:bg-[#1a2535] transition-all disabled:opacity-40 truncate"
               >
-                ↩ {h}
+                Reuse {h}
               </button>
             ))}
           </div>

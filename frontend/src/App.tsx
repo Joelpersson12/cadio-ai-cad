@@ -165,6 +165,7 @@ export default function App() {
     bounds,
     printers,
     printer,
+    status,
     expertMode,
     expertTool,
     selectionMode,
@@ -210,42 +211,65 @@ export default function App() {
   return (
     <div className="w-full h-full relative bg-cadio-bg text-cadio-text">
       {/* Desktop layout */}
-      <div className="hidden md:grid w-full h-full grid-cols-[270px_1fr_300px] gap-2 p-2 overflow-hidden">
-        {/* Left - AI Panel */}
-        <aside className="bg-cadio-panel/95 border border-cadio-border rounded-lg p-3 backdrop-blur-sm overflow-y-auto shadow-xl">
-          <AiPanel />
-        </aside>
+      <div className="hidden md:grid w-full h-full grid-rows-[38px_1fr] overflow-hidden bg-[#1f1f20]">
+        <header className="flex items-center justify-between border-b border-[#353538] bg-[#242426] px-3 text-[13px] text-[#f4f4f4]">
+          <div className="flex h-full items-center gap-4">
+            <div className="flex items-center gap-2 font-semibold">
+              <span className="grid h-5 w-5 place-items-center rounded bg-[#2f7fff] text-[11px] text-white">C</span>
+              <span>Untitled Project</span>
+              <span className="text-[#8f9094]">{objects.length} parts</span>
+            </div>
+            <nav className="flex h-full items-center gap-1 text-[#d7d7da]">
+              {["File", "Edit", "Item", "View", "Help"].map((item) => (
+                <button key={item} className="rounded px-2 py-1 hover:bg-[#343437]">
+                  {item}
+                </button>
+              ))}
+            </nav>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-[#bfc0c4]">
+            <span>{printerProfile?.name ?? "Printer"}</span>
+            <span className="rounded bg-[#303033] px-2 py-1">
+              {printerVolume[0]} x {printerVolume[1]} x {printerVolume[2]} mm
+            </span>
+            <span className="rounded bg-[#303033] px-2 py-1 text-[#67d6f5]">{status || "Ready"}</span>
+          </div>
+        </header>
 
-        {/* Center - Viewport */}
-        <main className="rounded-lg overflow-hidden border border-[#2f3033] min-h-0 bg-cadio-bg">
-          <CadViewport
-            objects={objects}
-            selectedObjectId={selectedObjectId}
-            selectedObjectIds={selectedObjectIds}
-            onSelectObject={(id) => void onSelectObject(id)}
-            transformMode={transformMode}
-            onTransformCommit={(id, t) => void onTransformCommit(id, t)}
-            printerVolume={printerVolume}
-            bounds={bounds}
-            expertMode={expertMode}
-            expertTool={expertTool}
-            selectionMode={selectionMode}
-            sketchHeight={sketchHeight}
-            operationAmount={operationAmount}
-            onSetExpertMode={setExpertMode}
-            onSetExpertTool={setExpertTool}
-            onSetSelectionMode={setSelectionMode}
-            onSetSketchHeight={setSketchHeight}
-            onSetOperationAmount={setOperationAmount}
-            onApplyExpertOperation={(op, amount, objectId) => void applyExpertOperation(op, amount, objectId)}
-            onCreatePrimitive={(payload) => void createPrimitive(payload)}
-          />
-        </main>
+        <div className="grid min-h-0 grid-cols-[280px_1fr_320px] gap-0 overflow-hidden">
+          <aside className="border-r border-[#343438] bg-[#282829] p-3 overflow-y-auto">
+            <AiPanel />
+          </aside>
 
-        {/* Right - Inspector */}
-        <aside className="bg-cadio-panel/95 border border-cadio-border rounded-lg p-3 backdrop-blur-sm overflow-y-auto shadow-xl">
-          <ObjectInspector />
-        </aside>
+          <main className="min-h-0 overflow-hidden bg-[#202022]">
+            <CadViewport
+              objects={objects}
+              selectedObjectId={selectedObjectId}
+              selectedObjectIds={selectedObjectIds}
+              onSelectObject={(id) => void onSelectObject(id)}
+              transformMode={transformMode}
+              onTransformCommit={(id, t) => void onTransformCommit(id, t)}
+              printerVolume={printerVolume}
+              bounds={bounds}
+              expertMode={expertMode}
+              expertTool={expertTool}
+              selectionMode={selectionMode}
+              sketchHeight={sketchHeight}
+              operationAmount={operationAmount}
+              onSetExpertMode={setExpertMode}
+              onSetExpertTool={setExpertTool}
+              onSetSelectionMode={setSelectionMode}
+              onSetSketchHeight={setSketchHeight}
+              onSetOperationAmount={setOperationAmount}
+              onApplyExpertOperation={(op, amount, objectId) => void applyExpertOperation(op, amount, objectId)}
+              onCreatePrimitive={(payload) => void createPrimitive(payload)}
+            />
+          </main>
+
+          <aside className="border-l border-[#343438] bg-[#282829] p-3 overflow-y-auto">
+            <ObjectInspector />
+          </aside>
+        </div>
       </div>
 
       {/* Mobile layout */}
@@ -338,7 +362,7 @@ function MobileAiBar() {
         disabled={loading || !prompt.trim()}
         className="px-4 py-2 rounded-lg bg-cadio-accent text-[#081225] text-sm font-semibold disabled:opacity-40"
       >
-        {loading ? "..." : "→"}
+        {loading ? "..." : ">"}
       </button>
     </div>
   );
