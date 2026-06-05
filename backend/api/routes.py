@@ -58,6 +58,7 @@ from backend.services.session_manager import (
     get_or_create_session,
     get_selected_object,
     get_session,
+    prepare_generation_target,
     rebuild_object,
     remove_object,
     add_object,
@@ -209,12 +210,22 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                     counterbore_diameter=hole_options["counterbore_diameter"],
                 )
             else:
-                if not session["object_order"] or not session.get("selected_object_id"):
-                    obj = create_object("part_1")
-                    add_object(session, obj)
-                    session["selected_object_id"] = obj["id"]
+                edit_only = is_edit_only_prompt(data.prompt)
+                if edit_only:
+                    if not session["object_order"]:
+                        obj = create_object("part_1")
+                        add_object(session, obj)
+                        session["selected_object_id"] = obj["id"]
+                    elif not session.get("selected_object_id") or session["selected_object_id"] not in session["objects"]:
+                        session["selected_object_id"] = session["object_order"][0]
+                        obj = get_selected_object(session)
+                    else:
+                        obj = get_selected_object(session)
                 else:
-                    obj = get_selected_object(session)
+                    obj = prepare_generation_target(
+                        session,
+                        f"generated_{len(session['edit_history']) + 1}",
+                    )
                 parsed = parse_ai_command(data.prompt, session, obj)
                 obj["parameters"] = parsed["parameters"]
                 obj["feature_tree"] = parsed["feature_tree"]
@@ -224,11 +235,10 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                 assembly_actions = replace_object_with_template_assembly(
                     session,
                     obj,
-                    None if is_edit_only_prompt(data.prompt) else parsed.get("template"),
+                    None if edit_only else parsed.get("template"),
                     parsed["parameters"],
                 )
                 research_actions = []
-                edit_only = is_edit_only_prompt(data.prompt)
                 if not assembly_actions and not edit_only:
                     research_actions = replace_object_with_research_assembly(
                         session,

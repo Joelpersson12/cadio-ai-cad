@@ -237,6 +237,40 @@ def _remove_object_direct(session: Session, object_id: str) -> None:
     if object_id in session["objects"]:
         del session["objects"][object_id]
     session["object_order"] = [oid for oid in session["object_order"] if oid != object_id]
+    if session.get("selected_object_id") == object_id:
+        session["selected_object_id"] = ""
+
+
+def _is_generated_object(obj: CadObject) -> bool:
+    """Return true for AI/template bodies that may be replaced as a set."""
+    return bool(
+        obj.get("template_component")
+        or obj.get("assembly_source")
+        or obj.get("research_brief")
+        or obj.get("template_hint")
+        or not obj.get("manual")
+    )
+
+
+def prepare_generation_target(session: Session, name: str = "part_1") -> CadObject:
+    """Clear previous generated geometry and return a fresh seed object.
+
+    Product prompts should behave like "replace generated model", not "swap one
+    selected part inside the old assembly". Manual sketch bodies are preserved.
+    """
+    generated_ids = [
+        oid
+        for oid in list(session["object_order"])
+        if _is_generated_object(session["objects"][oid])
+    ]
+    for oid in generated_ids:
+        _remove_object_direct(session, oid)
+
+    obj = create_object(name)
+    obj["generated_seed"] = True
+    add_object(session, obj)
+    session["selected_object_id"] = obj["id"]
+    return obj
 
 
 def replace_object_with_template_assembly(
