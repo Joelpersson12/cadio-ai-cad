@@ -28,12 +28,12 @@ export default function PartMesh({ object, selected, onSelect }: PartMeshProps) 
   const material = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: selected ? "#ffd166" : "#5aa1ff",
-        roughness: 0.4,
-        metalness: 0.15,
+        color: selected ? "#28c7df" : object.color || "#b9b8b3",
+        roughness: 0.72,
+        metalness: 0.02,
         flatShading: false,
       }),
-    [selected],
+    [object.color, selected],
   );
 
   // Dispose old geometry and material on unmount or change

@@ -119,7 +119,7 @@ function MobileEditSheet({
   onClose: () => void;
 }) {
   const { objects, selectedObjectId, patchParam, onToggleFeature } = useCadStore();
-  const obj = objects.find((o) => o.id === selectedObjectId);
+  const obj = objects.find((o) => o.id === selectedObjectId) ?? objects[0];
 
   if (!obj) return null;
 
@@ -548,6 +548,41 @@ export default function App() {
               Edit
             </button>
           </div>
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto border-b border-cadio-border bg-[#1f1f20]/95 px-3 py-2">
+          <button
+            onClick={selectAllObjects}
+            disabled={!objects.length}
+            className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text disabled:opacity-35"
+          >
+            Select all
+          </button>
+          <button
+            onClick={() => void snapSelectedObjects("on_plate")}
+            disabled={!objects.length}
+            className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text disabled:opacity-35"
+          >
+            On plate
+          </button>
+          <button
+            onClick={() => void snapSelectedObjects("center_on_plate")}
+            disabled={!objects.length}
+            className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text disabled:opacity-35"
+          >
+            Center
+          </button>
+          {TRANSFORM_MODES.map((mode) => (
+            <button
+              key={mode.id}
+              onClick={() => setTransformMode(mode.id)}
+              className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold ${
+                transformMode === mode.id ? "bg-cadio-accent text-[#101010]" : "bg-[#2b2b2d] text-cadio-text"
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
         </div>
 
         {/* Viewport - takes most space */}

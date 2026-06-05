@@ -5,6 +5,27 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, GizmoHelper, GizmoViewport, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
+
+const VIEW_COLORS = {
+  background: "#343435",
+  plate: "#5a5a5c",
+  plateEdge: "#74777b",
+  gridCell: "#505154",
+  gridSection: "#686b70",
+  neutralBody: "#b9b8b3",
+  selectedBody: "#28c7df",
+  hoveredBody: "#cfd1d2",
+  edgeSubtle: "#202124",
+  edgeStrong: "#e7faff",
+  edgeSelected: "#9eefff",
+  edgeHover: "#38d5f4",
+};
+
+function visibleBodyColor(obj: CadObject, selected: boolean, hovered: boolean) {
+  if (selected) return VIEW_COLORS.selectedBody;
+  if (hovered) return obj.color && obj.color !== "#a9aaad" ? obj.color : VIEW_COLORS.hoveredBody;
+  return obj.color && obj.color !== "#a9aaad" ? obj.color : VIEW_COLORS.neutralBody;
+}
  
 // ---------------------------------------------------------------------------
 // Camera auto-fit helper
@@ -168,25 +189,33 @@ function ScaledMesh({
       receiveShadow={false}
     >
       <meshPhysicalMaterial
-        color={selected ? "#27bfe6" : obj.color || "#a9aaad"}
-        roughness={0.68}
+        color={visibleBodyColor(obj, selected, hovered)}
+        roughness={0.74}
         metalness={0.02}
-        clearcoat={0.08}
+        clearcoat={0.04}
         clearcoatRoughness={0.82}
-        emissive={selected ? "#0a5265" : "#000000"}
-        emissiveIntensity={selected ? 0.12 : 0}
+        emissive={selected ? "#073e48" : hovered ? "#111314" : "#000000"}
+        emissiveIntensity={selected ? 0.1 : hovered ? 0.04 : 0}
         polygonOffset
         polygonOffsetFactor={1}
         polygonOffsetUnits={1}
       />
     </mesh>
+    <lineSegments>
+      <edgesGeometry args={[geometry, 24]} />
+      <lineBasicMaterial
+        color={selected ? VIEW_COLORS.edgeSelected : hovered ? VIEW_COLORS.edgeHover : VIEW_COLORS.edgeSubtle}
+        transparent
+        opacity={selected ? 0.86 : hovered ? 0.72 : 0.28}
+      />
+    </lineSegments>
     {((selected && selectionMode !== "body") || (hovered && expertMode && selectionMode === "edge")) && (
       <lineSegments>
-        <edgesGeometry args={[geometry]} />
+        <edgesGeometry args={[geometry, 8]} />
         <lineBasicMaterial
-          color={selectionMode === "edge" ? "#7de7ff" : selectionMode === "face" ? "#a78bfa" : "#7dd3fc"}
+          color={selectionMode === "edge" ? VIEW_COLORS.edgeStrong : selectionMode === "face" ? "#b9a7ff" : VIEW_COLORS.edgeSelected}
           transparent
-          opacity={hovered && !selected ? 1 : 0.82}
+          opacity={hovered && !selected ? 1 : 0.9}
         />
       </lineSegments>
     )}
@@ -240,11 +269,11 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       <mesh position={[0, -0.55, 0]} receiveShadow>
         <boxGeometry args={[px, 0.04, py]} />
         <meshStandardMaterial 
-          color="#4a4a4a"
-          roughness={0.88}
+          color={VIEW_COLORS.plate}
+          roughness={0.82}
           metalness={0.02}
           transparent
-          opacity={0.10}
+          opacity={0.18}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
@@ -258,13 +287,13 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       ].map((pos, i) => (
         <mesh key={i} position={[pos[0], pos[1], pos[2]]}>
           <sphereGeometry args={[2, 8, 8]} />
-          <meshStandardMaterial color="#dadada" emissive="#333333" />
+          <meshStandardMaterial color="#d6d8db" emissive="#22252a" />
         </mesh>
       ))}
       {/* Border frame - enhanced visibility */}
       <lineSegments>
         <edgesGeometry args={[new THREE.BoxGeometry(px, 0.5, py)]} />
-        <lineBasicMaterial color="#505052" linewidth={2} />
+        <lineBasicMaterial color={VIEW_COLORS.plateEdge} linewidth={2} />
       </lineSegments>
     </group>
   );
@@ -477,7 +506,7 @@ export default function CadViewport({
   const [transformDragging, setTransformDragging] = useState(false);
 
   return (
-    <div className="relative w-full h-full bg-[#3a3a3a]" onContextMenu={(e) => e.preventDefault()}>
+    <div className="relative w-full h-full touch-none select-none bg-[#343435]" onContextMenu={(e) => e.preventDefault()}>
       <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-3 top-14 z-10 w-44 flex-col gap-1.5 rounded-lg border border-[#454548] bg-[#242424]/92 p-2 shadow-xl backdrop-blur`}>
         <div className="px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cadio-muted">
           Expert tools
@@ -560,19 +589,19 @@ export default function CadViewport({
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
-          gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 1.0;
+          gl.toneMapping = THREE.NeutralToneMapping;
+          gl.toneMappingExposure = 1.08;
         }}
         onPointerUp={() => setTransformDragging(false)}
       >
-      <color attach="background" args={["#3a3a3a"]} />
+      <color attach="background" args={[VIEW_COLORS.background]} />
  
       {/* Lighting - enhanced for clarity */}
-      <hemisphereLight intensity={0.75} color="#ffffff" groundColor="#323238" />
-      <ambientLight intensity={0.55} color="#ffffff" />
+      <hemisphereLight intensity={0.95} color="#ffffff" groundColor="#56585c" />
+      <ambientLight intensity={0.62} color="#ffffff" />
       <directionalLight
         position={[220, 280, 180]}
-        intensity={2.6}
+        intensity={2.15}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -585,20 +614,21 @@ export default function CadViewport({
         shadow-bias={-0.00008}
         shadow-normalBias={0.025}
       />
-      <directionalLight position={[-180, 150, -140]} intensity={0.65} color="#d7e7ff" />
-      <pointLight position={[0, 260, 0]} intensity={0.35} color="#ffffff" />
+      <directionalLight position={[-220, 180, -180]} intensity={0.9} color="#e8f2ff" />
+      <directionalLight position={[40, -100, 160]} intensity={0.55} color="#ffffff" />
+      <pointLight position={[0, 260, 0]} intensity={0.28} color="#ffffff" />
  
       {/* Grid - improved visibility */}
       <Grid
         args={[printerVolume[0] * 2.2, printerVolume[1] * 2.2]}
         cellSize={10}
-        cellThickness={0.22}
-        cellColor="#424244"
+        cellThickness={0.2}
+        cellColor={VIEW_COLORS.gridCell}
         sectionSize={50}
-        sectionThickness={0.55}
-        sectionColor="#4b4b4d"
+        sectionThickness={0.5}
+        sectionColor={VIEW_COLORS.gridSection}
         fadeDistance={1000}
-        fadeStrength={2.6}
+        fadeStrength={2.35}
         position={[0, -0.78, 0]}
       />
  

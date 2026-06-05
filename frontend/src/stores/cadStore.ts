@@ -236,8 +236,9 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
 
   onToggleFeature: async (featureId: string, enabled: boolean) => {
-    const { sessionId, selectedObjectId, selectedObjectIds } = get();
-    const targets = selectedObjectIds.length > 1 ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : [];
+    const { sessionId, selectedObjectId, selectedObjectIds, objects } = get();
+    const fallbackObjectId = objects[0]?.id || "";
+    const targets = selectedObjectIds.length > 1 ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : fallbackObjectId ? [fallbackObjectId] : [];
     if (!sessionId || !targets.length) return;
     try {
       let data: ScenePayload | null = null;
@@ -306,8 +307,9 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
 
   snapSelectedObjects: async (snap) => {
-    const { sessionId, selectedObjectId, selectedObjectIds } = get();
-    const targets = selectedObjectIds.length > 0 ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : [];
+    const { sessionId, selectedObjectId, selectedObjectIds, objects } = get();
+    const fallbackObjectId = objects[0]?.id || "";
+    const targets = selectedObjectIds.length > 0 ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : fallbackObjectId ? [fallbackObjectId] : [];
     if (!sessionId || !targets.length) return;
     try {
       let data: ScenePayload | null = null;
@@ -349,12 +351,13 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
 
   patchAppearance: async (appearance) => {
-    const { sessionId, selectedObjectId } = get();
-    if (!sessionId || !selectedObjectId) return;
+    const { sessionId, selectedObjectId, objects } = get();
+    const targetObjectId = selectedObjectId || objects[0]?.id || "";
+    if (!sessionId || !targetObjectId) return;
     try {
       const data = await apiUpdateAppearance({
         session_id: sessionId,
-        object_id: selectedObjectId,
+        object_id: targetObjectId,
         ...appearance,
       });
       get().applyScenePayload(data);
