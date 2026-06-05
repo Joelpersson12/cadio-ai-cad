@@ -13,6 +13,19 @@ WORKDIR /app
 # CadQuery brings OpenCascade/OCP binary wheels for real CAD operations.
 # The app still has a mesh fallback if the optional kernel import fails.
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libgl1 \
+        libglib2.0-0 \
+        libgomp1 \
+        libx11-6 \
+        libxext6 \
+        libxrender1 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONUNBUFFERED=1
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
