@@ -268,6 +268,9 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                         # Store validation metrics
                         obj["validation"] = validation.to_dict()
 
+                if not edit_only and obj.get("id") in session["objects"]:
+                    session["selected_object_id"] = ""
+
             if session.get("fit"):
                 auto_fit_session(session)
 

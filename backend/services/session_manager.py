@@ -346,14 +346,14 @@ SOURCE_PHONE_STAND_META: dict[str, Any] = {
 }
 
 
-SOURCE_DEWALT_BATTERY_META: dict[str, Any] = {
-    "id": "source-dewalt-battery-wall-mount",
-    "title": "Dewalt battery holder wall mount",
-    "source": "source-first parametric reconstruction",
+SOURCE_BATTERY_HOLDER_META: dict[str, Any] = {
+    "id": "generative-power-tool-battery-wall-mount",
+    "title": "Power-tool battery wall mount recipe",
+    "source": "generative recipe from prompt and source signals",
     "reference_queries": [
-        "dewalt battery holder wall mount popular 3d print",
-        "dewalt battery holder flat bottom printables",
-        "dual dewalt battery holder printables",
+        "power tool battery holder wall mount popular 3d print",
+        "battery holder flat bottom printable",
+        "dual battery holder printable slide rail",
     ],
     "notes": [
         "multi-slot wall mount layout",
@@ -395,6 +395,25 @@ def _source_signal_summary(prompt: str) -> str:
         return "source-search: no live provider hits; used curated popular source model"
     top = "; ".join(f"{ex.source}:{ex.title}" for ex in examples[:3])
     return f"source-search: {top}"
+
+
+def _battery_brand(prompt: str) -> str:
+    text = (prompt or "").lower()
+    for brand in ("dewalt", "makita", "milwaukee", "ryobi", "bosch"):
+        if brand in text:
+            return brand
+    return "power_tool"
+
+
+def _battery_brand_color(prompt: str) -> str:
+    brand = _battery_brand(prompt)
+    return {
+        "dewalt": "#ffd700",
+        "makita": "#19b7b5",
+        "milwaukee": "#c62828",
+        "ryobi": "#b7d31f",
+        "bosch": "#d12b2b",
+    }.get(brand, "#a9aaad")
 
 
 def _recent_generation_context(session: Session) -> str:
@@ -682,6 +701,7 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
         return []
 
     if kind in {"dewalt_battery_holder", "battery_holder"}:
+        brand = _battery_brand(prompt)
         params = dict(DEFAULT_PARAMETERS)
         params.update(
             {
@@ -706,27 +726,27 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
             }
         )
         shape = _make_source_battery_holder_mesh(params)
-        source_obj = create_manual_object("dewalt_battery_wall_mount", shape, params)
+        source_obj = create_manual_object(f"{brand}_battery_wall_mount", shape, params)
         source_obj["primitive"] = "source_battery_holder"
         source_obj["template_hint"] = "source_battery_holder"
-        source_obj["assembly_source"] = "source:dewalt-battery-wall-mount"
-        source_obj["source_model"] = deepcopy(SOURCE_DEWALT_BATTERY_META)
+        source_obj["assembly_source"] = "generative-recipe:power-tool-battery-wall-mount"
+        source_obj["source_model"] = deepcopy(SOURCE_BATTERY_HOLDER_META)
         source_obj["operation_history"] = [
             {
-                "operation": "source_reconstruct",
-                "source": SOURCE_DEWALT_BATTERY_META["title"],
+                "operation": "generative_recipe",
+                "source": SOURCE_BATTERY_HOLDER_META["title"],
                 "slots": 3,
             }
         ]
-        source_obj["color"] = "#ffd700"
+        source_obj["color"] = _battery_brand_color(prompt)
 
         _remove_object_direct(session, obj["id"])
         add_object(session, source_obj)
-        session["selected_object_id"] = source_obj["id"]
+        session["selected_object_id"] = ""
         return [
             _source_signal_summary(prompt),
-            "source-model: Dewalt battery wall mount with 3 adjustable slots",
-            "generated source-first wall mount with slide rails, latch pads, rear stops, and screw pattern",
+            "generative-recipe: power-tool battery wall mount with adjustable slots",
+            "generated clean parametric wall mount with slide rails, latch pads, rear stops, and screw pattern",
         ]
 
     params = dict(DEFAULT_PARAMETERS)
@@ -760,11 +780,11 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
 
     _remove_object_direct(session, obj["id"])
     add_object(session, source_obj)
-    session["selected_object_id"] = source_obj["id"]
+    session["selected_object_id"] = ""
     return [
         _source_signal_summary(prompt),
-        "source-model: Phone/Tablet Stand - Flat fold - Print in place! (medium 60x100x4mm)",
-        "generated source-first parametric reconstruction with hinge barrels, front stops, side links, and cable gap",
+        "generative-recipe: phone/tablet flat-fold stand proportions",
+        "generated clean parametric stand with hinge barrels, front stops, side links, and cable gap",
     ]
 
 
@@ -866,7 +886,7 @@ def replace_object_with_template_assembly(
     for part in parts:
         part["assembly_source"] = template_name
         add_object(session, part)
-    session["selected_object_id"] = parts[0]["id"]
+    session["selected_object_id"] = ""
     return [f"created editable {template_name} assembly with {len(parts)} bodies"]
 
 
@@ -881,8 +901,6 @@ def replace_object_with_research_assembly(
         return []
 
     category = str(brief.get("category") or "generic").strip().lower()
-    if category == "generic":
-        return []
 
     parts: list[CadObject] = []
     color = obj.get("color", "#a9aaad")
@@ -1002,6 +1020,26 @@ def replace_object_with_research_assembly(
             _create_box_component("tool_base_plate", width, depth, max(height, thickness), [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
             _create_box_component("tool_alignment_rib", width * 0.72, wall, max(height * 0.8, wall), [0.0, 0.0, max(height, thickness)], params, color=color),
         ]
+    elif category == "generic":
+        prompt_text = str(brief.get("prompt", "")).strip().lower()
+        base_h = max(thickness, min(height * 0.22, 14.0))
+        core_h = max(height - base_h, base_h)
+        core_w = max(width * 0.62, min(width - wall * 2.0, width * 0.78))
+        core_d = max(depth * 0.58, min(depth - wall * 2.0, depth * 0.74))
+        parts = [
+            _create_box_component("concept_base", width, depth, base_h, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
+            _create_box_component("concept_main_body", core_w, core_d, core_h, [0.0, 0.0, base_h], params, color=color),
+        ]
+        if any(word in prompt_text for word in ("holder", "hallare", "mount", "rack", "stand", "stall")):
+            parts.extend([
+                _create_box_component("concept_front_lip", core_w, wall, max(core_h * 0.38, wall * 2.0), [0.0, -core_d / 2.0 + wall / 2.0, base_h], params, color=color),
+                _create_box_component("concept_back_register", core_w, wall, max(core_h * 0.52, wall * 2.0), [0.0, core_d / 2.0 - wall / 2.0, base_h], params, color=color),
+            ])
+        else:
+            parts.extend([
+                _create_box_component("concept_left_detail", wall, core_d * 0.78, max(core_h * 0.55, wall * 2.0), [-core_w / 2.0 + wall / 2.0, 0.0, base_h], params, color=color),
+                _create_box_component("concept_right_detail", wall, core_d * 0.78, max(core_h * 0.55, wall * 2.0), [core_w / 2.0 - wall / 2.0, 0.0, base_h], params, color=color),
+            ])
 
     if not parts:
         return []

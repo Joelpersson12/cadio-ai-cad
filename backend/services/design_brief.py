@@ -39,14 +39,14 @@ class DesignBrief:
 
 
 CATEGORY_KEYWORDS: dict[str, set[str]] = {
-    "battery_holder": {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch"},
-    "device_stand": {"stand", "dock", "cradle", "phone", "tablet", "headset", "headphone"},
-    "electronics_holder": {"cdi", "ecu", "ecm", "module", "ignition", "controller", "electronics"},
-    "holder": {"holder", "mount", "bracket", "clip", "retainer", "hanger"},
-    "enclosure": {"case", "cover", "enclosure", "box", "housing", "shell", "lid"},
+    "battery_holder": {"battery", "batteries", "batteri", "dewalt", "makita", "milwaukee", "ryobi", "bosch"},
+    "device_stand": {"stand", "stall", "dock", "cradle", "phone", "mobil", "tablet", "headset", "headphone"},
+    "electronics_holder": {"cdi", "ecu", "ecm", "module", "modul", "ignition", "controller", "electronics"},
+    "holder": {"holder", "hallare", "mount", "wall", "bracket", "clip", "retainer", "hanger"},
+    "enclosure": {"case", "cover", "enclosure", "box", "housing", "shell", "lid", "cover"},
     "organizer": {"organizer", "organiser", "tray", "bin", "rack", "divider", "storage"},
-    "organic": {"octopus", "figurine", "statue", "miniature", "toy", "animal", "sculpture"},
-    "tool": {"jig", "fixture", "adapter", "spacer", "shim", "washer", "tool"},
+    "organic": {"octopus", "blackfisk", "figurine", "statue", "miniature", "toy", "animal", "sculpture"},
+    "tool": {"jig", "fixture", "adapter", "spacer", "shim", "washer", "tool", "knife", "nozzle"},
 }
 
 
