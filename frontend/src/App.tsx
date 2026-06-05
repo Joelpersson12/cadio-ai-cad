@@ -8,7 +8,7 @@ import AiPanel from "./components/AiPanel";
 import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
 import type { ExampleObject } from "./components/ExampleBrowser";
-import type { ExpertTool, SelectionMode, TransformMode } from "./utils/types";
+import type { ExpertTool, MaterialProfile, SelectionMode, TransformMode } from "./utils/types";
 
 function promptFromHistory(item: Record<string, unknown> | undefined) {
   const value = item?.prompt ?? item?.command ?? item?.input;
@@ -53,6 +53,20 @@ const TRANSFORM_MODES: Array<{ id: TransformMode; label: string }> = [
   { id: "translate", label: "Move" },
   { id: "rotate", label: "Rotate" },
   { id: "scale", label: "Scale" },
+];
+
+const FALLBACK_MATERIAL_ENTRIES: Array<[string, MaterialProfile]> = [
+  [
+    "PLA",
+    {
+      label: "PLA",
+      nozzle_temp_c: [200, 215],
+      bed_temp_c: [50, 60],
+      fan_percent: 100,
+      scale_compensation_percent: 100,
+      notes: [],
+    },
+  ],
 ];
 
 // Mobile examples sheet for inspiration
@@ -118,8 +132,11 @@ function MobileEditSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const { objects, selectedObjectId, patchParam, onToggleFeature } = useCadStore();
+  const { objects, selectedObjectId, materials, printSettings, patchParam, patchAppearance, onToggleFeature } = useCadStore();
   const obj = objects.find((o) => o.id === selectedObjectId) ?? objects[0];
+  const materialEntries: Array<[string, MaterialProfile]> = Object.entries(materials).length
+    ? Object.entries(materials)
+    : FALLBACK_MATERIAL_ENTRIES;
 
   if (!obj) return null;
 
@@ -146,6 +163,50 @@ function MobileEditSheet({
 
         <div className="px-5 pb-8 flex flex-col gap-4">
           <h3 className="text-sm font-semibold text-cadio-text">Edit Model</h3>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-cadio-muted">Material</span>
+              <select
+                value={printSettings?.material ?? obj.material}
+                onChange={(e) => void patchAppearance({ material: e.target.value })}
+                className="h-10 rounded-lg border border-cadio-border bg-[#111827] px-3 text-sm text-cadio-text outline-none"
+              >
+                {materialEntries.map(([key, material]) => (
+                  <option value={key} key={key}>
+                    {material.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-cadio-muted">Color</span>
+              <input
+                type="color"
+                value={obj.color}
+                onChange={(e) => void patchAppearance({ color: e.target.value })}
+                className="h-10 w-full rounded-lg border border-cadio-border bg-[#111827] p-1"
+              />
+            </label>
+          </div>
+
+          {printSettings && (
+            <div className="rounded-xl border border-cadio-border bg-[#111827] p-3 text-xs text-cadio-text">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="font-semibold">Print setup</span>
+                <span className="text-cadio-accent">{printSettings.scale.recommended_scale_percent.toFixed(1)}% scale</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-cadio-muted">
+                <span>Layer {printSettings.slicer.layer_height_mm} mm</span>
+                <span>Infill {printSettings.slicer.infill_percent}%</span>
+                <span>Nozzle {printSettings.slicer.nozzle_temp_c[0]}-{printSettings.slicer.nozzle_temp_c[1]} C</span>
+                <span>Bed {printSettings.slicer.bed_temp_c[0]}-{printSettings.slicer.bed_temp_c[1]} C</span>
+              </div>
+              {printSettings.source_settings?.has_creator_settings && (
+                <p className="mt-2 text-cadio-accent">Creator settings loaded from Printables</p>
+              )}
+            </div>
+          )}
 
           {/* Parameters */}
           {Object.entries(obj.parameters).map(([key, value]) => (

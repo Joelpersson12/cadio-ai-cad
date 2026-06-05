@@ -196,6 +196,7 @@ def build_scene_payload(
 ) -> ScenePayload:
     """Serialize the full session state into a ScenePayload for the frontend."""
     from backend.services.print_analysis import analyze_printability
+    from backend.services.print_profiles import recommended_print_settings
 
     objects_out: list[CadObjectOut] = []
     for oid in session["object_order"]:
@@ -224,6 +225,7 @@ def build_scene_payload(
 
     pa = analyze_printability(session)
     bounds = scene_bounds(session)
+    print_settings = recommended_print_settings(session)
 
     return ScenePayload(
         session_id=session["session_id"],
@@ -235,6 +237,7 @@ def build_scene_payload(
         printer=session.get("printer", DEFAULT_PRINTER),
         scene_token=session.get("scene_token", ""),
         print_assistant=pa,
+        print_settings=print_settings,
         printability_score=pa.printability_score,
         edit_history=session["edit_history"][-30:],
         updated_at=session.get("updated_at", ""),

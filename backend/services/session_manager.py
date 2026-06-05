@@ -489,6 +489,22 @@ def _source_file_evidence(prompt: str, preferred_slots: int = 0) -> tuple[dict[s
     )
 
 
+def _source_print_settings(source_example: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(source_example, dict):
+        return {}
+    if source_example.get("source") != "printables":
+        return {}
+    url = str(source_example.get("url") or "")
+    if not url:
+        return {}
+    try:
+        from backend.services.design_providers import resolve_printables_model_metadata
+
+        return resolve_printables_model_metadata(url)
+    except Exception:
+        return {}
+
+
 def _slot_count_from_source_file(source_file: dict[str, Any] | None, fallback: int) -> int:
     name = str((source_file or {}).get("name") or "").lower()
     if any(token in name for token in ("x3", "3x", "triple", "three")):
@@ -800,6 +816,7 @@ def _create_imported_source_object(
         "matched_example": source_example,
         "files": source_files,
         "selected_file": selected_source_file,
+        "print_settings": _source_print_settings(source_example),
     }
     source_obj["operation_history"] = [
         {
@@ -883,6 +900,7 @@ def _create_imported_source_objects(
             "group_id": group_id,
             "part_index": index,
             "part_count": len(imported_parts),
+            "print_settings": _source_print_settings(source_example),
         }
         if variant_index is not None:
             source_obj["source_model"]["variant_index"] = variant_index
@@ -1614,6 +1632,7 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
         source_model["matched_example"] = source_example
         source_model["files"] = source_files
         source_model["selected_file"] = selected_source_file
+        source_model["print_settings"] = _source_print_settings(source_example)
         source_obj["source_model"] = source_model
         source_obj["operation_history"] = [
             {
@@ -1655,6 +1674,13 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
     source_obj["template_hint"] = "source_phone_stand"
     source_obj["assembly_source"] = "source:printables:1161/thingiverse:3146835"
     source_obj["source_model"] = deepcopy(SOURCE_PHONE_STAND_META)
+    source_obj["source_model"]["print_settings"] = _source_print_settings(
+        {
+            "source": "printables",
+            "url": SOURCE_PHONE_STAND_META["printables_url"],
+            "title": SOURCE_PHONE_STAND_META["title"],
+        }
+    )
     source_obj["operation_history"] = [
         {
             "operation": "source_reconstruct",

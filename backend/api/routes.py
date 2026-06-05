@@ -46,6 +46,7 @@ from backend.services.object_manager import (
     build_scene_payload,
     duplicate_object,
 )
+from backend.services.print_profiles import material_profiles_response, normalize_material
 from backend.services.session_manager import (
     acquire_lock,
     add_history,
@@ -132,7 +133,17 @@ def health() -> dict[str, Any]:
 
 @router.get("/api/printers")
 def list_printers() -> dict[str, Any]:
-    return {"status": "ok", "default": DEFAULT_PRINTER, "printers": PRINTERS}
+    return {
+        "status": "ok",
+        "default": DEFAULT_PRINTER,
+        "printers": PRINTERS,
+        "materials": material_profiles_response(),
+    }
+
+
+@router.get("/api/materials")
+def list_materials() -> dict[str, Any]:
+    return {"status": "ok", "materials": material_profiles_response()}
 
 
 @router.post("/api/printer", response_model=None)
@@ -506,7 +517,7 @@ async def update_appearance(
 
             save_undo_snapshot(session)
             if data.material is not None:
-                obj["material"] = str(data.material)[:64]
+                obj["material"] = normalize_material(str(data.material))
             if data.color is not None and re.fullmatch(r"#[0-9a-fA-F]{6}", data.color):
                 obj["color"] = data.color
 

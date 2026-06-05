@@ -3,7 +3,9 @@
 import { create } from "zustand";
 import type {
   CadObject,
+  MaterialProfile,
   PrintAssistantResult,
+  PrintSettings,
   PrinterProfile,
   ScenePayload,
   ExpertTool,
@@ -46,7 +48,9 @@ interface CadState {
   // Print
   printer: string;
   printers: Record<string, PrinterProfile>;
+  materials: Record<string, MaterialProfile>;
   printAssistant: PrintAssistantResult;
+  printSettings: PrintSettings | null;
 
   // UI
   status: string;
@@ -109,12 +113,14 @@ export const useCadStore = create<CadState>((set, get) => ({
   bounds: { x: 0, y: 0, z: 0 },
   printer: "adventurer_3",
   printers: {},
+  materials: {},
   printAssistant: {
     warnings: [],
     checks: [],
     hints: [],
     printability_score: 0,
   },
+  printSettings: null,
   status: "Ready",
   transformMode: "off",
   expertMode: false,
@@ -173,6 +179,7 @@ export const useCadStore = create<CadState>((set, get) => ({
       bounds: payload.bounds,
       printer: payload.printer,
       printAssistant: payload.print_assistant,
+      printSettings: payload.print_settings,
       editHistory: payload.edit_history,
     });
   },
@@ -184,7 +191,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   loadPrinters: async () => {
     try {
       const data = await apiListPrinters();
-      set({ printers: data.printers });
+      set({ printers: data.printers, materials: data.materials ?? {} });
     } catch {
       // Silently fail
     }
@@ -352,15 +359,22 @@ export const useCadStore = create<CadState>((set, get) => ({
 
   patchAppearance: async (appearance) => {
     const { sessionId, selectedObjectId, objects } = get();
-    const targetObjectId = selectedObjectId || objects[0]?.id || "";
-    if (!sessionId || !targetObjectId) return;
+    const targetObjectIds = selectedObjectId
+      ? [selectedObjectId]
+      : objects.length > 1
+      ? objects.map((object) => object.id)
+      : [objects[0]?.id || ""];
+    if (!sessionId || !targetObjectIds[0]) return;
     try {
-      const data = await apiUpdateAppearance({
-        session_id: sessionId,
-        object_id: targetObjectId,
-        ...appearance,
-      });
-      get().applyScenePayload(data);
+      let data: ScenePayload | null = null;
+      for (const objectId of targetObjectIds) {
+        data = await apiUpdateAppearance({
+          session_id: sessionId,
+          object_id: objectId,
+          ...appearance,
+        });
+      }
+      if (data) get().applyScenePayload(data);
       set({ status: "Appearance updated" });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });

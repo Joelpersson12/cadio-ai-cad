@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useCadStore } from "../stores/cadStore";
-import type { PrinterProfile } from "../utils/types";
+import type { MaterialProfile, PrinterProfile } from "../utils/types";
 import { exportUrl } from "../utils/api";
 
 type ParamMeta = {
@@ -12,6 +12,20 @@ type ParamMeta = {
   step: number;
   unit?: string;
 };
+
+const FALLBACK_MATERIAL_ENTRIES: Array<[string, MaterialProfile]> = [
+  [
+    "PLA",
+    {
+      label: "PLA",
+      nozzle_temp_c: [200, 215],
+      bed_temp_c: [50, 60],
+      fan_percent: 100,
+      scale_compensation_percent: 100,
+      notes: [],
+    },
+  ],
+];
 
 const PARAM_META: Record<string, ParamMeta> = {
   num_batteries: { label: "Num Batteries", min: 1, max: 6, step: 1 },
@@ -74,6 +88,17 @@ const DEFAULT_ORDER = [
 function formatValue(value: number, step: number) {
   if (Number.isInteger(step)) return String(Math.round(value));
   return Number(value).toFixed(step < 0.5 ? 2 : 1).replace(/\.0$/, "");
+}
+
+function settingValue(value: string | number | boolean | undefined) {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
+function tempRange(value: [number, number] | undefined) {
+  if (!value) return "-";
+  return `${value[0]}-${value[1]} C`;
 }
 
 function ParameterRow({
@@ -147,6 +172,8 @@ export default function ObjectInspector() {
     bounds,
     printer,
     printers,
+    materials,
+    printSettings,
     sessionId,
     patchParam,
     patchAppearance,
@@ -158,6 +185,7 @@ export default function ObjectInspector() {
 
   const selectedObject = objects.find((o) => o.id === selectedObjectId) ?? objects[0];
   const selectedPrinter = printers[printer] as PrinterProfile | undefined;
+  const materialKey = printSettings?.material ?? selectedObject?.material ?? "PLA";
 
   const parameterKeys = useMemo(() => {
     if (!selectedObject) return [];
@@ -171,6 +199,12 @@ export default function ObjectInspector() {
   }, [selectedObject]);
 
   const color = selectedObject?.color ?? "#ffd700";
+  const sourceSettings = printSettings?.source_settings;
+  const sourceFields = sourceSettings?.fields ?? {};
+  const sourceRows = Object.entries(sourceFields).slice(0, 7);
+  const materialEntries: Array<[string, MaterialProfile]> = Object.entries(materials).length
+    ? Object.entries(materials)
+    : FALLBACK_MATERIAL_ENTRIES;
 
   return (
     <div className="flex h-full flex-col bg-[#1d1d1e] text-white">
@@ -259,11 +293,30 @@ export default function ObjectInspector() {
 
         <section className="border-t border-[#303033] py-5">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Colors</h3>
-            <span className="text-[10px] text-[#858585]">1</span>
+            <h3 className="text-sm font-semibold">Material & color</h3>
+            <span className="text-[10px] text-[#858585]">{Object.keys(materials).length || 1}</span>
           </div>
+          <label className="mb-4 block">
+            <span className="mb-2 block text-xs text-[#a9a9a9]">Material</span>
+            <select
+              value={materialKey}
+              onChange={(e) => void patchAppearance({ material: e.target.value })}
+              className="w-full rounded-lg border border-[#333] bg-[#252526] px-3 py-2 text-sm text-white outline-none"
+            >
+              {materialEntries.map(([key, material]) => (
+                <option value={key} key={key}>
+                  {material.label}
+                </option>
+              ))}
+            </select>
+            {materials[materialKey] && (
+              <span className="mt-1 block text-[11px] text-[#898989]">
+                {tempRange(materials[materialKey].nozzle_temp_c)} nozzle, {tempRange(materials[materialKey].bed_temp_c)} bed
+              </span>
+            )}
+          </label>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-[#b9b9b9]">Holder</span>
+            <span className="text-sm text-[#b9b9b9]">Model color</span>
             <label className="flex items-center gap-2 rounded-lg bg-[#2a2a2b] px-3 py-2">
               <input
                 type="color"
@@ -275,6 +328,97 @@ export default function ObjectInspector() {
             </label>
           </div>
         </section>
+
+        {printSettings && (
+          <section className="border-t border-[#303033] py-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Print setup</h3>
+              <span className="text-[10px] text-[#858585]">{printSettings.material_label}</span>
+            </div>
+
+            <div className="mb-4 grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg bg-[#242425] px-3 py-2">
+                <div className="text-[#8f8f8f]">Scale</div>
+                <div className="mt-1 text-base font-semibold text-white">
+                  {printSettings.scale.recommended_scale_percent.toFixed(1)}%
+                </div>
+                <div className="text-[10px] text-[#9a9a9a]">
+                  fit max {printSettings.scale.fit_scale_percent.toFixed(1)}%
+                </div>
+              </div>
+              <div className="rounded-lg bg-[#242425] px-3 py-2">
+                <div className="text-[#8f8f8f]">Layer</div>
+                <div className="mt-1 text-base font-semibold text-white">
+                  {printSettings.slicer.layer_height_mm} mm
+                </div>
+                <div className="text-[10px] text-[#9a9a9a]">
+                  first {printSettings.slicer.first_layer_height_mm} mm
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs text-[#cfcfcf]">
+              <div className="flex justify-between gap-3">
+                <span className="text-[#8f8f8f]">Nozzle</span>
+                <span>{tempRange(printSettings.slicer.nozzle_temp_c)}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-[#8f8f8f]">Bed</span>
+                <span>{tempRange(printSettings.slicer.bed_temp_c)}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-[#8f8f8f]">Speed</span>
+                <span>{printSettings.slicer.print_speed_mm_s} mm/s</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-[#8f8f8f]">Infill / walls</span>
+                <span>{printSettings.slicer.infill_percent}% / {printSettings.slicer.walls}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-[#8f8f8f]">Supports</span>
+                <span className="text-right">{printSettings.slicer.support}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-[#8f8f8f]">Adhesion</span>
+                <span>{printSettings.slicer.adhesion}</span>
+              </div>
+            </div>
+
+            {printSettings.slicer.source_overrides.length > 0 && (
+              <p className="mt-3 rounded-lg bg-[#14333a] px-3 py-2 text-xs text-[#b7f3ff]">
+                Using creator values for: {printSettings.slicer.source_overrides.join(", ")}
+              </p>
+            )}
+            {printSettings.warnings.map((warning) => (
+              <p key={warning} className="mt-2 rounded-lg bg-[#3b2525] px-3 py-2 text-xs text-[#ffb5b5]">{warning}</p>
+            ))}
+          </section>
+        )}
+
+        {sourceSettings?.has_creator_settings && (
+          <section className="border-t border-[#303033] py-5">
+            <div className="mb-3">
+              <h3 className="text-sm font-semibold">Creator settings</h3>
+              <p className="mt-1 text-[11px] text-[#898989]">
+                {sourceSettings.title || "Printables model"}
+                {sourceSettings.author ? ` by ${sourceSettings.author}` : ""}
+              </p>
+            </div>
+            {sourceRows.length > 0 && (
+              <div className="space-y-2 text-xs">
+                {sourceRows.map(([key, value]) => (
+                  <div key={key} className="flex justify-between gap-3">
+                    <span className="capitalize text-[#8f8f8f]">{key.replace(/_/g, " ")}</span>
+                    <span className="max-w-[150px] text-right text-[#ededed]">{settingValue(value)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {(sourceSettings.notes ?? []).slice(0, 2).map((note) => (
+              <p key={note} className="mt-3 text-xs leading-relaxed text-[#bdbdbd]">{note}</p>
+            ))}
+          </section>
+        )}
 
         <section className="border-t border-[#303033] py-5 text-xs text-[#9f9f9f]">
           <p>Bounds: {bounds.x?.toFixed(1)} x {bounds.y?.toFixed(1)} x {bounds.z?.toFixed(1)} mm</p>

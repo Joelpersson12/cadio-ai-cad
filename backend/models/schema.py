@@ -77,6 +77,7 @@ class ScenePayload(BaseModel):
     printer: str
     scene_token: str
     print_assistant: PrintAssistantResult
+    print_settings: dict[str, Any] = Field(default_factory=dict)
     printability_score: int
     edit_history: list[dict[str, Any]]
     updated_at: str

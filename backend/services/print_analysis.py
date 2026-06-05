@@ -11,6 +11,7 @@ from backend.services.object_manager import (
     scene_bounds,
 )
 from backend.services.session_manager import Session, get_selected_object
+from backend.services.print_profiles import MATERIALS, normalize_material
 
 
 def analyze_printability(session: Session) -> PrintAssistantResult:
@@ -44,6 +45,23 @@ def analyze_printability(session: Session) -> PrintAssistantResult:
 
     selected = get_selected_object(session)
     params = selected["parameters"]
+    material_key = normalize_material(str(selected.get("material", "PLA")))
+    material = MATERIALS[material_key]
+    printer_name = str(printer["name"]).lower()
+    enclosed = any(
+        word in printer_name
+        for word in ("x1c", "p1s", "creator", "adventurer", "qidi", "raise3d", "ultimaker", "voron", "k1")
+    )
+
+    checks.append(f"Material profile: {material['label']}")
+    if material_key in {"ABS", "ASA", "NYLON"} and not enclosed:
+        warnings.append(f"{material['label']} needs an enclosure for reliable printing")
+    elif material_key in {"ABS", "ASA", "NYLON"}:
+        checks.append("Printer enclosure suitable for high-temperature material")
+    if material_key == "PETG":
+        hints.append("PETG: keep fan lower and print slower than PLA")
+    if material_key == "TPU":
+        hints.append("TPU: use slow speed, low retraction, and avoid dense supports")
 
     # Wall thickness
     wall = params.get("wall_thickness", 3.0)

@@ -1,6 +1,6 @@
 /** HTTP API client for the Cadio backend. */
 
-import type { ScenePayload, PrinterProfile } from "./types";
+import type { ScenePayload, PrinterProfile, MaterialProfile } from "./types";
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE || window.location.origin
@@ -151,8 +151,16 @@ export async function listPrinters(): Promise<{
   status: string;
   default: string;
   printers: Record<string, PrinterProfile>;
+  materials: Record<string, MaterialProfile>;
 }> {
   return request("/api/printers");
+}
+
+export async function listMaterials(): Promise<{
+  status: string;
+  materials: Record<string, MaterialProfile>;
+}> {
+  return request("/api/materials");
 }
 
 export async function updatePrinter(payload: {

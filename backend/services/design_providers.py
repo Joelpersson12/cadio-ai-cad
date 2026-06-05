@@ -124,6 +124,7 @@ class DesignProvider(ABC):
 
 _SEARCH_CACHE: dict[tuple[str, str, int], tuple[float, list[ExampleDesign]]] = {}
 _FILE_CACHE: dict[str, tuple[float, list[SourceModelFile]]] = {}
+_MODEL_META_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _CACHE_TTL_SECONDS = 600.0
 
 
@@ -152,6 +153,147 @@ def _media_url(path: Any) -> str | None:
     if path.startswith("http"):
         return path
     return f"https://media.printables.com/{path.lstrip('/')}"
+
+
+def _plain_text(value: Any) -> str:
+    if not isinstance(value, str) or not value:
+        return ""
+    text = html.unescape(value)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(r"</p\s*>", "\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n\s+", "\n", text)
+    return text.strip()
+
+
+def _numeric_values(value: Any) -> list[float]:
+    values: list[float] = []
+    if value is None:
+        return values
+    if isinstance(value, (int, float)):
+        return [float(value)]
+    if isinstance(value, str):
+        for match in re.finditer(r"\d+(?:[.,]\d+)?", value):
+            values.append(float(match.group(0).replace(",", ".")))
+        return values
+    if isinstance(value, dict):
+        for key in ("value", "height", "diameter", "mm", "amount", "name"):
+            values.extend(_numeric_values(value.get(key)))
+        return values
+    if isinstance(value, list):
+        for item in value:
+            values.extend(_numeric_values(item))
+    return values
+
+
+def _name_values(value: Any) -> list[str]:
+    names: list[str] = []
+    if value is None:
+        return names
+    if isinstance(value, str):
+        clean = _plain_text(value)
+        return [clean] if clean else []
+    if isinstance(value, dict):
+        for key in ("name", "label", "value", "material", "title", "publicUsername", "handle"):
+            item = value.get(key)
+            if isinstance(item, str) and item.strip():
+                names.append(_plain_text(item))
+        return names
+    if isinstance(value, list):
+        for item in value:
+            names.extend(_name_values(item))
+    seen: set[str] = set()
+    unique: list[str] = []
+    for name in names:
+        key = name.lower()
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(name)
+    return unique
+
+
+def _duration_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    if isinstance(value, dict):
+        for key in ("text", "display", "formatted", "name"):
+            text = value.get(key)
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+        for key in ("seconds", "duration", "value"):
+            text = _duration_text(value.get(key))
+            if text:
+                return text
+        return None
+    if isinstance(value, (int, float)):
+        seconds = int(value)
+        if seconds <= 0:
+            return None
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        if hours and minutes:
+            return f"{hours}h {minutes}m"
+        if hours:
+            return f"{hours}h"
+        return f"{minutes}m"
+    return None
+
+
+def _extract_text_print_settings(text: str) -> dict[str, Any]:
+    lower = text.lower()
+    fields: dict[str, Any] = {}
+    notes: list[str] = []
+
+    material_hits = []
+    for material in ("PLA", "PETG", "ABS", "ASA", "TPU", "NYLON"):
+        if re.search(rf"\b{material.lower()}\b", lower):
+            material_hits.append(material)
+    if material_hits:
+        fields["material"] = ", ".join(material_hits)
+
+    patterns: list[tuple[str, str]] = [
+        ("layer_height_mm", r"(?:layer\s*height|layer|resolution)[^\d]{0,20}(\d+(?:[.,]\d+)?)\s*mm"),
+        ("infill_percent", r"(?:infill|fill)[^\d]{0,20}(\d{1,3})\s*%"),
+        ("infill_percent", r"(\d{1,3})\s*%\s*(?:infill|fill)"),
+        ("nozzle_temp_c", r"(?:nozzle|hotend|extruder)[^\d]{0,24}(\d{3})\s*(?:c|°c)?"),
+        ("bed_temp_c", r"(?:bed|build\s*plate)[^\d]{0,24}(\d{2,3})\s*(?:c|°c)?"),
+        ("scale_percent", r"(?:scale|skal)[^\d]{0,24}(\d{2,3})\s*%"),
+        ("wall_count", r"(?:walls?|perimeters?)[^\d]{0,24}(\d{1,2})"),
+    ]
+    for key, pattern in patterns:
+        if key in fields:
+            continue
+        match = re.search(pattern, lower, re.I)
+        if match:
+            number = float(match.group(1).replace(",", "."))
+            fields[key] = int(number) if number.is_integer() else number
+
+    if re.search(r"\b(no|without|support[- ]?free)\s+supports?\b|\bno support\b", lower):
+        fields["supports"] = "No supports"
+    elif re.search(r"\b(supports?\s+(required|needed|recommended)|needs?\s+supports?)\b", lower):
+        fields["supports"] = "Supports recommended"
+    elif "support" in lower:
+        fields["supports"] = "Check model notes"
+
+    if "brim" in lower:
+        fields["adhesion"] = "Brim"
+    elif "raft" in lower:
+        fields["adhesion"] = "Raft"
+
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        clean = sentence.strip()
+        if len(clean) < 8:
+            continue
+        if any(word in clean.lower() for word in ("print", "support", "infill", "layer", "material", "scale", "brim", "raft")):
+            notes.append(clean[:220])
+        if len(notes) >= 3:
+            break
+
+    return {"fields": fields, "notes": notes}
 
 
 def _printables_download_url(preview_path: Any, name: str) -> str | None:
@@ -561,6 +703,116 @@ def resolve_printables_model_files(model_url: str, limit: int = 20) -> list[Sour
     result = sorted(files.values(), key=lambda item: (item.order, item.name.lower()))[:limit]
     _FILE_CACHE[cache_key] = (time.time(), result)
     return list(result)
+
+
+def resolve_printables_model_metadata(model_url: str) -> dict[str, Any]:
+    """Read public Printables model metadata and creator print settings.
+
+    Printables exposes structured fields for some models (material, layer
+    heights, nozzle diameters, printer, duration) and many creators instead
+    write settings in the description.  This returns both, with a clear source
+    marker so Cadio can show them separately from its own slicer fallback.
+    """
+    if "printables.com/model/" not in (model_url or ""):
+        return {}
+
+    normalized = model_url.split("?")[0].rstrip("/")
+    normalized = normalized.removesuffix("/files")
+    cache_key = normalized.lower()
+    cached = _MODEL_META_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+        return dict(cached[1])
+
+    try:
+        page = _fetch_text(normalized)
+    except Exception:
+        return {}
+
+    model: dict[str, Any] | None = None
+    for match in re.finditer(
+        r'<script[^>]+data-sveltekit-fetched[^>]*>(.*?)</script>',
+        page,
+        re.DOTALL,
+    ):
+        try:
+            wrapper = json.loads(html.unescape(match.group(1)))
+            body = wrapper.get("body")
+            if not isinstance(body, str):
+                continue
+            payload = json.loads(body)
+        except Exception:
+            continue
+
+        for node in _walk_json(payload):
+            if not isinstance(node, dict):
+                continue
+            if node.get("__typename") == "PrintType" and node.get("name"):
+                model = node
+                break
+        if model is not None:
+            break
+
+    if model is None:
+        _MODEL_META_CACHE[cache_key] = (time.time(), {})
+        return {}
+
+    description = _plain_text(model.get("description"))
+    summary = _plain_text(model.get("summary"))
+    combined_text = "\n".join(part for part in (summary, description) if part)
+    text_settings = _extract_text_print_settings(combined_text)
+
+    fields: dict[str, Any] = dict(text_settings.get("fields", {}))
+    materials = _name_values(model.get("usedMaterial")) or _name_values(model.get("materials"))
+    if materials and "material" not in fields:
+        fields["material"] = ", ".join(materials[:3])
+
+    layer_values = _numeric_values(model.get("layerHeights"))
+    if layer_values and "layer_height_mm" not in fields:
+        fields["layer_height_mm"] = round(layer_values[0], 3)
+
+    nozzle_values = _numeric_values(model.get("nozzleDiameters"))
+    if nozzle_values and "nozzle_diameter_mm" not in fields:
+        fields["nozzle_diameter_mm"] = round(nozzle_values[0], 3)
+
+    printer_names = _name_values(model.get("printer"))
+    if printer_names:
+        fields["printer"] = printer_names[0]
+
+    duration = _duration_text(model.get("printDuration"))
+    if duration:
+        fields["print_duration"] = duration
+
+    if model.get("weight") is not None:
+        weights = _numeric_values(model.get("weight"))
+        if weights:
+            fields["weight_g"] = round(weights[0], 1)
+
+    if model.get("numPieces"):
+        fields["pieces"] = int(model.get("numPieces") or 0)
+
+    user = model.get("user") if isinstance(model.get("user"), dict) else {}
+    author = (
+        str(user.get("publicUsername") or user.get("handle") or "").strip()
+        if isinstance(user, dict)
+        else ""
+    )
+
+    notes = list(text_settings.get("notes", []))
+    if summary and summary not in notes:
+        notes.insert(0, summary[:220])
+    notes = notes[:4]
+
+    metadata = {
+        "source": "printables",
+        "source_url": normalized,
+        "title": str(model.get("name") or "").strip(),
+        "author": author,
+        "fields": fields,
+        "notes": notes,
+        "has_creator_settings": bool(fields or notes),
+    }
+    _MODEL_META_CACHE[cache_key] = (time.time(), metadata)
+    return dict(metadata)
 
 
 class MakerworldProvider(DesignProvider):
