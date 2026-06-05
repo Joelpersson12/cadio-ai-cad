@@ -17,7 +17,7 @@ const languageOptions: Array<{ value: Language; label: string }> = [
   { value: "pt", label: "PT" },
 ];
 
-const heroPrompt = "Black gaming headset stand with hanging headphones";
+const heroPrompt = "Clean black geometric CAD concept";
 
 const copy = {
   en: {
@@ -689,128 +689,93 @@ const copy = {
 
 function HeroModel() {
   const groupRef = useRef<THREE.Group>(null);
-  const standMaterial = useMemo(
+  const bodyMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#17191b",
-        roughness: 0.42,
-        metalness: 0.18,
+        color: "#111315",
+        roughness: 0.44,
+        metalness: 0.2,
       }),
     [],
   );
   const highlightMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#2d3033",
-        roughness: 0.36,
-        metalness: 0.22,
+        color: "#2b2f33",
+        roughness: 0.38,
+        metalness: 0.24,
       }),
     [],
   );
   const accentMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#2ee66b",
-        emissive: "#0f7d37",
-        emissiveIntensity: 0.18,
-        roughness: 0.32,
-        metalness: 0.08,
-      }),
-    [],
-  );
-  const headsetMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#0c0d0f",
-        roughness: 0.55,
+        color: "#26bddc",
+        emissive: "#0f5f70",
+        emissiveIntensity: 0.1,
+        roughness: 0.34,
         metalness: 0.12,
       }),
     [],
   );
-  const cushionMaterial = useMemo(
+  const cutMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#24272b",
-        roughness: 0.84,
-        metalness: 0.02,
+        color: "#050607",
+        roughness: 0.72,
+        metalness: 0.04,
       }),
     [],
   );
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
-    groupRef.current.rotation.y = -0.42 + Math.sin(clock.elapsedTime * 0.24) * 0.07;
-    groupRef.current.rotation.x = 0.38 + Math.sin(clock.elapsedTime * 0.18) * 0.03;
+    groupRef.current.rotation.y = -0.44 + Math.sin(clock.elapsedTime * 0.24) * 0.07;
+    groupRef.current.rotation.x = 0.42 + Math.sin(clock.elapsedTime * 0.18) * 0.028;
   });
 
   return (
-    <group ref={groupRef} position={[0.08, -0.25, 0]}>
-      <RoundedBox args={[3.55, 0.34, 2.35]} radius={0.18} smoothness={10} position={[0, 0, 0]} castShadow receiveShadow>
-        <primitive object={standMaterial} attach="material" />
+    <group ref={groupRef} position={[0.15, -0.3, 0]}>
+      <RoundedBox args={[4.35, 0.32, 2.65]} radius={0.16} smoothness={10} position={[0, 0, 0]} castShadow receiveShadow>
+        <primitive object={bodyMaterial} attach="material" />
       </RoundedBox>
-      <RoundedBox args={[2.78, 0.05, 0.1]} radius={0.03} smoothness={6} position={[0, 0.22, 0.88]} castShadow receiveShadow>
+      <RoundedBox args={[3.45, 0.26, 1.78]} radius={0.12} smoothness={8} position={[-0.18, 0.38, 0.02]} castShadow receiveShadow>
+        <primitive object={highlightMaterial} attach="material" />
+      </RoundedBox>
+      <RoundedBox args={[2.15, 0.24, 1.08]} radius={0.1} smoothness={8} position={[-0.78, 0.7, -0.12]} castShadow receiveShadow>
+        <primitive object={bodyMaterial} attach="material" />
+      </RoundedBox>
+      <RoundedBox args={[3.05, 0.05, 0.09]} radius={0.025} smoothness={5} position={[0, 0.58, 0.82]} castShadow receiveShadow>
         <primitive object={accentMaterial} attach="material" />
       </RoundedBox>
-      <RoundedBox args={[0.55, 2.95, 0.5]} radius={0.17} smoothness={12} position={[0, 1.52, 0.06]} castShadow receiveShadow>
-        <primitive object={standMaterial} attach="material" />
-      </RoundedBox>
-      <RoundedBox args={[0.1, 2.28, 0.04]} radius={0.02} smoothness={4} position={[0, 1.54, -0.22]} castShadow receiveShadow>
-        <primitive object={accentMaterial} attach="material" />
-      </RoundedBox>
-      <RoundedBox
-        args={[2.15, 0.34, 0.72]}
-        radius={0.16}
-        smoothness={10}
-        position={[0, 3.03, -0.18]}
-        castShadow
-        receiveShadow
-      >
-        <primitive object={standMaterial} attach="material" />
-      </RoundedBox>
-      <RoundedBox
-        args={[1.45, 0.26, 0.34]}
-        radius={0.1}
-        smoothness={8}
-        position={[0, 2.84, -0.7]}
-        castShadow
-        receiveShadow
-      >
+      <RoundedBox args={[1.1, 0.06, 0.09]} radius={0.025} smoothness={5} position={[-1.28, 0.88, -0.62]} castShadow receiveShadow>
         <primitive object={accentMaterial} attach="material" />
       </RoundedBox>
 
-      <group position={[0, 1.48, -0.9]}>
-        <mesh material={headsetMaterial} position={[0, 0.85, 0]} castShadow receiveShadow>
-          <torusGeometry args={[1.25, 0.075, 18, 96, Math.PI]} />
-        </mesh>
-        <mesh material={highlightMaterial} position={[0, 0.72, 0.06]} scale={[0.83, 1.02, 1]} castShadow receiveShadow>
-          <torusGeometry args={[1.14, 0.045, 14, 84, Math.PI]} />
-        </mesh>
-        <RoundedBox args={[0.54, 0.92, 0.34]} radius={0.16} smoothness={10} position={[-1.16, -0.02, 0]} castShadow receiveShadow>
-          <primitive object={headsetMaterial} attach="material" />
-        </RoundedBox>
-        <RoundedBox args={[0.54, 0.92, 0.34]} radius={0.16} smoothness={10} position={[1.16, -0.02, 0]} castShadow receiveShadow>
-          <primitive object={headsetMaterial} attach="material" />
-        </RoundedBox>
-        {[-1.16, 1.16].map((x) => (
-          <group key={x} position={[x, -0.02, -0.2]}>
-            <mesh material={cushionMaterial} scale={[0.72, 1.05, 1]} castShadow receiveShadow>
-              <torusGeometry args={[0.34, 0.065, 18, 72]} />
-            </mesh>
-            <mesh material={accentMaterial} scale={[0.78, 1.12, 1]} castShadow receiveShadow>
-              <torusGeometry args={[0.38, 0.018, 12, 72]} />
-            </mesh>
-          </group>
-        ))}
-        <mesh material={headsetMaterial} position={[-1.42, -0.5, -0.22]} rotation={[0.9, 0, -0.52]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.035, 0.035, 0.92, 18]} />
-        </mesh>
-        <RoundedBox args={[0.34, 0.11, 0.1]} radius={0.04} smoothness={6} position={[-1.74, -0.9, -0.38]} rotation={[0, 0, -0.16]} castShadow receiveShadow>
-          <primitive object={cushionMaterial} attach="material" />
-        </RoundedBox>
-      </group>
+      <mesh material={bodyMaterial} position={[0.95, 0.86, 0.06]} rotation={[0, Math.PI / 6, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.62, 0.62, 0.46, 6]} />
+      </mesh>
+      <mesh material={cutMaterial} position={[0.95, 1.11, 0.06]} rotation={[Math.PI / 2, 0, Math.PI / 6]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.22, 0.22, 0.035, 48]} />
+      </mesh>
 
-      <mesh material={highlightMaterial} position={[0, 0.2, -0.62]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.15, 0.15, 2.55, 56]} />
+      <mesh material={highlightMaterial} position={[-0.42, 1.32, -0.02]} rotation={[0, 0, -0.55]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.18, 0.18, 2.28, 40]} />
+      </mesh>
+      <RoundedBox args={[1.55, 0.22, 0.48]} radius={0.09} smoothness={8} position={[-1.12, 1.92, -0.12]} rotation={[0, 0, -0.55]} castShadow receiveShadow>
+        <primitive object={bodyMaterial} attach="material" />
+      </RoundedBox>
+      <mesh material={accentMaterial} position={[-1.62, 2.2, -0.12]} rotation={[Math.PI / 2, 0, -0.55]} castShadow receiveShadow>
+        <torusGeometry args={[0.22, 0.028, 12, 54]} />
+      </mesh>
+
+      {[-1.46, -0.08, 1.34].map((x) => (
+        <mesh key={x} material={cutMaterial} position={[x, 0.61, 0.28]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.12, 0.12, 0.04, 36]} />
+        </mesh>
+      ))}
+      <mesh material={highlightMaterial} position={[0.24, 0.2, -0.78]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.14, 0.14, 2.8, 56]} />
       </mesh>
       <gridHelper args={[8, 18, "#45484b", "#323436"]} position={[0, -0.23, 0]} />
     </group>
