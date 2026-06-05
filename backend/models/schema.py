@@ -139,6 +139,11 @@ class TransformUpdateRequest(BaseModel):
     snap: str | None = None
 
 
+class SourceModelSwitchRequest(BaseModel):
+    session_id: str
+    direction: str = "next"
+
+
 class PrimitiveCreateRequest(BaseModel):
     session_id: str | None = None
     primitive: str

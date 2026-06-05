@@ -25,6 +25,7 @@ from backend.models.schema import (
     PrinterUpdateRequest,
     PrimitiveCreateRequest,
     ScenePayload,
+    SourceModelSwitchRequest,
     TransformUpdateRequest,
 )
 from backend.services.ai_parser import (
@@ -50,6 +51,7 @@ from backend.services.session_manager import (
     add_history,
     add_hole_to_object,
     add_mounting_holes_to_session,
+    add_bottom_plate_from_prompt,
     apply_expert_operation,
     bump_version,
     center_object_on_plate,
@@ -59,6 +61,7 @@ from backend.services.session_manager import (
     get_or_create_session,
     get_selected_object,
     get_session,
+    is_bottom_plate_prompt,
     prepare_generation_target,
     place_object_on_plate,
     rebuild_object,
@@ -69,6 +72,8 @@ from backend.services.session_manager import (
     replace_object_with_source_model,
     replace_object_with_template_assembly,
     save_undo_snapshot,
+    switch_source_model_variant,
+    update_imported_source_dimensions,
     undo_session,
     redo_session,
 )
@@ -212,6 +217,8 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                     diameter=hole_options["diameter"],
                     counterbore_diameter=hole_options["counterbore_diameter"],
                 )
+            elif session["object_order"] and is_bottom_plate_prompt(data.prompt):
+                actions = add_bottom_plate_from_prompt(session, data.prompt)
             else:
                 edit_only = is_edit_only_prompt(data.prompt)
                 if edit_only:
@@ -234,10 +241,17 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                     actions = source_actions
                 else:
                     parsed = parse_ai_command(data.prompt, session, obj)
+                    previous_parameters = dict(obj.get("parameters", {}))
                     obj["parameters"] = parsed["parameters"]
                     obj["feature_tree"] = parsed["feature_tree"]
                     obj["transform"] = parsed["transform"]
-                    rebuild_object(obj)
+                    changed_keys = {
+                        key
+                        for key, value in parsed["parameters"].items()
+                        if previous_parameters.get(key) != value
+                    }
+                    if not update_imported_source_dimensions(obj, changed_keys):
+                        rebuild_object(obj)
 
                     assembly_actions = replace_object_with_template_assembly(
                         session,
@@ -312,17 +326,17 @@ async def update_parameters(
 
             save_undo_snapshot(session)
             allowed_params = set(DEFAULT_PARAMETERS) | set(obj["parameters"])
+            changed_keys: set[str] = set()
             for key, value in data.parameters.items():
                 if key in allowed_params:
                     obj["parameters"][key] = float(value)
+                    changed_keys.add(key)
                     if obj.get("manual") and key == "thickness":
                         obj["parameters"]["height"] = float(value)
                     if obj.get("manual") and key == "height":
                         obj["parameters"]["thickness"] = float(value)
-            rebuild_object(obj)
-
-            if session.get("fit"):
-                auto_fit_session(session)
+            if not update_imported_source_dimensions(obj, changed_keys):
+                rebuild_object(obj)
 
             bump_version(session)
             add_history(session, "parameter-update", list(data.parameters.keys()))
@@ -444,6 +458,28 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
             payload = build_scene_payload(
                 session, include_mesh=True, model_updated=True
             )
+
+        await broadcast(session["session_id"], payload.model_dump())
+        return payload
+
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.post("/api/source-model/switch", response_model=None)
+async def switch_source_model(data: SourceModelSwitchRequest) -> ScenePayload | JSONResponse:
+    try:
+        lock = acquire_lock()
+        with lock:
+            session = get_session(data.session_id)
+            if session is None:
+                return _error(404, "Session not found")
+            save_undo_snapshot(session)
+            actions = switch_source_model_variant(session, data.direction)
+            bump_version(session)
+            add_history(session, f"{data.direction}-source-model", actions)
+            payload = build_scene_payload(session, include_mesh=True, model_updated=True)
 
         await broadcast(session["session_id"], payload.model_dump())
         return payload

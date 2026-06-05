@@ -511,6 +511,13 @@ def _mesh_dimensions(mesh: TriMesh) -> dict[str, float]:
     }
 
 
+def _prefer_flat_for_prompt(prompt: str) -> bool:
+    text = (prompt or "").lower()
+    return any(word in text for word in ("battery", "batteri", "wall mount", "vägg", "vagg")) and any(
+        word in text for word in ("holder", "mount", "hållare", "hallare")
+    )
+
+
 def _title_to_object_name(prompt: str, source_example: dict[str, Any] | None) -> str:
     title = str((source_example or {}).get("title") or prompt or "source model").strip()
     title = re.sub(r"[^a-zA-Z0-9]+", "_", title).strip("_").lower()
@@ -543,6 +550,7 @@ def _create_imported_source_object(
     source_obj["template_hint"] = None
     source_obj["assembly_source"] = f"imported-stl:{(source_example or {}).get('source') or 'source'}"
     source_obj["imported_source_mesh"] = True
+    source_obj["source_dimensions"] = dimensions
     source_obj["source_model"] = {
         "prompt": prompt,
         "matched_example": source_example,
@@ -607,6 +615,95 @@ def _try_replace_with_imported_source_model(
     ], source_obj
 
 
+def _active_source_object(session: Session) -> CadObject | None:
+    selected = get_object(session, session.get("selected_object_id"))
+    if selected and selected.get("source_model"):
+        return selected
+    for oid in reversed(session.get("object_order", [])):
+        obj = session["objects"].get(oid)
+        if obj and obj.get("source_model"):
+            return obj
+    return None
+
+
+def _source_model_prompt(obj: CadObject | None) -> str:
+    if not obj:
+        return ""
+    source_model = obj.get("source_model") if isinstance(obj.get("source_model"), dict) else {}
+    prompt = str(source_model.get("prompt") or "").strip()
+    if prompt:
+        return prompt
+    matched = source_model.get("matched_example")
+    if isinstance(matched, dict):
+        return str(matched.get("title") or obj.get("name") or "").strip()
+    return str(obj.get("name") or "").replace("_", " ").strip()
+
+
+def switch_source_model_variant(session: Session, direction: str = "next") -> list[str]:
+    """Swap the active source model to another ranked Printables result."""
+    current = _active_source_object(session)
+    prompt = _source_model_prompt(current)
+    if current is None or not prompt:
+        return ["no source model to switch"]
+
+    try:
+        from backend.services.design_providers import get_provider_registry, resolve_printables_model_files
+    except Exception:
+        return ["source providers unavailable"]
+
+    examples = [
+        example
+        for example in get_provider_registry().search_all(prompt, limit=12)
+        if example.source == "printables"
+    ]
+    if not examples:
+        return ["no Printables variants found"]
+
+    current_url = ""
+    source_model = current.get("source_model") if isinstance(current.get("source_model"), dict) else {}
+    matched = source_model.get("matched_example")
+    if isinstance(matched, dict):
+        current_url = str(matched.get("url") or "")
+
+    current_index = next((idx for idx, example in enumerate(examples) if example.url == current_url), -1)
+    step = -1 if direction.strip().lower().startswith("prev") else 1
+    start = current_index if current_index >= 0 else (-1 if step > 0 else 0)
+    order = [((start + step * offset) % len(examples)) for offset in range(1, len(examples) + 1)]
+
+    for index in order:
+        example = examples[index]
+        files = _rank_source_files(resolve_printables_model_files(example.url, limit=24), prompt, 0)
+        files_dicts = [source_file.to_dict() for source_file in files]
+        candidates: list[dict[str, Any]] = []
+        for candidate in files_dicts:
+            if candidate.get("id") not in {item.get("id") for item in candidates}:
+                candidates.append(candidate)
+        for candidate in candidates:
+            shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
+            if shape is None:
+                continue
+            source_obj = _create_imported_source_object(
+                prompt,
+                shape,
+                example.to_dict(),
+                files_dicts,
+                candidate,
+            )
+            source_obj["color"] = current.get("color", source_obj.get("color", "#a9aaad"))
+            source_obj["source_model"]["variant_index"] = index
+            source_obj["source_model"]["variant_count"] = len(examples)
+            _remove_object_direct(session, current["id"])
+            add_object(session, source_obj)
+            session["selected_object_id"] = ""
+            return [
+                f"{'previous' if step < 0 else 'next'} source model",
+                f"source-match: {example.title}",
+                f"source-files: selected {candidate.get('name')}",
+            ]
+
+    return ["no importable STL found for adjacent variants"]
+
+
 def _battery_brand(prompt: str) -> str:
     text = (prompt or "").lower()
     for brand in ("dewalt", "makita", "milwaukee", "ryobi", "bosch"):
@@ -624,6 +721,72 @@ def _battery_brand_color(prompt: str) -> str:
         "ryobi": "#b7d31f",
         "bosch": "#d12b2b",
     }.get(brand, "#a9aaad")
+
+
+def is_bottom_plate_prompt(prompt: str) -> bool:
+    text = (prompt or "").lower()
+    plate_terms = ("bottom plate", "base plate", "bottenplatta", "botten platta")
+    relation_terms = ("outside", "around", "under", "below", "utanför", "runt", "under")
+    return any(term in text for term in plate_terms) and any(term in text for term in relation_terms)
+
+
+def _plate_margin_from_prompt(prompt: str) -> float:
+    text = (prompt or "").lower()
+    match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:outside|around|extra|larger|bigger|utanför|runt)", text)
+    if not match:
+        match = re.search(r"(?:outside|around|extra|larger|bigger|utanför|runt)\D{0,12}(\d+(?:\.\d+)?)\s*mm", text)
+    return max(1.0, min(200.0, float(match.group(1)))) if match else 20.0
+
+
+def _plate_thickness_from_prompt(prompt: str) -> float:
+    text = (prompt or "").lower()
+    match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:thick|thickness|tjock)", text)
+    return max(1.0, min(30.0, float(match.group(1)))) if match else 4.0
+
+
+def add_bottom_plate_from_prompt(session: Session, prompt: str) -> list[str]:
+    target = _active_source_object(session) or get_object(session, session.get("selected_object_id"))
+    if target is None:
+        return ["bottom plate skipped: no target model"]
+
+    margin = _plate_margin_from_prompt(prompt)
+    plate_h = _plate_thickness_from_prompt(prompt)
+    mins, maxs = _world_extents(target)
+    width = max(1.0, maxs[0] - mins[0] + margin * 2.0)
+    depth = max(1.0, maxs[1] - mins[1] + margin * 2.0)
+    cx = (mins[0] + maxs[0]) / 2.0
+    cy = (mins[1] + maxs[1]) / 2.0
+
+    shape = make_box_body(width, depth, plate_h, fillet=1.2) or make_rounded_box(width, depth, plate_h, 1.2, segments=8)
+    params = dict(DEFAULT_PARAMETERS)
+    params.update(
+        {
+            "width": width,
+            "depth": depth,
+            "height": plate_h,
+            "thickness": plate_h,
+            "fillet_radius": 1.2,
+            "chamfer_size": 0.0,
+            "hole_count": 0.0,
+            "wall_thickness": plate_h,
+        }
+    )
+    plate = create_manual_object("bottom_plate", shape, params)
+    plate["primitive"] = "rectangle"
+    plate["template_component"] = True
+    plate["assembly_source"] = "chat-edit:bottom-plate"
+    plate["color"] = "#b8babd"
+    plate["transform"].position = [cx, cy, 0.0]
+
+    target_min_z = _world_extents(target)[0][2]
+    target["transform"].position[2] += plate_h - target_min_z
+    add_object(session, plate)
+    session["selected_object_id"] = plate["id"]
+    return [
+        f"added bottom plate {margin:g}mm outside target",
+        f"plate size {width:.1f} x {depth:.1f} x {plate_h:.1f}mm",
+        "lifted source model onto the new plate",
+    ]
 
 
 def _recent_generation_context(session: Session) -> str:
@@ -919,6 +1082,7 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
             obj,
             prompt,
             preferred_slots=0,
+            prefer_flat=_prefer_flat_for_prompt(prompt),
         )
         if generic_actions:
             return generic_actions
@@ -966,6 +1130,7 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
         )
         source_obj["imported_source_mesh"] = imported_shape is not None
         source_model = deepcopy(SOURCE_BATTERY_HOLDER_META)
+        source_model["prompt"] = prompt
         source_model["matched_example"] = source_example
         source_model["files"] = source_files
         source_model["selected_file"] = selected_source_file
@@ -1849,6 +2014,29 @@ def center_object_on_plate(obj: CadObject) -> None:
     obj["transform"].position[0] -= center_x
     obj["transform"].position[1] -= center_y
     place_object_on_plate(obj)
+
+
+def update_imported_source_dimensions(obj: CadObject, changed_keys: set[str]) -> bool:
+    """Apply dimension-panel edits to imported STL meshes through transform scale."""
+    if obj.get("primitive") != "imported_source_mesh":
+        return False
+    dimension_keys = {"width", "depth", "height"}
+    if not (dimension_keys & changed_keys):
+        return True
+
+    source_dimensions = obj.get("source_dimensions")
+    if not isinstance(source_dimensions, dict):
+        source_dimensions = _mesh_dimensions(obj["shape"])
+        obj["source_dimensions"] = source_dimensions
+
+    axis_for_key = {"width": 0, "depth": 1, "height": 2}
+    t: Transform = obj["transform"]
+    for key, axis in axis_for_key.items():
+        original = max(0.001, float(source_dimensions.get(key) or 0.0))
+        desired = max(0.001, float(obj["parameters"].get(key, original)))
+        t.scale[axis] = desired / original
+    place_object_on_plate(obj)
+    return True
 
 
 def add_object(session: Session, obj: CadObject) -> None:

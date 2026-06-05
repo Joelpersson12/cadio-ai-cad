@@ -97,6 +97,16 @@ export async function updateObjectTransform(payload: {
   });
 }
 
+export async function switchSourceModel(payload: {
+  session_id: string;
+  direction: "next" | "previous";
+}): Promise<ScenePayload> {
+  return request<ScenePayload>("/api/source-model/switch", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateAppearance(payload: {
   session_id: string;
   object_id?: string;

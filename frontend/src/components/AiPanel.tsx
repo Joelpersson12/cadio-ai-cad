@@ -34,7 +34,7 @@ export default function AiPanel() {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState(AI_MODELS[0]);
-  const { status, runPrompt, editHistory, objects } = useCadStore();
+  const { status, runPrompt, editHistory, objects, switchSourceModel } = useCadStore();
 
   const latestPrompt = useMemo(() => {
     const latest = editHistory[editHistory.length - 1];
@@ -55,6 +55,16 @@ export default function AiPanel() {
     setPrompt("");
     try {
       await runPrompt(cleaned);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const switchModel = async (direction: "next" | "previous") => {
+    if (isLoading || !objects.length) return;
+    setIsLoading(true);
+    try {
+      await switchSourceModel(direction);
     } finally {
       setIsLoading(false);
     }
@@ -109,6 +119,24 @@ export default function AiPanel() {
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {objects.length > 0 && (
+          <>
+            <button
+              onClick={() => void switchModel("previous")}
+              disabled={isLoading}
+              className="rounded-full border border-[#38383a] bg-[#242424] px-3 py-2 text-xs font-semibold text-white hover:border-[#555] hover:bg-[#2d2d2f] disabled:opacity-40"
+            >
+              Previous model
+            </button>
+            <button
+              onClick={() => void switchModel("next")}
+              disabled={isLoading}
+              className="rounded-full border border-[#28c7df] bg-[#123038] px-3 py-2 text-xs font-semibold text-white hover:bg-[#173a43] disabled:opacity-40"
+            >
+              Next model
+            </button>
+          </>
+        )}
         {QUICK_COMMANDS.map((cmd) => (
           <button
             key={cmd}

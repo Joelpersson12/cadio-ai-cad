@@ -19,6 +19,7 @@ import {
   selectObject as apiSelectObject,
   deleteObject as apiDeleteObject,
   updateObjectTransform as apiUpdateTransform,
+  switchSourceModel as apiSwitchSourceModel,
   createPrimitive as apiCreatePrimitive,
   applyExpertOperation as apiApplyExpertOperation,
   listPrinters as apiListPrinters,
@@ -83,6 +84,7 @@ interface CadState {
     },
   ) => Promise<void>;
   snapSelectedObjects: (snap: "on_plate" | "center_on_plate") => Promise<void>;
+  switchSourceModel: (direction: "next" | "previous") => Promise<void>;
   createPrimitive: (payload: {
     primitive: ExpertTool;
     center: [number, number];
@@ -324,6 +326,22 @@ export const useCadStore = create<CadState>((set, get) => ({
           status: snap === "center_on_plate" ? "Centered on plate" : "Placed on plate",
         });
       }
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Error" });
+    }
+  },
+
+  switchSourceModel: async (direction) => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    set({ status: direction === "next" ? "Loading next model..." : "Loading previous model..." });
+    try {
+      const data = await apiSwitchSourceModel({
+        session_id: sessionId,
+        direction,
+      });
+      get().applyScenePayload(data);
+      set({ status: `Updated v${data.version}` });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });
     }
