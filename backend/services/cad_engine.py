@@ -308,7 +308,7 @@ def auto_adjust_z_position(transform: Transform, mesh: TriMesh) -> None:
 
 
 def shift_mesh_to_buildplate(mesh: TriMesh) -> TriMesh:
-    """Ensure all vertices are at Z >= 0 by translating the mesh upward.
+    """Move raw geometry so its lowest vertex sits exactly on the build plate.
     
     Returns a new mesh with all vertices shifted so the minimum Z is at 0.
     This is applied to the raw geometry before transform.
@@ -318,11 +318,9 @@ def shift_mesh_to_buildplate(mesh: TriMesh) -> TriMesh:
     
     min_z_val = min(v[2] for v in mesh.verts)
     
-    # No shift needed if already at or above build plate
-    if min_z_val >= 0:
+    if abs(min_z_val) < 1e-9:
         return mesh
     
-    # Shift all vertices upward
     shifted = TriMesh()
     for vx, vy, vz in mesh.verts:
         shifted.verts.append((vx, vy, vz - min_z_val))

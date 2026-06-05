@@ -26,7 +26,7 @@ from backend.services.cad_engine import (
     rebuild_from_features,
     shift_mesh_to_buildplate,
 )
-from backend.services.cad_kernel import make_box_body, make_cylinder_body
+from backend.services.cad_kernel import make_battery_holder_body, make_box_body, make_cylinder_body
 
 # ---------------------------------------------------------------------------
 # Internal types
@@ -397,6 +397,80 @@ def _source_signal_summary(prompt: str) -> str:
     return f"source-search: {top}"
 
 
+def _select_source_file(files: list[Any], prompt: str, preferred_slots: int) -> Any | None:
+    text = (prompt or "").lower()
+
+    def score(source_file: Any) -> float:
+        name = str(getattr(source_file, "name", "") or "").lower()
+        file_type = str(getattr(source_file, "file_type", "") or "").lower()
+        value = 0.0
+        if file_type in {"stl", "step", "stp", "3mf"}:
+            value += 20.0
+        if preferred_slots >= 3 and any(token in name for token in ("x3", "3x", "triple", "three")):
+            value += 60.0
+        if preferred_slots <= 1 and any(token in name for token in ("x1", "single", "one")):
+            value += 60.0
+        if "bestfit" in name or "best-fit" in name:
+            value += 22.0
+        if "holder" in name:
+            value += 8.0
+        if "dewalt" in text and ("dw" in name or "dewalt" in name):
+            value += 8.0
+        if file_type == "step":
+            value += 6.0
+        return value
+
+    return max(files, key=score) if files else None
+
+
+def _source_file_evidence(prompt: str, preferred_slots: int) -> tuple[dict[str, Any] | None, list[dict[str, Any]], dict[str, Any] | None]:
+    try:
+        from backend.services.design_providers import get_provider_registry, resolve_printables_model_files
+
+        examples = get_provider_registry().search_all(prompt, limit=5)
+    except Exception:
+        return None, [], None
+
+    printables = next((example for example in examples if example.source == "printables"), None)
+    top = printables or (examples[0] if examples else None)
+    if top is None:
+        return None, [], None
+
+    files = resolve_printables_model_files(top.url, limit=20) if top.source == "printables" else []
+    selected = _select_source_file(files, prompt, preferred_slots)
+    return (
+        top.to_dict(),
+        [source_file.to_dict() for source_file in files],
+        selected.to_dict() if selected else None,
+    )
+
+
+def _slot_count_from_source_file(source_file: dict[str, Any] | None, fallback: int) -> int:
+    name = str((source_file or {}).get("name") or "").lower()
+    if any(token in name for token in ("x3", "3x", "triple", "three")):
+        return 3
+    if any(token in name for token in ("x2", "2x", "dual", "double", "two")):
+        return 2
+    if any(token in name for token in ("x1", "single", "one")):
+        return 1
+    return fallback
+
+
+def _try_import_source_stl(source_file: dict[str, Any] | None) -> TriMesh | None:
+    if not source_file:
+        return None
+    url = str(source_file.get("download_url") or "")
+    file_type = str(source_file.get("file_type") or "").lower()
+    if file_type != "stl" or not url:
+        return None
+    try:
+        from backend.services.stl_importer import import_stl_from_url
+
+        return import_stl_from_url(url, prefer_flat=True)
+    except Exception:
+        return None
+
+
 def _battery_brand(prompt: str) -> str:
     text = (prompt or "").lower()
     for brand in ("dewalt", "makita", "milwaukee", "ryobi", "bosch"):
@@ -572,6 +646,11 @@ def _make_source_battery_holder_mesh(params: dict[str, float]) -> TriMesh:
     params["depth"] = base_d
     params["height"] = total_h
     params["thickness"] = base_t
+    params["counterbore_depth"] = max(1.0, min(base_t + rail_t - 0.5, float(params.get("counterbore_depth", 2.4))))
+
+    cad_body = make_battery_holder_body(params)
+    if cad_body is not None:
+        return shift_mesh_to_buildplate(cad_body)
 
     hole_params = dict(params)
     for key in list(hole_params.keys()):
@@ -702,11 +781,13 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
 
     if kind in {"dewalt_battery_holder", "battery_holder"}:
         brand = _battery_brand(prompt)
+        source_example, source_files, selected_source_file = _source_file_evidence(prompt, preferred_slots=3)
+        slots = _slot_count_from_source_file(selected_source_file, 3)
         params = dict(DEFAULT_PARAMETERS)
         params.update(
             {
-                "num_batteries": 3.0,
-                "battery_slots": 3.0,
+                "num_batteries": float(slots),
+                "battery_slots": float(slots),
                 "battery_spacing": 85.0,
                 "holder_length": 85.0,
                 "margin_width": 10.0,
@@ -718,24 +799,36 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
                 "stop_thickness": 5.0,
                 "screw_diameter": 4.5,
                 "screw_head_diameter": 9.0,
+                "counterbore_depth": 2.4,
                 "latch_y_pos": 18.0,
                 "latch_width": 16.0,
-                "fillet_radius": 1.2,
-                "hole_count": 6.0,
+                "fillet_radius": 1.0,
+                "hole_count": float(slots * 2),
                 "wall_thickness": 3.0,
             }
         )
-        shape = _make_source_battery_holder_mesh(params)
+        imported_shape = _try_import_source_stl(selected_source_file)
+        shape = imported_shape or _make_source_battery_holder_mesh(params)
         source_obj = create_manual_object(f"{brand}_battery_wall_mount", shape, params)
         source_obj["primitive"] = "source_battery_holder"
         source_obj["template_hint"] = "source_battery_holder"
-        source_obj["assembly_source"] = "generative-recipe:power-tool-battery-wall-mount"
-        source_obj["source_model"] = deepcopy(SOURCE_BATTERY_HOLDER_META)
+        source_obj["assembly_source"] = (
+            "imported-stl:printables"
+            if imported_shape is not None
+            else "file-aware-reconstruction:power-tool-battery-wall-mount"
+        )
+        source_obj["imported_source_mesh"] = imported_shape is not None
+        source_model = deepcopy(SOURCE_BATTERY_HOLDER_META)
+        source_model["matched_example"] = source_example
+        source_model["files"] = source_files
+        source_model["selected_file"] = selected_source_file
+        source_obj["source_model"] = source_model
         source_obj["operation_history"] = [
             {
-                "operation": "generative_recipe",
-                "source": SOURCE_BATTERY_HOLDER_META["title"],
-                "slots": 3,
+                "operation": "file_aware_reconstruct",
+                "source": (source_example or {}).get("title") or SOURCE_BATTERY_HOLDER_META["title"],
+                "selected_file": (selected_source_file or {}).get("name"),
+                "slots": slots,
             }
         ]
         source_obj["color"] = _battery_brand_color(prompt)
@@ -743,10 +836,11 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
         _remove_object_direct(session, obj["id"])
         add_object(session, source_obj)
         session["selected_object_id"] = ""
+        selected_file_name = (selected_source_file or {}).get("name")
         return [
             _source_signal_summary(prompt),
-            "generative-recipe: power-tool battery wall mount with adjustable slots",
-            "generated clean parametric wall mount with slide rails, latch pads, rear stops, and screw pattern",
+            f"source-files: selected {selected_file_name}" if selected_file_name else "source-files: file manifest unavailable; used source-ranked reconstruction",
+            "imported real Printables STL mesh as starting geometry" if imported_shape is not None else "file-aware reconstruction: clean wall mount body with CAD-cut holes, counterbores, raised pads, slide rails, and latch reliefs",
         ]
 
     params = dict(DEFAULT_PARAMETERS)

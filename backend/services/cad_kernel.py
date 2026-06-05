@@ -247,3 +247,122 @@ def make_phone_stand_body(params: dict[str, float]) -> TriMesh | None:
         return to_trimesh(solid)
     except Exception:
         return None
+
+
+def make_battery_holder_body(params: dict[str, float]) -> TriMesh | None:
+    """Create a source-like power-tool battery wall mount from CAD booleans.
+
+    The layout follows the common Printables DeWalt-style holder family: a
+    clean long wall plate, repeated raised battery pads, slide-register rails,
+    screw through-holes with shallow counterbores, and latch relief pockets.
+    """
+    if not CADQUERY_AVAILABLE:
+        return None
+
+    try:
+        slots = max(1, min(6, int(round(float(params.get("num_batteries", params.get("battery_slots", 3.0)))))))
+        spacing = max(62.0, min(110.0, float(params.get("battery_spacing", 85.0))))
+        holder_length = max(58.0, min(120.0, float(params.get("holder_length", 85.0))))
+        margin = max(6.0, min(24.0, float(params.get("margin_width", 10.0))))
+        base_t = max(3.0, min(12.0, float(params.get("base_thickness", params.get("thickness", 6.0)))))
+        core_w = max(28.0, min(54.0, float(params.get("core_width", 40.0))))
+        core_h = max(7.0, min(22.0, float(params.get("core_height", 11.5))))
+        rail_w = max(core_w + 8.0, min(76.0, float(params.get("rail_width", 52.0))))
+        rail_t = max(2.5, min(9.0, float(params.get("rail_thickness", 4.5))))
+        stop_t = max(3.0, min(12.0, float(params.get("stop_thickness", 5.0))))
+        screw_d = max(3.0, min(8.0, float(params.get("screw_diameter", 4.5))))
+        screw_head_d = max(screw_d + 2.0, min(16.0, float(params.get("screw_head_diameter", 9.0))))
+        counterbore_depth = max(1.0, min(base_t + rail_t - 0.5, float(params.get("counterbore_depth", 2.4))))
+        latch_y = max(8.0, min(holder_length * 0.45, float(params.get("latch_y_pos", 18.0))))
+        latch_w = max(8.0, min(core_w, float(params.get("latch_width", 16.0))))
+
+        base_w = spacing * (slots - 1) + rail_w + margin * 2.0
+        base_d = holder_length + margin * 2.0
+        deck_w = rail_w + margin * 0.45
+        deck_d = holder_length * 0.70
+        rail_depth = deck_d * 0.82
+        total_h = base_t + rail_t + core_h * 0.62 + stop_t
+
+        params["num_batteries"] = float(slots)
+        params["battery_slots"] = float(slots)
+        params["width"] = base_w
+        params["depth"] = base_d
+        params["height"] = total_h
+        params["thickness"] = base_t
+        params["hole_count"] = float(slots * 2)
+        params["hole_diameter"] = screw_d
+        params["counterbore_diameter"] = screw_head_d
+        params["counterbore_depth"] = counterbore_depth
+
+        solid = _box_solid(base_w, base_d, base_t, (0.0, 0.0, 0.0))
+
+        # Subtle perimeter lips make the plate read as a molded printable part.
+        lip_h = max(1.2, base_t * 0.34)
+        solid = solid.union(_box_solid(base_w - 4.0, 3.2, lip_h, (0.0, -base_d / 2.0 + 3.0, base_t)))
+        solid = solid.union(_box_solid(base_w - 4.0, 3.2, lip_h, (0.0, base_d / 2.0 - 3.0, base_t)))
+
+        for slot in range(slots):
+            cx = (slot - (slots - 1) / 2.0) * spacing
+
+            # Raised top island, matching the simpler CADAM/Printables silhouette.
+            solid = solid.union(_box_solid(deck_w, deck_d, rail_t, (cx, 0.0, base_t)))
+
+            # Battery slide registers: two clean side rails and a low center tongue.
+            side_rail_h = core_h * 0.62
+            side_rail_w = max(4.2, min(8.0, rail_t * 1.35))
+            for x in (cx - core_w / 2.0, cx + core_w / 2.0):
+                solid = solid.union(_box_solid(side_rail_w, rail_depth, side_rail_h, (x, -2.0, base_t + rail_t)))
+            solid = solid.union(_box_solid(core_w * 0.50, rail_depth * 0.62, max(3.0, side_rail_h * 0.34), (cx, -2.0, base_t + rail_t)))
+
+            # Rear stop block. This is deliberately broad and flat like the source files.
+            solid = solid.union(
+                _box_solid(
+                    deck_w,
+                    stop_t,
+                    side_rail_h + stop_t * 0.55,
+                    (cx, deck_d / 2.0 - stop_t / 2.0, base_t + rail_t),
+                )
+            )
+
+            # Shallow square latch relief on the top pad.
+            latch_cut = _box_solid(
+                latch_w,
+                latch_w * 0.72,
+                counterbore_depth + 1.0,
+                (cx, -holder_length / 2.0 + latch_y, base_t + rail_t - counterbore_depth * 0.82),
+            )
+            solid = solid.cut(latch_cut)
+
+            for y in (-holder_length * 0.25, holder_length * 0.25):
+                through = (
+                    cq.Workplane("XY")
+                    .center(cx, y)
+                    .circle(screw_d / 2.0)
+                    .extrude(total_h + 6.0)
+                    .translate((0.0, 0.0, -2.0))
+                )
+                counterbore = (
+                    cq.Workplane("XY")
+                    .center(cx, y)
+                    .circle(screw_head_d / 2.0)
+                    .extrude(counterbore_depth + 1.0)
+                    .translate((0.0, 0.0, base_t + rail_t - counterbore_depth))
+                )
+                solid = solid.cut(through).cut(counterbore)
+
+        fillet = max(0.0, min(float(params.get("fillet_radius", 1.2)), 1.8))
+        chamfer = max(0.0, min(float(params.get("chamfer_size", 0.0)), 1.5))
+        if fillet > 0:
+            try:
+                solid = solid.edges().fillet(fillet)
+            except Exception:
+                pass
+        elif chamfer > 0:
+            try:
+                solid = solid.edges().chamfer(chamfer)
+            except Exception:
+                pass
+
+        return to_trimesh(solid, tolerance=0.04)
+    except Exception:
+        return None
