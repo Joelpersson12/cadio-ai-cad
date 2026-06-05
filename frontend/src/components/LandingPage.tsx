@@ -3,10 +3,115 @@ import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { markCadioAuthenticated } from "../utils/auth";
 
-type Language = "sv" | "en";
+type Language = "en" | "sv" | "es" | "fr" | "it" | "de" | "pt";
 type AuthMode = "login" | "signup" | null;
 
+const languageOptions: Array<{ value: Language; label: string }> = [
+  { value: "en", label: "EN" },
+  { value: "sv", label: "SV" },
+  { value: "es", label: "ES" },
+  { value: "fr", label: "FR" },
+  { value: "it", label: "IT" },
+  { value: "de", label: "DE" },
+  { value: "pt", label: "PT" },
+];
+
 const copy = {
+  en: {
+    nav: {
+      product: "Product",
+      workflow: "Workflow",
+      pricing: "Pricing",
+      login: "Log in",
+      signup: "Sign up",
+      start: "Start building",
+    },
+    hero: {
+      eyebrow: "AI CAD for real 3D printing",
+      title: "Describe the model. Edit like CAD. Print with the right profile.",
+      body:
+        "Cadio combines AI search, parametric models, and a clean CAD workspace for makers, workshops, and product ideas.",
+      prompt: "Dewalt battery holder with wall mount",
+      primary: "Start building",
+      secondary: "See pricing",
+    },
+    stats: [
+      ["Source aware", "Uses signals from Printables and popular 3D model sources"],
+      ["Easy + Expert", "Fast AI edits or manual CAD control"],
+      ["Print ready", "Printer, material, scale, and export formats in one flow"],
+    ],
+    product: {
+      title: "A CAD builder for every level",
+      body:
+        "Easy mode helps you describe what you want. Expert mode gives you control over sketches, parts, transforms, edges, and CAD operations.",
+    },
+    cards: [
+      ["AI model search", "Type what you want to build and Cadio creates a model from popular printable design signals."],
+      ["Manual CAD", "Draw, select parts, move, rotate, and refine the model when you want direct control."],
+      ["Printer profiles", "Choose printer, material, and export format before the model reaches your slicer."],
+    ],
+    workflow: {
+      title: "From idea to STL without switching tools",
+      steps: [
+        ["1", "Write a prompt", "Example: cup holder with desk mount, phone stand, or a replacement bracket."],
+        ["2", "Pick a variant", "Move through popular model options with Next and Previous until the shape is right."],
+        ["3", "Fine tune", "Adjust dimensions, material, color, placement, and CAD details."],
+        ["4", "Export", "Download STL, 3MF, OBJ, or AMF with recommended print settings."],
+      ],
+    },
+    pricingTitle: "Pricing",
+    pricingBody: "Every plan has the same CAD experience. The only difference is monthly downloadable generations.",
+    tiers: [
+      {
+        name: "Free",
+        price: "$0",
+        note: "1 downloadable generation",
+        features: [
+          "1 generation that can be downloaded",
+          "Login required before download",
+          "Same Easy and Expert CAD",
+          "Same model quality as paid plans",
+        ],
+      },
+      {
+        name: "Maker",
+        price: "$10/mo",
+        note: "10 generations per month",
+        features: [
+          "10 downloadable generations/month",
+          "Same CAD tools as every plan",
+          "All printers, materials, and export formats",
+          "Login required for downloads",
+        ],
+        featured: true,
+      },
+      {
+        name: "Pro",
+        price: "$49/mo",
+        note: "Unlimited generations",
+        features: [
+          "Unlimited downloadable generations",
+          "Same CAD experience as every plan",
+          "All printers, materials, and export formats",
+          "Login required for downloads",
+        ],
+      },
+    ],
+    auth: {
+      loginTitle: "Log in",
+      signupTitle: "Sign up",
+      email: "Email",
+      password: "Password",
+      name: "Name",
+      continue: "Continue to workspace",
+      hint: "Authentication is prepared in the frontend and can be connected to real auth later.",
+    },
+    cta: {
+      title: "Ready to build?",
+      body: "Open the Cadio workspace and create the first model directly.",
+      button: "Start building",
+    },
+  },
   sv: {
     nav: {
       product: "Produkt",
@@ -102,98 +207,478 @@ const copy = {
       button: "Start building",
     },
   },
-  en: {
+  es: {
     nav: {
-      product: "Product",
-      workflow: "Workflow",
-      pricing: "Pricing",
-      login: "Log in",
-      signup: "Sign up",
+      product: "Producto",
+      workflow: "Flujo",
+      pricing: "Precios",
+      login: "Iniciar sesion",
+      signup: "Crear cuenta",
       start: "Start building",
     },
     hero: {
-      eyebrow: "AI CAD for real 3D printing",
-      title: "Describe the model. Edit like CAD. Print with the right profile.",
+      eyebrow: "CAD con IA para impresion 3D real",
+      title: "Describe el modelo. Edita como en CAD. Imprime con el perfil correcto.",
       body:
-        "Cadio combines AI search, parametric models, and a clean CAD workspace for makers, workshops, and product ideas.",
+        "Cadio combina busqueda con IA, modelos parametricos y un espacio CAD limpio para makers, talleres e ideas de producto.",
       prompt: "Dewalt battery holder with wall mount",
       primary: "Start building",
-      secondary: "See pricing",
+      secondary: "Ver precios",
     },
     stats: [
-      ["Source aware", "Uses signals from Printables and popular 3D model sources"],
-      ["Easy + Expert", "Fast AI edits or manual CAD control"],
-      ["Print ready", "Printer, material, scale, and export formats in one flow"],
+      ["Source aware", "Usa senales de Printables y fuentes populares de modelos 3D"],
+      ["Easy + Expert", "Ediciones rapidas con IA o control CAD manual"],
+      ["Print ready", "Impresora, material, escala y formatos de exportacion en un flujo"],
     ],
     product: {
-      title: "A CAD builder for every level",
+      title: "Un constructor CAD para todos los niveles",
       body:
-        "Easy mode helps you describe what you want. Expert mode gives you control over sketches, parts, transforms, edges, and CAD operations.",
+        "Easy mode te ayuda a describir lo que quieres. Expert mode te da control sobre bocetos, piezas, transformaciones, bordes y operaciones CAD.",
     },
     cards: [
-      ["AI model search", "Type what you want to build and Cadio creates a model from popular printable design signals."],
-      ["Manual CAD", "Draw, select parts, move, rotate, and refine the model when you want direct control."],
-      ["Printer profiles", "Choose printer, material, and export format before the model reaches your slicer."],
+      ["AI model search", "Escribe lo que quieres construir y Cadio crea un modelo a partir de senales de disenos imprimibles populares."],
+      ["Manual CAD", "Dibuja, selecciona piezas, mueve, rota y refina el modelo cuando quieras control directo."],
+      ["Printer profiles", "Elige impresora, material y formato de exportacion antes de llevar el modelo al slicer."],
     ],
     workflow: {
-      title: "From idea to STL without switching tools",
+      title: "De idea a STL sin cambiar de herramienta",
       steps: [
-        ["1", "Write a prompt", "Example: cup holder with desk mount, phone stand, or a replacement bracket."],
-        ["2", "Pick a variant", "Move through popular model options with Next and Previous until the shape is right."],
-        ["3", "Fine tune", "Adjust dimensions, material, color, placement, and CAD details."],
-        ["4", "Export", "Download STL, 3MF, OBJ, or AMF with recommended print settings."],
+        ["1", "Escribe un prompt", "Ejemplo: cup holder with desk mount, phone stand o un soporte de repuesto."],
+        ["2", "Elige una variante", "Cambia entre opciones populares con Next y Previous hasta que la forma sea correcta."],
+        ["3", "Ajusta detalles", "Cambia dimensiones, material, color, posicion y detalles CAD."],
+        ["4", "Exporta", "Descarga STL, 3MF, OBJ o AMF con ajustes de impresion recomendados."],
       ],
     },
-    pricingTitle: "Pricing",
-    pricingBody: "Every plan has the same CAD experience. The only difference is monthly downloadable generations.",
+    pricingTitle: "Precios",
+    pricingBody: "Todos los planes tienen la misma experiencia CAD. La diferencia es la cantidad mensual de generaciones descargables.",
     tiers: [
       {
         name: "Free",
         price: "$0",
-        note: "1 downloadable generation",
+        note: "1 generacion descargable",
         features: [
-          "1 generation that can be downloaded",
-          "Login required before download",
-          "Same Easy and Expert CAD",
-          "Same model quality as paid plans",
+          "1 generacion que se puede descargar",
+          "Inicio de sesion requerido antes de descargar",
+          "Mismo Easy y Expert CAD",
+          "Misma calidad de modelo que los planes de pago",
         ],
       },
       {
         name: "Maker",
         price: "$10/mo",
-        note: "10 generations per month",
+        note: "10 generaciones al mes",
         features: [
-          "10 downloadable generations/month",
-          "Same CAD tools as every plan",
-          "All printers, materials, and export formats",
-          "Login required for downloads",
+          "10 generaciones descargables/mes",
+          "Mismas herramientas CAD que todos los planes",
+          "Todas las impresoras, materiales y formatos de exportacion",
+          "Login requerido para descargar",
         ],
         featured: true,
       },
       {
         name: "Pro",
         price: "$49/mo",
-        note: "Unlimited generations",
+        note: "Generaciones ilimitadas",
         features: [
-          "Unlimited downloadable generations",
-          "Same CAD experience as every plan",
-          "All printers, materials, and export formats",
-          "Login required for downloads",
+          "Generaciones descargables ilimitadas",
+          "Misma experiencia CAD que todos los planes",
+          "Todas las impresoras, materiales y formatos de exportacion",
+          "Login requerido para descargar",
         ],
       },
     ],
     auth: {
-      loginTitle: "Log in",
-      signupTitle: "Sign up",
+      loginTitle: "Iniciar sesion",
+      signupTitle: "Crear cuenta",
       email: "Email",
-      password: "Password",
-      name: "Name",
-      continue: "Continue to workspace",
-      hint: "Authentication is prepared in the frontend and can be connected to real auth later.",
+      password: "Contrasena",
+      name: "Nombre",
+      continue: "Continuar al workspace",
+      hint: "La autenticacion esta preparada en frontend y se puede conectar a auth real mas adelante.",
     },
     cta: {
-      title: "Ready to build?",
-      body: "Open the Cadio workspace and create the first model directly.",
+      title: "Listo para construir?",
+      body: "Abre el workspace de Cadio y crea el primer modelo directamente.",
+      button: "Start building",
+    },
+  },
+  fr: {
+    nav: {
+      product: "Produit",
+      workflow: "Flux",
+      pricing: "Tarifs",
+      login: "Connexion",
+      signup: "Creer un compte",
+      start: "Start building",
+    },
+    hero: {
+      eyebrow: "CAO IA pour impression 3D reelle",
+      title: "Decrivez le modele. Modifiez comme en CAO. Imprimez avec le bon profil.",
+      body:
+        "Cadio combine recherche IA, modeles parametriques et espace CAO clair pour makers, ateliers et idees produit.",
+      prompt: "Dewalt battery holder with wall mount",
+      primary: "Start building",
+      secondary: "Voir les tarifs",
+    },
+    stats: [
+      ["Source aware", "Utilise les signaux de Printables et de sources populaires de modeles 3D"],
+      ["Easy + Expert", "Editions rapides par IA ou controle CAO manuel"],
+      ["Print ready", "Imprimante, materiau, echelle et formats d'export dans un seul flux"],
+    ],
+    product: {
+      title: "Un constructeur CAO pour chaque niveau",
+      body:
+        "Easy mode vous aide a decrire ce que vous voulez. Expert mode donne le controle des esquisses, pieces, transformations, aretes et operations CAO.",
+    },
+    cards: [
+      ["AI model search", "Tapez ce que vous voulez construire et Cadio cree un modele a partir de signaux de designs imprimables populaires."],
+      ["Manual CAD", "Dessinez, selectionnez des pieces, deplacez, pivotez et affinez le modele avec un controle direct."],
+      ["Printer profiles", "Choisissez imprimante, materiau et format d'export avant le slicer."],
+    ],
+    workflow: {
+      title: "De l'idee au STL sans changer d'outil",
+      steps: [
+        ["1", "Ecrivez un prompt", "Exemple: cup holder with desk mount, phone stand ou support de remplacement."],
+        ["2", "Choisissez une variante", "Passez entre options populaires avec Next et Previous jusqu'a la bonne forme."],
+        ["3", "Ajustez", "Modifiez dimensions, materiau, couleur, placement et details CAO."],
+        ["4", "Exportez", "Telechargez STL, 3MF, OBJ ou AMF avec les reglages d'impression recommandes."],
+      ],
+    },
+    pricingTitle: "Tarifs",
+    pricingBody: "Tous les forfaits ont la meme experience CAO. Seul le nombre de generations telechargeables par mois change.",
+    tiers: [
+      {
+        name: "Free",
+        price: "$0",
+        note: "1 generation telechargeable",
+        features: [
+          "1 generation telechargeable",
+          "Connexion requise avant telechargement",
+          "Memes modes Easy et Expert CAD",
+          "Meme qualite de modele que les forfaits payants",
+        ],
+      },
+      {
+        name: "Maker",
+        price: "$10/mo",
+        note: "10 generations par mois",
+        features: [
+          "10 generations telechargeables/mois",
+          "Memes outils CAO que tous les forfaits",
+          "Toutes imprimantes, materiaux et formats d'export",
+          "Connexion requise pour telecharger",
+        ],
+        featured: true,
+      },
+      {
+        name: "Pro",
+        price: "$49/mo",
+        note: "Generations illimitees",
+        features: [
+          "Generations telechargeables illimitees",
+          "Meme experience CAO que tous les forfaits",
+          "Toutes imprimantes, materiaux et formats d'export",
+          "Connexion requise pour telecharger",
+        ],
+      },
+    ],
+    auth: {
+      loginTitle: "Connexion",
+      signupTitle: "Creer un compte",
+      email: "Email",
+      password: "Mot de passe",
+      name: "Nom",
+      continue: "Continuer vers le workspace",
+      hint: "L'authentification est preparee en frontend et pourra etre connectee a une vraie auth plus tard.",
+    },
+    cta: {
+      title: "Pret a construire?",
+      body: "Ouvrez le workspace Cadio et creez le premier modele directement.",
+      button: "Start building",
+    },
+  },
+  it: {
+    nav: {
+      product: "Prodotto",
+      workflow: "Flusso",
+      pricing: "Prezzi",
+      login: "Accedi",
+      signup: "Registrati",
+      start: "Start building",
+    },
+    hero: {
+      eyebrow: "CAD AI per vera stampa 3D",
+      title: "Descrivi il modello. Modifica come in CAD. Stampa con il profilo giusto.",
+      body:
+        "Cadio combina ricerca AI, modelli parametrici e un workspace CAD pulito per maker, officine e idee prodotto.",
+      prompt: "Dewalt battery holder with wall mount",
+      primary: "Start building",
+      secondary: "Vedi prezzi",
+    },
+    stats: [
+      ["Source aware", "Usa segnali da Printables e fonti popolari di modelli 3D"],
+      ["Easy + Expert", "Modifiche rapide con AI o controllo CAD manuale"],
+      ["Print ready", "Stampante, materiale, scala e formati export in un unico flusso"],
+    ],
+    product: {
+      title: "Un builder CAD per ogni livello",
+      body:
+        "Easy mode ti aiuta a descrivere cosa vuoi. Expert mode ti da controllo su schizzi, parti, trasformazioni, bordi e operazioni CAD.",
+    },
+    cards: [
+      ["AI model search", "Scrivi cosa vuoi costruire e Cadio crea un modello da segnali di design stampabili popolari."],
+      ["Manual CAD", "Disegna, seleziona parti, sposta, ruota e rifinisci il modello quando vuoi controllo diretto."],
+      ["Printer profiles", "Scegli stampante, materiale e formato export prima del slicer."],
+    ],
+    workflow: {
+      title: "Dall'idea allo STL senza cambiare strumento",
+      steps: [
+        ["1", "Scrivi un prompt", "Esempio: cup holder with desk mount, phone stand o supporto di ricambio."],
+        ["2", "Scegli una variante", "Passa tra opzioni popolari con Next e Previous finche la forma e corretta."],
+        ["3", "Rifinisci", "Modifica dimensioni, materiale, colore, posizione e dettagli CAD."],
+        ["4", "Esporta", "Scarica STL, 3MF, OBJ o AMF con impostazioni di stampa consigliate."],
+      ],
+    },
+    pricingTitle: "Prezzi",
+    pricingBody: "Tutti i piani hanno la stessa esperienza CAD. Cambia solo il numero mensile di generazioni scaricabili.",
+    tiers: [
+      {
+        name: "Free",
+        price: "$0",
+        note: "1 generazione scaricabile",
+        features: [
+          "1 generazione scaricabile",
+          "Login richiesto prima del download",
+          "Stessi Easy e Expert CAD",
+          "Stessa qualita dei modelli dei piani a pagamento",
+        ],
+      },
+      {
+        name: "Maker",
+        price: "$10/mo",
+        note: "10 generazioni al mese",
+        features: [
+          "10 generazioni scaricabili/mese",
+          "Stessi strumenti CAD di ogni piano",
+          "Tutte le stampanti, materiali e formati export",
+          "Login richiesto per il download",
+        ],
+        featured: true,
+      },
+      {
+        name: "Pro",
+        price: "$49/mo",
+        note: "Generazioni illimitate",
+        features: [
+          "Generazioni scaricabili illimitate",
+          "Stessa esperienza CAD di ogni piano",
+          "Tutte le stampanti, materiali e formati export",
+          "Login richiesto per il download",
+        ],
+      },
+    ],
+    auth: {
+      loginTitle: "Accedi",
+      signupTitle: "Registrati",
+      email: "Email",
+      password: "Password",
+      name: "Nome",
+      continue: "Continua al workspace",
+      hint: "L'autenticazione e pronta nel frontend e puo essere collegata a una vera auth piu avanti.",
+    },
+    cta: {
+      title: "Pronto a costruire?",
+      body: "Apri il workspace Cadio e crea subito il primo modello.",
+      button: "Start building",
+    },
+  },
+  de: {
+    nav: {
+      product: "Produkt",
+      workflow: "Ablauf",
+      pricing: "Preise",
+      login: "Einloggen",
+      signup: "Registrieren",
+      start: "Start building",
+    },
+    hero: {
+      eyebrow: "AI CAD fur echten 3D-Druck",
+      title: "Beschreibe das Modell. Bearbeite wie im CAD. Drucke mit dem richtigen Profil.",
+      body:
+        "Cadio kombiniert KI-Suche, parametrische Modelle und einen klaren CAD-Workspace fur Maker, Werkstatten und Produktideen.",
+      prompt: "Dewalt battery holder with wall mount",
+      primary: "Start building",
+      secondary: "Preise ansehen",
+    },
+    stats: [
+      ["Source aware", "Nutzt Signale von Printables und beliebten 3D-Modellquellen"],
+      ["Easy + Expert", "Schnelle KI-Edits oder manuelle CAD-Kontrolle"],
+      ["Print ready", "Drucker, Material, Skalierung und Exportformate in einem Ablauf"],
+    ],
+    product: {
+      title: "Ein CAD-Builder fur jedes Level",
+      body:
+        "Easy mode hilft dir, dein Ziel zu beschreiben. Expert mode gibt Kontrolle uber Skizzen, Teile, Transformationen, Kanten und CAD-Operationen.",
+    },
+    cards: [
+      ["AI model search", "Tippe, was du bauen willst, und Cadio erstellt ein Modell aus beliebten druckbaren Designsignalen."],
+      ["Manual CAD", "Zeichne, wahle Teile, verschiebe, rotiere und verfeinere das Modell mit direkter Kontrolle."],
+      ["Printer profiles", "Wahle Drucker, Material und Exportformat, bevor das Modell in den Slicer geht."],
+    ],
+    workflow: {
+      title: "Von der Idee zur STL ohne Toolwechsel",
+      steps: [
+        ["1", "Prompt schreiben", "Beispiel: cup holder with desk mount, phone stand oder Ersatzhalter."],
+        ["2", "Variante wahlen", "Wechsle mit Next und Previous durch beliebte Optionen, bis die Form passt."],
+        ["3", "Feinjustieren", "Passe Abmessungen, Material, Farbe, Position und CAD-Details an."],
+        ["4", "Exportieren", "Lade STL, 3MF, OBJ oder AMF mit empfohlenen Druckeinstellungen herunter."],
+      ],
+    },
+    pricingTitle: "Preise",
+    pricingBody: "Alle Pakete haben dieselbe CAD-Erfahrung. Nur die Anzahl monatlich herunterladbarer Generierungen ist anders.",
+    tiers: [
+      {
+        name: "Free",
+        price: "$0",
+        note: "1 herunterladbare Generierung",
+        features: [
+          "1 Generierung zum Herunterladen",
+          "Login vor Download erforderlich",
+          "Dasselbe Easy und Expert CAD",
+          "Dieselbe Modellqualitat wie bezahlte Pakete",
+        ],
+      },
+      {
+        name: "Maker",
+        price: "$10/mo",
+        note: "10 Generierungen pro Monat",
+        features: [
+          "10 herunterladbare Generierungen/Monat",
+          "Dieselben CAD-Tools wie jedes Paket",
+          "Alle Drucker, Materialien und Exportformate",
+          "Login fur Downloads erforderlich",
+        ],
+        featured: true,
+      },
+      {
+        name: "Pro",
+        price: "$49/mo",
+        note: "Unbegrenzte Generierungen",
+        features: [
+          "Unbegrenzte herunterladbare Generierungen",
+          "Dieselbe CAD-Erfahrung wie jedes Paket",
+          "Alle Drucker, Materialien und Exportformate",
+          "Login fur Downloads erforderlich",
+        ],
+      },
+    ],
+    auth: {
+      loginTitle: "Einloggen",
+      signupTitle: "Registrieren",
+      email: "Email",
+      password: "Passwort",
+      name: "Name",
+      continue: "Weiter zum Workspace",
+      hint: "Authentifizierung ist im Frontend vorbereitet und kann spater mit echter Auth verbunden werden.",
+    },
+    cta: {
+      title: "Bereit zu bauen?",
+      body: "Offne den Cadio-Workspace und erstelle direkt dein erstes Modell.",
+      button: "Start building",
+    },
+  },
+  pt: {
+    nav: {
+      product: "Produto",
+      workflow: "Fluxo",
+      pricing: "Precos",
+      login: "Entrar",
+      signup: "Criar conta",
+      start: "Start building",
+    },
+    hero: {
+      eyebrow: "CAD com IA para impressao 3D real",
+      title: "Descreva o modelo. Edite como CAD. Imprima com o perfil certo.",
+      body:
+        "Cadio combina busca com IA, modelos parametricos e um workspace CAD limpo para makers, oficinas e ideias de produto.",
+      prompt: "Dewalt battery holder with wall mount",
+      primary: "Start building",
+      secondary: "Ver precos",
+    },
+    stats: [
+      ["Source aware", "Usa sinais do Printables e de fontes populares de modelos 3D"],
+      ["Easy + Expert", "Edicoes rapidas com IA ou controle CAD manual"],
+      ["Print ready", "Impressora, material, escala e formatos de exportacao em um fluxo"],
+    ],
+    product: {
+      title: "Um builder CAD para todos os niveis",
+      body:
+        "Easy mode ajuda voce a descrever o que quer. Expert mode da controle sobre sketches, pecas, transformacoes, bordas e operacoes CAD.",
+    },
+    cards: [
+      ["AI model search", "Digite o que quer construir e Cadio cria um modelo com sinais de designs imprimiveis populares."],
+      ["Manual CAD", "Desenhe, selecione pecas, mova, rotacione e refine o modelo quando quiser controle direto."],
+      ["Printer profiles", "Escolha impressora, material e formato de exportacao antes do slicer."],
+    ],
+    workflow: {
+      title: "Da ideia ao STL sem trocar de ferramenta",
+      steps: [
+        ["1", "Escreva um prompt", "Exemplo: cup holder with desk mount, phone stand ou suporte de reposicao."],
+        ["2", "Escolha uma variante", "Alterne entre opcoes populares com Next e Previous ate acertar a forma."],
+        ["3", "Ajuste fino", "Mude dimensoes, material, cor, posicao e detalhes CAD."],
+        ["4", "Exporte", "Baixe STL, 3MF, OBJ ou AMF com configuracoes de impressao recomendadas."],
+      ],
+    },
+    pricingTitle: "Precos",
+    pricingBody: "Todos os planos tem a mesma experiencia CAD. A diferenca e o numero mensal de geracoes baixaveis.",
+    tiers: [
+      {
+        name: "Free",
+        price: "$0",
+        note: "1 geracao baixavel",
+        features: [
+          "1 geracao que pode ser baixada",
+          "Login obrigatorio antes do download",
+          "Mesmo Easy e Expert CAD",
+          "Mesma qualidade de modelo dos planos pagos",
+        ],
+      },
+      {
+        name: "Maker",
+        price: "$10/mo",
+        note: "10 geracoes por mes",
+        features: [
+          "10 geracoes baixaveis/mes",
+          "Mesmas ferramentas CAD de todos os planos",
+          "Todas as impressoras, materiais e formatos de exportacao",
+          "Login obrigatorio para downloads",
+        ],
+        featured: true,
+      },
+      {
+        name: "Pro",
+        price: "$49/mo",
+        note: "Geracoes ilimitadas",
+        features: [
+          "Geracoes baixaveis ilimitadas",
+          "Mesma experiencia CAD de todos os planos",
+          "Todas as impressoras, materiais e formatos de exportacao",
+          "Login obrigatorio para downloads",
+        ],
+      },
+    ],
+    auth: {
+      loginTitle: "Entrar",
+      signupTitle: "Criar conta",
+      email: "Email",
+      password: "Senha",
+      name: "Nome",
+      continue: "Continuar para o workspace",
+      hint: "A autenticacao esta preparada no frontend e pode ser conectada a auth real depois.",
+    },
+    cta: {
+      title: "Pronto para construir?",
+      body: "Abra o workspace Cadio e crie o primeiro modelo diretamente.",
       button: "Start building",
     },
   },
@@ -350,7 +835,7 @@ function AuthDialog({
 }
 
 export default function LandingPage({ onStartBuilding }: { onStartBuilding: () => void }) {
-  const [language, setLanguage] = useState<Language>("sv");
+  const [language, setLanguage] = useState<Language>("en");
   const [authMode, setAuthMode] = useState<AuthMode>(null);
   const text = copy[language];
 
@@ -378,8 +863,11 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               className="h-9 rounded-lg border border-white/10 bg-[#222] px-2 text-xs text-white outline-none"
               aria-label="Language"
             >
-              <option value="sv">SV</option>
-              <option value="en">EN</option>
+              {languageOptions.map((option) => (
+                <option value={option.value} key={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
             <button
               onClick={() => setAuthMode("login")}
