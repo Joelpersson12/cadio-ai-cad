@@ -331,9 +331,10 @@ async def update_parameters(
                 if key in allowed_params:
                     obj["parameters"][key] = float(value)
                     changed_keys.add(key)
-                    if obj.get("manual") and key == "thickness":
+                    imported_source = obj.get("primitive") == "imported_source_mesh" or bool(obj.get("imported_source_mesh"))
+                    if obj.get("manual") and not imported_source and key == "thickness":
                         obj["parameters"]["height"] = float(value)
-                    if obj.get("manual") and key == "height":
+                    if obj.get("manual") and not imported_source and key == "height":
                         obj["parameters"]["thickness"] = float(value)
             if not update_imported_source_dimensions(obj, changed_keys):
                 rebuild_object(obj)

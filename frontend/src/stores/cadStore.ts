@@ -219,12 +219,13 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
 
   patchParam: async (key: string, value: number) => {
-    const { sessionId, selectedObjectId } = get();
-    if (!sessionId || !selectedObjectId) return;
+    const { sessionId, selectedObjectId, objects } = get();
+    const targetObjectId = selectedObjectId || objects[0]?.id || "";
+    if (!sessionId || !targetObjectId) return;
     try {
       const data = await apiUpdateParams({
         session_id: sessionId,
-        object_id: selectedObjectId,
+        object_id: targetObjectId,
         parameters: { [key]: value },
       });
       get().applyScenePayload(data);

@@ -574,6 +574,15 @@ def _localize_mesh_part(mesh: TriMesh) -> tuple[TriMesh, list[float], dict[str, 
     return local, [cx, cy, min_z], dimensions
 
 
+def _stable_source_shape(obj: CadObject) -> TriMesh:
+    source_shape = obj.get("source_original_shape")
+    if isinstance(source_shape, TriMesh):
+        return deepcopy(source_shape)
+    shape = deepcopy(obj["shape"])
+    obj["source_original_shape"] = deepcopy(shape)
+    return shape
+
+
 def _source_file_name(source_file: dict[str, Any]) -> str:
     return str(source_file.get("name") or "").strip()
 
@@ -785,6 +794,7 @@ def _create_imported_source_object(
     source_obj["assembly_source"] = f"imported-stl:{(source_example or {}).get('source') or 'source'}"
     source_obj["imported_source_mesh"] = True
     source_obj["source_dimensions"] = dimensions
+    source_obj["source_original_shape"] = deepcopy(shape)
     source_obj["source_model"] = {
         "prompt": prompt,
         "matched_example": source_example,
@@ -860,6 +870,7 @@ def _create_imported_source_objects(
         source_obj["assembly_source"] = f"imported-stl-assembly:{(source_example or {}).get('source') or 'source'}"
         source_obj["imported_source_mesh"] = True
         source_obj["source_dimensions"] = dimensions
+        source_obj["source_original_shape"] = deepcopy(local_mesh)
         source_obj["source_group_id"] = group_id
         source_obj["source_part_index"] = index
         source_obj["source_part_count"] = len(imported_parts)
@@ -2014,6 +2025,80 @@ def _make_box_with_rect_holes(width: float, depth: float, height: float, params:
     return mesh if mesh.verts else make_box(width, depth, height)
 
 
+def _add_cylinder_wall(
+    mesh: TriMesh,
+    x: float,
+    y: float,
+    radius: float,
+    z0: float,
+    z1: float,
+    *,
+    segments: int = 28,
+) -> None:
+    if radius <= 0.0 or z1 <= z0:
+        return
+    bottom: list[int] = []
+    top: list[int] = []
+    for index in range(segments):
+        angle = 2.0 * math.pi * index / segments
+        px = x + math.cos(angle) * radius
+        py = y + math.sin(angle) * radius
+        bottom.append(mesh.add_vertex((px, py, z0)))
+        top.append(mesh.add_vertex((px, py, z1)))
+    for index in range(segments):
+        nxt = (index + 1) % segments
+        # Reversed winding so the surface reads as the inside of a cut hole.
+        mesh.add_quad(bottom[nxt], bottom[index], top[index], top[nxt])
+
+
+def _apply_mesh_hole_cuts(mesh: TriMesh, params: dict[str, float]) -> TriMesh:
+    """Approximate vertical screw holes for imported STL meshes.
+
+    Imported Printables models arrive as triangles, not editable B-reps. This
+    removes triangles inside the requested cylinders and adds simple inside
+    walls so the edit is visible and printable enough for source meshes.
+    """
+    holes = _hole_specs(params)
+    if not holes or not mesh.verts:
+        return shift_mesh_to_buildplate(mesh)
+
+    mins, maxs = _mesh_extents(mesh)
+    z0 = mins[2] - 0.2
+    z1 = maxs[2] + 0.2
+    counterbore_diameter = max(0.0, float(params.get("counterbore_diameter", 0.0)))
+    counterbore_depth = max(0.0, float(params.get("counterbore_depth", 0.0)))
+    counterbore_z0 = max(z0, z1 - counterbore_depth) if counterbore_depth > 0 else z1
+
+    cut_specs: list[tuple[float, float, float, float, float]] = []
+    for x, y, diameter in holes:
+        radius = max(0.1, diameter / 2.0)
+        cut_specs.append((x, y, radius, z0, z1))
+        if counterbore_diameter > diameter and counterbore_depth > 0:
+            cut_specs.append((x, y, counterbore_diameter / 2.0, counterbore_z0, z1))
+
+    cut = TriMesh()
+    cut.verts = list(mesh.verts)
+    for a, b, c in mesh.tris:
+        va, vb, vc = mesh.verts[a], mesh.verts[b], mesh.verts[c]
+        cx = (va[0] + vb[0] + vc[0]) / 3.0
+        cy = (va[1] + vb[1] + vc[1]) / 3.0
+        cz = (va[2] + vb[2] + vc[2]) / 3.0
+        inside_cut = any(
+            hz0 <= cz <= hz1 and (cx - hx) ** 2 + (cy - hy) ** 2 <= hr ** 2
+            for hx, hy, hr, hz0, hz1 in cut_specs
+        )
+        if not inside_cut:
+            cut.tris.append((a, b, c))
+
+    for x, y, diameter in holes:
+        radius = max(0.1, diameter / 2.0)
+        _add_cylinder_wall(cut, x, y, radius, max(0.0, z0), z1)
+        if counterbore_diameter > diameter and counterbore_depth > 0:
+            _add_cylinder_wall(cut, x, y, counterbore_diameter / 2.0, counterbore_z0, z1)
+
+    return shift_mesh_to_buildplate(cut)
+
+
 def rebuild_manual_object(obj: CadObject) -> None:
     """Rebuild an expert-mode primitive from its parameters and operations."""
     params = obj["parameters"]
@@ -2033,7 +2118,7 @@ def rebuild_manual_object(obj: CadObject) -> None:
     elif primitive == "source_battery_holder":
         obj["shape"] = _make_source_battery_holder_mesh(params)
     elif primitive == "imported_source_mesh":
-        obj["shape"] = shift_mesh_to_buildplate(obj["shape"])
+        obj["shape"] = _apply_mesh_hole_cuts(_stable_source_shape(obj), params)
     else:
         fillet = max(0.0, float(params.get("fillet_radius", 0.0)))
         chamfer = max(0.0, float(params.get("chamfer_size", 0.0)))
@@ -2092,10 +2177,32 @@ def _is_base_like(obj: CadObject) -> bool:
             "holder_base",
             "battery_mount",
             "electronics_base",
+            "desk",
+            "clamp",
         )
     )
-    flat = primitive == "rectangle" and width >= 25.0 and depth >= 20.0 and height <= max(18.0, min(width, depth) * 0.35)
+    flat_primitive = primitive == "rectangle"
+    imported_source = primitive == "imported_source_mesh" or bool(obj.get("imported_source_mesh"))
+    flat = (flat_primitive or imported_source) and width >= 25.0 and depth >= 20.0 and height <= max(18.0, min(width, depth) * 0.35)
     return explicit or flat
+
+
+def _base_candidate_score(obj: CadObject) -> float:
+    name = str(obj.get("name", "")).lower()
+    params = obj.get("parameters", {})
+    width = max(0.0, float(params.get("width", 0.0)))
+    depth = max(0.0, float(params.get("depth", 0.0)))
+    height = max(0.1, float(params.get("height", params.get("thickness", 0.0))))
+    area = width * depth
+    flatness = area / height
+    score = flatness
+    if _is_base_like(obj):
+        score += area * 3.0
+    if any(token in name for token in ("base", "plate", "mount", "desk", "clamp", "floor", "bottom")):
+        score += area * 2.0
+    if any(token in name for token in ("screw", "bolt", "pin", "knob", "spacer")):
+        score -= area * 4.0
+    return score
 
 
 def _mounting_hole_positions(width: float, depth: float, count: int) -> list[tuple[float, float]]:
@@ -2127,9 +2234,20 @@ def _apply_mounting_holes_to_object(
     counterbore_diameter: float,
 ) -> None:
     params = obj["parameters"]
-    width = max(1.0, float(params.get("width", 80.0)))
-    depth = max(1.0, float(params.get("depth", 70.0)))
-    height = max(0.5, float(params.get("height", params.get("thickness", 8.0))))
+    source_dimensions = obj.get("source_dimensions") if isinstance(obj.get("source_dimensions"), dict) else {}
+    imported_source = obj.get("primitive") == "imported_source_mesh" or bool(obj.get("imported_source_mesh"))
+    width = max(
+        1.0,
+        float((source_dimensions if imported_source else {}).get("width") or params.get("width", 80.0)),
+    )
+    depth = max(
+        1.0,
+        float((source_dimensions if imported_source else {}).get("depth") or params.get("depth", 70.0)),
+    )
+    height = max(
+        0.5,
+        float((source_dimensions if imported_source else {}).get("height") or params.get("height", params.get("thickness", 8.0))),
+    )
     safe_diameter = max(1.0, min(float(diameter), min(width, depth) * 0.45))
     safe_counterbore = max(safe_diameter + 1.0, min(float(counterbore_diameter), min(width, depth) * 0.7))
     safe_depth = max(0.6, min(height * 0.45, safe_diameter * 0.45, 3.0))
@@ -2169,14 +2287,17 @@ def add_mounting_holes_to_session(
 ) -> list[str]:
     """Add predictable mounting holes to base-like bodies without regenerating."""
     candidates: list[CadObject] = []
+    search_space = _source_group_objects(session, selected) if selected and selected.get("source_group_id") else []
+    if not search_space:
+        search_space = [session["objects"][oid] for oid in session["object_order"]]
+
     if selected and _is_base_like(selected):
         candidates = [selected]
     else:
-        candidates = [
-            session["objects"][oid]
-            for oid in session["object_order"]
-            if _is_base_like(session["objects"][oid])
-        ]
+        candidates = [obj for obj in search_space if _is_base_like(obj)]
+        if not candidates and search_space:
+            ranked = sorted(search_space, key=_base_candidate_score, reverse=True)
+            candidates = ranked[:1] if ranked and _base_candidate_score(ranked[0]) > 0 else []
         if not candidates and selected:
             candidates = [selected]
 
@@ -2490,12 +2611,23 @@ def update_imported_source_dimensions(obj: CadObject, changed_keys: set[str]) ->
     if obj.get("primitive") != "imported_source_mesh":
         return False
     dimension_keys = {"width", "depth", "height"}
+    hole_keys = {
+        "hole_count",
+        "hole_diameter",
+        "counterbore_diameter",
+        "counterbore_depth",
+        "custom_hole_count",
+    }
+    changed_holes = bool(hole_keys & changed_keys) or any(key.startswith("custom_hole_") for key in changed_keys)
+    if changed_holes:
+        rebuild_manual_object(obj)
     if not (dimension_keys & changed_keys):
+        place_object_on_plate(obj)
         return True
 
     source_dimensions = obj.get("source_dimensions")
     if not isinstance(source_dimensions, dict):
-        source_dimensions = _mesh_dimensions(obj["shape"])
+        source_dimensions = _mesh_dimensions(_stable_source_shape(obj))
         obj["source_dimensions"] = source_dimensions
 
     axis_for_key = {"width": 0, "depth": 1, "height": 2}

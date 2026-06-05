@@ -1,6 +1,6 @@
 /** Adam/CADAM-style parameter inspector. */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCadStore } from "../stores/cadStore";
 import type { PrinterProfile } from "../utils/types";
 import { exportUrl } from "../utils/api";
@@ -87,7 +87,23 @@ function ParameterRow({
   meta: ParamMeta;
   onChange: (key: string, value: number) => void;
 }) {
-  const display = formatValue(value, meta.step);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [paramKey, value]);
+
+  const clamp = (next: number) => Math.max(meta.min, Math.min(meta.max, next));
+  const commit = (next = draft) => {
+    if (!Number.isFinite(next)) return;
+    const clamped = clamp(next);
+    setDraft(clamped);
+    if (Math.abs(clamped - value) > 0.0001) {
+      onChange(paramKey, clamped);
+    }
+  };
+
+  const display = formatValue(draft, meta.step);
   return (
     <div className="grid grid-cols-[82px_1fr_58px_26px] items-center gap-3 py-2">
       <label className="text-xs leading-tight text-[#b9b9b9]">{meta.label}</label>
@@ -96,8 +112,12 @@ function ParameterRow({
         min={meta.min}
         max={meta.max}
         step={meta.step}
-        value={Number.isFinite(value) ? value : meta.min}
-        onChange={(e) => onChange(paramKey, Number(e.target.value))}
+        value={Number.isFinite(draft) ? draft : meta.min}
+        onChange={(e) => setDraft(Number(e.target.value))}
+        onPointerUp={() => commit()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+        }}
         className="h-2 w-full accent-[#245b70]"
       />
       <input
@@ -106,7 +126,13 @@ function ParameterRow({
         max={meta.max}
         step={meta.step}
         value={display}
-        onChange={(e) => onChange(paramKey, Number(e.target.value))}
+        onChange={(e) => setDraft(Number(e.target.value))}
+        onBlur={() => commit()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.currentTarget.blur();
+          }
+        }}
         className="h-7 rounded-lg border-0 bg-[#2b2b2c] px-2 text-center text-xs font-semibold text-white outline-none"
       />
       <span className="text-xs text-[#9f9f9f]">{meta.unit ?? ""}</span>
