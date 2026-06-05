@@ -256,6 +256,27 @@ _BAD_URL_FRAGMENTS = (
     "/makes/",
 )
 
+_QUERY_STOP_WORDS = {
+    "with",
+    "and",
+    "the",
+    "for",
+    "from",
+    "that",
+    "this",
+    "into",
+    "onto",
+    "under",
+    "over",
+    "med",
+    "och",
+    "till",
+    "att",
+    "som",
+    "det",
+    "den",
+}
+
 
 def _clean_title(text: str) -> str:
     title = re.sub(r"<[^>]+>", " ", html.unescape(text))
@@ -283,16 +304,23 @@ def _looks_like_model_url(source: str, url: str, title: str) -> bool:
 
 
 def _query_words(query: str) -> list[str]:
-    base = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2]
+    base = [
+        w
+        for w in re.findall(r"[a-z0-9]+", query.lower())
+        if len(w) > 2 and w not in _QUERY_STOP_WORDS
+    ]
     aliases = {
         "phone": ["mobile", "smartphone"],
         "mobile": ["phone", "smartphone"],
+        "cup": ["mug"],
+        "mug": ["cup"],
         "headset": ["headphone", "headphones"],
         "headphone": ["headset", "headphones"],
         "battery": ["batteries", "pack"],
         "batteries": ["battery", "pack"],
         "holder": ["mount", "bracket", "rack"],
         "mount": ["holder", "bracket"],
+        "desk": ["clamp"],
         "wall": ["mount"],
         "dewalt": ["power", "tool"],
     }
@@ -309,6 +337,12 @@ def _query_words(query: str) -> list[str]:
 def _query_variants(query: str) -> list[str]:
     normalized = re.sub(r"\s+", " ", query.strip().lower())
     variants = [normalized] if normalized else []
+    core_words = [
+        word
+        for word in re.findall(r"[a-z0-9]+", normalized)
+        if len(word) > 2 and word not in _QUERY_STOP_WORDS
+    ]
+    cleaned = " ".join(core_words)
     words = set(_query_words(normalized))
 
     def add(value: str) -> None:
@@ -316,11 +350,24 @@ def _query_variants(query: str) -> list[str]:
         if value and value not in variants:
             variants.append(value)
 
+    add(cleaned)
     if {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch"} & words:
         brand = next((word for word in ("dewalt", "makita", "milwaukee", "ryobi", "bosch") if word in words), "power tool")
         add(f"{brand} battery holder wall mount")
         add(f"{brand} battery holder slide rail")
         add("power tool battery holder printable")
+    if "desk" in words and {"holder", "mount", "bracket", "rack", "clamp"} & words:
+        object_words = [
+            word
+            for word in core_words
+            if word not in {"desk", "holder", "mount", "bracket", "rack", "clamp"}
+        ]
+        object_phrase = " ".join(object_words)
+        if object_phrase:
+            add(f"{object_phrase} holder desk mount")
+            add(f"desk {object_phrase} holder")
+            add(f"desk mount {object_phrase} holder")
+            add(f"clamp on desk {object_phrase} holder")
     if {"phone", "mobile", "smartphone", "tablet"} & words and {"stand", "holder", "dock", "mount"} & words:
         add("foldable phone stand 3d print")
         add("phone tablet stand flat fold")
@@ -339,22 +386,62 @@ def _query_variants(query: str) -> list[str]:
         add(f"{normalized} 3d print")
         add(f"{normalized} stl")
 
-    return variants[:6]
+    return variants[:8]
 
 
 def _design_score(query: str, design: ExampleDesign) -> float:
     relevance = _query_relevance(query, design.title, design.tags)
     title = design.title.lower()
     words = [w for w in _query_words(query) if len(w) > 2]
+    core_words = [
+        w
+        for w in re.findall(r"[a-z0-9]+", query.lower())
+        if len(w) > 2 and w not in _QUERY_STOP_WORDS
+    ]
+    cleaned_phrase = " ".join(core_words)
     exact_phrase_bonus = 18.0 if query.strip().lower() in title else 0.0
+    if cleaned_phrase and cleaned_phrase in title:
+        exact_phrase_bonus += 56.0
     coverage = 0.0
     if words:
         hits = sum(1 for word in words if word in title or word in design.tags)
         coverage = hits / len(words)
+    exact_coverage = 0.0
+    missing_core = 0
+    if core_words:
+        exact_hits = sum(1 for word in core_words if _query_token_matches_title(word, title, design.tags))
+        exact_coverage = exact_hits / len(core_words)
+        missing_core = len(core_words) - exact_hits
     quality_penalty = 18.0 if any(word in title for word in _BAD_TITLE_WORDS) else 0.0
+    required_penalty = missing_core * 18.0
+    if "mount" in core_words and not _query_token_matches_title("mount", title, design.tags):
+        required_penalty += 36.0
+    if "desk" in core_words and not _query_token_matches_title("desk", title, design.tags):
+        required_penalty += 24.0
     source_weight = _SOURCE_WEIGHTS.get(design.source, 6)
     popularity = min(100, design.popularity) * 0.85 + min(1000, design.likes) * 0.02 + min(10000, design.downloads) * 0.004
-    return relevance * 34.0 + coverage * 28.0 + exact_phrase_bonus + source_weight + popularity - quality_penalty
+    return (
+        relevance * 28.0
+        + coverage * 22.0
+        + exact_coverage * 42.0
+        + exact_phrase_bonus
+        + source_weight
+        + popularity
+        - quality_penalty
+        - required_penalty
+    )
+
+
+def _query_token_matches_title(word: str, title: str, tags: list[str]) -> bool:
+    haystack = set(re.findall(r"[a-z0-9]+", title.lower()) + tags)
+    equivalents = {
+        "cup": {"cup", "mug", "tumbler"},
+        "mug": {"mug", "cup", "tumbler"},
+        "holder": {"holder", "hold", "mount", "stand"},
+        "mount": {"mount", "mounted", "clamp", "clip", "bracket"},
+        "desk": {"desk", "table", "desktop"},
+    }
+    return bool((equivalents.get(word, {word}) & haystack) or any(term in title for term in equivalents.get(word, {word})))
 
 
 

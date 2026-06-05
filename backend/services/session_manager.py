@@ -436,9 +436,26 @@ def _source_file_score(source_file: Any, prompt: str, preferred_slots: int = 0) 
         value += 8.0
     if any(token in name for token in ("support", "raft", "gcode", "profile", "test", "old")):
         value -= 24.0
+    if any(token in name for token in ("front", "left", "right", "rear", "back", "bolt", "screw", "insert", "topper", "pad", "knob")):
+        value -= 48.0
+    if "small" in name and "small" not in text:
+        value -= 14.0
     if file_type == "step":
         value += 6.0
     return value
+
+
+def _source_title_score(title: str, prompt: str) -> float:
+    stop_words = {"with", "and", "the", "for", "from", "that", "this", "into", "onto", "under", "over"}
+    core_words = [word for word in re.findall(r"[a-z0-9]+", (prompt or "").lower()) if len(word) > 2 and word not in stop_words]
+    if not core_words:
+        return 0.0
+    cleaned = " ".join(core_words)
+    lower_title = (title or "").lower()
+    if cleaned and cleaned in lower_title:
+        return 90.0
+    hits = sum(1 for word in core_words if word in lower_title)
+    return 34.0 * (hits / len(core_words))
 
 def _rank_source_files(files: list[Any], prompt: str, preferred_slots: int = 0) -> list[Any]:
     return sorted(files, key=lambda source_file: _source_file_score(source_file, prompt, preferred_slots), reverse=True)
@@ -578,41 +595,70 @@ def _try_replace_with_imported_source_model(
     preferred_slots: int = 0,
     prefer_flat: bool = False,
 ) -> tuple[list[str], CadObject | None]:
-    source_example, source_files, selected_source_file = _source_file_evidence(prompt, preferred_slots=preferred_slots)
-    candidates: list[dict[str, Any]] = []
-    for candidate in [selected_source_file, *source_files]:
-        if isinstance(candidate, dict) and candidate.get("id") not in {item.get("id") for item in candidates}:
-            candidates.append(candidate)
+    try:
+        from backend.services.design_providers import get_provider_registry, resolve_printables_model_files
 
-    imported_shape = None
-    imported_file = selected_source_file
-    for candidate in candidates:
+        examples = [
+            example
+            for example in get_provider_registry().search_all(prompt, limit=12)
+            if example.source == "printables"
+        ]
+    except Exception:
+        examples = []
+
+    ranked_candidates: list[tuple[float, Any, list[dict[str, Any]], dict[str, Any]]] = []
+    for example_index, source_example_obj in enumerate(examples[:8]):
+        source_files_obj = _rank_source_files(
+            resolve_printables_model_files(source_example_obj.url, limit=24),
+            prompt,
+            preferred_slots,
+        )
+        source_files = [source_file.to_dict() for source_file in source_files_obj]
+        seen_ids: set[Any] = set()
+        for candidate in source_files:
+            if candidate.get("id") in seen_ids:
+                continue
+            seen_ids.add(candidate.get("id"))
+            if str(candidate.get("file_type") or "").lower() != "stl" or not candidate.get("download_url"):
+                continue
+            model_rank_bonus = max(0, len(examples) - example_index) * 34.0
+            ranked_candidates.append(
+                (
+                    model_rank_bonus
+                    + _source_title_score(source_example_obj.title, prompt)
+                    + _source_file_score(candidate, prompt, preferred_slots),
+                    source_example_obj,
+                    source_files,
+                    candidate,
+                )
+            )
+
+    ranked_candidates.sort(key=lambda item: item[0], reverse=True)
+    for _score, source_example_obj, source_files, candidate in ranked_candidates:
         imported_shape = _try_import_source_stl(candidate, prefer_flat=prefer_flat)
-        if imported_shape is not None:
-            imported_file = candidate
-            break
+        if imported_shape is None:
+            continue
 
-    if imported_shape is None:
-        return [], None
+        source_example = source_example_obj.to_dict()
+        source_obj = _create_imported_source_object(
+            prompt,
+            imported_shape,
+            source_example,
+            source_files,
+            candidate,
+        )
+        _remove_object_direct(session, obj["id"])
+        add_object(session, source_obj)
+        session["selected_object_id"] = ""
+        selected_file_name = candidate.get("name")
+        return [
+            _source_signal_summary(prompt),
+            f"source-match: {source_example_obj.title}",
+            f"source-files: selected {selected_file_name}" if selected_file_name else "source-files: selected public STL",
+            "imported real Printables STL mesh as starting geometry",
+        ], source_obj
 
-    source_obj = _create_imported_source_object(
-        prompt,
-        imported_shape,
-        source_example,
-        source_files,
-        imported_file,
-    )
-    _remove_object_direct(session, obj["id"])
-    add_object(session, source_obj)
-    session["selected_object_id"] = ""
-    selected_file_name = (imported_file or {}).get("name")
-    source_title = (source_example or {}).get("title") or "source model"
-    return [
-        _source_signal_summary(prompt),
-        f"source-match: {source_title}",
-        f"source-files: selected {selected_file_name}" if selected_file_name else "source-files: selected public STL",
-        "imported real Printables STL mesh as starting geometry",
-    ], source_obj
+    return [], None
 
 
 def _active_source_object(session: Session) -> CadObject | None:
