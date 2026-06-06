@@ -22,9 +22,9 @@ CREATE_PATTERNS = (
 )
 
 EDIT_PATTERNS = (
-    r"\b(add|remove|delete|change|modify|edit|increase|decrease|resize|scale|rotate|move)\b",
-    r"\b(make it|taller|wider|thicker|thinner|rounded|fillet|chamfer|extrude|shell|mirror|holes?)\b",
-    r"\b(lagg till|ta bort|andra|redigera|flytta|rotera|skala|hal|rund|fasa|tjockare|bredare|hogre)\b",
+    r"\b(add|remove|delete|change|modify|edit|increase|decrease|resize|scale|rotate|move|write|engrave|emboss)\b",
+    r"\b(make it|taller|wider|thicker|thinner|rounded|fillet|chamfer|extrude|shell|mirror|holes?|text|logo|label|engraved|raised)\b",
+    r"\b(lagg till|ta bort|andra|redigera|flytta|rotera|skala|hal|rund|fasa|tjockare|bredare|hogre|skriv|ingravera|ingraverat|gravyr|logga|upphojd|upphojt|praglad)\b",
     r"\b(lägg till|ta bort|ändra|redigera|flytta|rotera|skala|hål|rund|fasa|tjockare|bredare|högre)\b",
     r"\bgor\s+(den|det)\b",
     r"\bgör\s+(den|det)\b",

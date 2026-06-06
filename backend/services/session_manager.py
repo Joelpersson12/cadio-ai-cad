@@ -2137,6 +2137,393 @@ def _apply_mesh_hole_cuts(mesh: TriMesh, params: dict[str, float]) -> TriMesh:
     return shift_mesh_to_buildplate(cut)
 
 
+_TEXT_GLYPHS: dict[str, tuple[str, ...]] = {
+    "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "B": ("11110", "10001", "10001", "11110", "10001", "10001", "11110"),
+    "C": ("01111", "10000", "10000", "10000", "10000", "10000", "01111"),
+    "D": ("11110", "10001", "10001", "10001", "10001", "10001", "11110"),
+    "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+    "F": ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
+    "G": ("01111", "10000", "10000", "10011", "10001", "10001", "01111"),
+    "H": ("10001", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "I": ("11111", "00100", "00100", "00100", "00100", "00100", "11111"),
+    "J": ("00111", "00010", "00010", "00010", "00010", "10010", "01100"),
+    "K": ("10001", "10010", "10100", "11000", "10100", "10010", "10001"),
+    "L": ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
+    "M": ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
+    "N": ("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
+    "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+    "Q": ("01110", "10001", "10001", "10001", "10101", "10010", "01101"),
+    "R": ("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
+    "S": ("01111", "10000", "10000", "01110", "00001", "00001", "11110"),
+    "T": ("11111", "00100", "00100", "00100", "00100", "00100", "00100"),
+    "U": ("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "V": ("10001", "10001", "10001", "10001", "10001", "01010", "00100"),
+    "W": ("10001", "10001", "10001", "10101", "10101", "10101", "01010"),
+    "X": ("10001", "10001", "01010", "00100", "01010", "10001", "10001"),
+    "Y": ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
+    "Z": ("11111", "00001", "00010", "00100", "01000", "10000", "11111"),
+    "0": ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
+    "1": ("00100", "01100", "00100", "00100", "00100", "00100", "01110"),
+    "2": ("01110", "10001", "00001", "00010", "00100", "01000", "11111"),
+    "3": ("11110", "00001", "00001", "01110", "00001", "00001", "11110"),
+    "4": ("00010", "00110", "01010", "10010", "11111", "00010", "00010"),
+    "5": ("11111", "10000", "10000", "11110", "00001", "00001", "11110"),
+    "6": ("01110", "10000", "10000", "11110", "10001", "10001", "01110"),
+    "7": ("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
+    "8": ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
+    "9": ("01110", "10001", "10001", "01111", "00001", "00001", "01110"),
+    "-": ("00000", "00000", "00000", "11111", "00000", "00000", "00000"),
+    ".": ("00000", "00000", "00000", "00000", "00000", "01100", "01100"),
+}
+
+
+def _sanitize_label_text(text: str) -> str:
+    folded = re.sub(r"[^A-Za-z0-9 ._-]+", " ", str(text or ""))
+    folded = re.sub(r"\s+", " ", folded).strip(" ._-")
+    if not folded:
+        return "TEXT"
+    return folded[:28].upper()
+
+
+def _extract_label_text(prompt: str) -> str:
+    raw = str(prompt or "")
+    quoted = re.search(r"[\"']([^\"']{1,40})[\"']", raw)
+    if quoted:
+        return _sanitize_label_text(quoted.group(1))
+
+    patterns = (
+        r"(?:l[äa]gg\s+till|lagg\s+till|add)\s+([A-Za-z0-9][A-Za-z0-9 ._-]{0,30})\s+(?:text|logo|logga|bokstav|ord)",
+        r"(?:text|logo|logga)\s+(?:med\s+|with\s+)?([A-Za-z0-9][A-Za-z0-9 ._-]{0,30})",
+        r"(?:skriv|write)\s+([A-Za-z0-9][A-Za-z0-9 ._-]{0,30})",
+        r"(?:engrave|engraved|ingravera|ingraverat)\s+([A-Za-z0-9][A-Za-z0-9 ._-]{0,30})",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, raw, flags=re.IGNORECASE)
+        if match:
+            candidate = re.sub(
+                r"\b(?:pa|på|on|i|in|text|logo|logga|kortsidorna|kortsida|langsidorna|langsida|long|short|side|sides|top|bottom|front|back|engraved|ingraverat)\b.*$",
+                "",
+                match.group(1),
+                flags=re.IGNORECASE,
+            )
+            label = _sanitize_label_text(candidate)
+            if label:
+                return label
+    return "TEXT"
+
+
+def _is_text_removal_prompt(prompt: str) -> bool:
+    text = _prompt_match_text(prompt)
+    return any(token in text for token in ("remove text", "delete text", "ta bort text", "remove logo", "delete logo"))
+
+
+def is_text_label_prompt(prompt: str) -> bool:
+    text = _prompt_match_text(prompt)
+    has_text_target = any(
+        token in text
+        for token in (
+            "text",
+            "logo",
+            "label",
+            "engrave",
+            "engraved",
+            "engraving",
+            "emboss",
+            "embossed",
+            "raised",
+            "ingravera",
+            "ingraverat",
+            "gravyr",
+            "logga",
+            "upphojd",
+            "upphojt",
+            "praglad",
+        )
+    )
+    has_edit = any(
+        token in text
+        for token in (
+            "add",
+            "write",
+            "create",
+            "remove",
+            "delete",
+            "change",
+            "lagg till",
+            "skriv",
+            "ta bort",
+            "engrave",
+            "ingravera",
+        )
+    )
+    return has_text_target and has_edit
+
+
+def _label_style(prompt: str) -> str:
+    text = _prompt_match_text(prompt)
+    if any(token in text for token in ("raised", "emboss", "embossed", "upphojd", "upphojt", "praglad")):
+        return "raised"
+    if any(token in text for token in ("engrave", "engraved", "engraving", "recessed", "ingravera", "ingraverat", "gravyr")):
+        return "engraved"
+    return "raised"
+
+
+def _label_placement(prompt: str, width: float, depth: float) -> str:
+    text = _prompt_match_text(prompt)
+    if any(token in text for token in ("top", "ovansida", "ovanpa", "upper face")):
+        return "top"
+    if any(token in text for token in ("bottom", "undersida")):
+        return "bottom"
+    if any(token in text for token in ("short side", "short sides", "kortsida", "kortsidorna")):
+        return "x_sides" if width >= depth else "y_sides"
+    if any(token in text for token in ("long side", "long sides", "langsida", "langsidorna")):
+        return "y_sides" if width >= depth else "x_sides"
+    if any(token in text for token in ("left", "right", "vanster", "hoger")):
+        return "x_sides"
+    if any(token in text for token in ("front", "back", "framsida", "baksida")):
+        return "y_sides"
+    return "top"
+
+
+def _glyph_units(label: str) -> int:
+    units = 0
+    for char in label:
+        units += 3 if char == " " else 6
+    return max(5, units - 1)
+
+
+def _fit_label_height(label: str, available_width: float, available_height: float) -> float:
+    units = _glyph_units(label)
+    by_width = max(2.5, available_width * 0.84 * 7.0 / units)
+    by_height = max(2.5, available_height * 0.72)
+    return max(2.5, min(28.0, by_width, by_height))
+
+
+def _make_block_text_mesh(label: str, letter_height: float, depth: float) -> tuple[TriMesh, float, float]:
+    label = _sanitize_label_text(label)
+    cell = max(0.25, float(letter_height) / 7.0)
+    pixel = cell * 0.86
+    advance = cell * 6.0
+    space = cell * 3.0
+    mesh = TriMesh()
+    cursor = 0.0
+
+    for char in label:
+        if char == " ":
+            cursor += space
+            continue
+        glyph = _TEXT_GLYPHS.get(char, _TEXT_GLYPHS.get("?", _TEXT_GLYPHS["0"]))
+        for row, pattern in enumerate(glyph):
+            for col, filled in enumerate(pattern):
+                if filled != "1":
+                    continue
+                x = cursor + col * cell + cell / 2.0
+                z = (6 - row) * cell + cell / 2.0
+                block = make_box(pixel, max(0.2, depth), pixel).transformed(
+                    Transform(
+                        position=[x, 0.0, z],
+                        rotation=[0.0, 0.0, 0.0],
+                        scale=[1.0, 1.0, 1.0],
+                    )
+                )
+                mesh = mesh.merge(block)
+        cursor += advance
+
+    if not mesh.verts:
+        mesh = make_box(cell * 5.0, max(0.2, depth), cell * 7.0)
+        cursor = cell * 5.0
+
+    min_x = min(v[0] for v in mesh.verts)
+    max_x = max(v[0] for v in mesh.verts)
+    center_x = (min_x + max_x) / 2.0
+    mesh.verts = [(x - center_x, y, z) for x, y, z in mesh.verts]
+    width = max_x - min_x
+    height = cell * 7.0
+    return mesh, width, height
+
+
+def _base_objects_for_ai_edit(session: Session) -> list[CadObject]:
+    selected = get_object(session, session.get("selected_object_id"))
+    if selected and selected.get("primitive") != "text_label":
+        return [
+            obj
+            for obj in _source_group_objects(session, selected)
+            if obj.get("primitive") != "text_label"
+        ]
+    return [
+        session["objects"][oid]
+        for oid in session.get("object_order", [])
+        if session["objects"].get(oid, {}).get("primitive") != "text_label"
+    ]
+
+
+def _remove_text_labels(session: Session, label: str | None = None) -> list[str]:
+    wanted = _sanitize_label_text(label or "") if label else ""
+    removed = 0
+    for oid in list(session.get("object_order", [])):
+        obj = session["objects"].get(oid)
+        if not obj or obj.get("primitive") != "text_label":
+            continue
+        if wanted and _sanitize_label_text(str(obj.get("text_label", ""))) != wanted:
+            continue
+        _remove_object_direct(session, oid)
+        removed += 1
+    return [f"remove {removed} text label{'s' if removed != 1 else ''}"] if removed else ["no text labels to remove"]
+
+
+def _create_text_label_object(
+    label: str,
+    *,
+    letter_height: float,
+    depth: float,
+    position: list[float],
+    rotation: list[float],
+    style: str,
+    target_color: str,
+) -> CadObject:
+    mesh, text_width, text_height = _make_block_text_mesh(label, letter_height, depth)
+    obj = create_manual_object(
+        f"{label.lower()}_{style}_text",
+        mesh,
+        {
+            "width": text_width,
+            "depth": depth,
+            "height": text_height,
+            "thickness": depth,
+            "fillet_radius": 0.0,
+            "chamfer_size": 0.0,
+            "text_height": letter_height,
+            "text_depth": depth,
+        },
+    )
+    obj["primitive"] = "text_label"
+    obj["text_label"] = label
+    obj["text_style"] = style
+    obj["color"] = "#151515" if style == "engraved" else target_color
+    obj["transform"] = Transform(
+        position=[float(position[0]), float(position[1]), float(position[2])],
+        rotation=rotation,
+        scale=[1.0, 1.0, 1.0],
+    )
+    obj["operation_history"] = [
+        {
+            "operation": "ai_text_label",
+            "label": label,
+            "style": style,
+        }
+    ]
+    return obj
+
+
+def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
+    """Add simple raised/engraved block text to the current model."""
+    if _is_text_removal_prompt(prompt):
+        label = _extract_label_text(prompt)
+        return _remove_text_labels(session, None if label == "TEXT" else label)
+
+    targets = _base_objects_for_ai_edit(session)
+    if not targets:
+        return ["no object available for text edit"]
+
+    mins, maxs = _world_extents_for_objects(targets)
+    width = max(1.0, maxs[0] - mins[0])
+    depth = max(1.0, maxs[1] - mins[1])
+    height = max(1.0, maxs[2] - mins[2])
+    cx = (mins[0] + maxs[0]) / 2.0
+    cy = (mins[1] + maxs[1]) / 2.0
+    label = _extract_label_text(prompt)
+    style = _label_style(prompt)
+    placement = _label_placement(prompt, width, depth)
+    text_depth = 0.55 if style == "engraved" else 0.9
+    offset = text_depth / 2.0 + 0.05
+    target_color = str(targets[0].get("color", "#d6c12a"))
+    created: list[CadObject] = []
+
+    if placement == "top":
+        letter_h = _fit_label_height(label, width, depth)
+        created.append(
+            _create_text_label_object(
+                label,
+                letter_height=letter_h,
+                depth=text_depth,
+                position=[cx, cy + letter_h / 2.0, maxs[2] + offset],
+                rotation=[90.0, 0.0, 0.0],
+                style=style,
+                target_color=target_color,
+            )
+        )
+    elif placement == "bottom":
+        letter_h = _fit_label_height(label, width, depth)
+        created.append(
+            _create_text_label_object(
+                label,
+                letter_height=letter_h,
+                depth=text_depth,
+                position=[cx, cy - letter_h / 2.0, mins[2] - offset],
+                rotation=[-90.0, 0.0, 0.0],
+                style=style,
+                target_color=target_color,
+            )
+        )
+    elif placement == "x_sides":
+        letter_h = _fit_label_height(label, depth, height)
+        z = mins[2] + max(1.0, (height - letter_h) / 2.0)
+        created.extend(
+            [
+                _create_text_label_object(
+                    label,
+                    letter_height=letter_h,
+                    depth=text_depth,
+                    position=[mins[0] - offset, cy, z],
+                    rotation=[0.0, 0.0, 90.0],
+                    style=style,
+                    target_color=target_color,
+                ),
+                _create_text_label_object(
+                    label,
+                    letter_height=letter_h,
+                    depth=text_depth,
+                    position=[maxs[0] + offset, cy, z],
+                    rotation=[0.0, 0.0, -90.0],
+                    style=style,
+                    target_color=target_color,
+                ),
+            ]
+        )
+    else:
+        letter_h = _fit_label_height(label, width, height)
+        z = mins[2] + max(1.0, (height - letter_h) / 2.0)
+        created.extend(
+            [
+                _create_text_label_object(
+                    label,
+                    letter_height=letter_h,
+                    depth=text_depth,
+                    position=[cx, mins[1] - offset, z],
+                    rotation=[0.0, 0.0, 180.0],
+                    style=style,
+                    target_color=target_color,
+                ),
+                _create_text_label_object(
+                    label,
+                    letter_height=letter_h,
+                    depth=text_depth,
+                    position=[cx, maxs[1] + offset, z],
+                    rotation=[0.0, 0.0, 0.0],
+                    style=style,
+                    target_color=target_color,
+                ),
+            ]
+        )
+
+    for obj in created:
+        add_object(session, obj)
+    session["selected_object_id"] = ""
+    return [f"add {style} '{label}' text on {placement.replace('_', ' ')}"]
+
+
 def rebuild_manual_object(obj: CadObject) -> None:
     """Rebuild an expert-mode primitive from its parameters and operations."""
     params = obj["parameters"]
@@ -2157,6 +2544,13 @@ def rebuild_manual_object(obj: CadObject) -> None:
         obj["shape"] = _make_source_battery_holder_mesh(params)
     elif primitive == "imported_source_mesh":
         obj["shape"] = _apply_mesh_hole_cuts(_stable_source_shape(obj), params)
+    elif primitive == "text_label":
+        label = _sanitize_label_text(str(obj.get("text_label", "TEXT")))
+        obj["shape"] = _make_block_text_mesh(
+            label,
+            max(1.0, float(params.get("text_height", params.get("height", 8.0)))),
+            max(0.2, float(params.get("text_depth", params.get("depth", 0.8)))),
+        )[0]
     else:
         fillet = max(0.0, float(params.get("fillet_radius", 0.0)))
         chamfer = max(0.0, float(params.get("chamfer_size", 0.0)))

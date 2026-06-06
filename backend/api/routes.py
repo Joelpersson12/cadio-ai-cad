@@ -54,6 +54,7 @@ from backend.services.session_manager import (
     add_hole_to_object,
     add_mounting_holes_to_session,
     add_bottom_plate_from_prompt,
+    add_text_label_from_prompt,
     apply_expert_operation,
     bump_version,
     center_object_on_plate,
@@ -64,6 +65,7 @@ from backend.services.session_manager import (
     get_selected_object,
     get_session,
     is_bottom_plate_prompt,
+    is_text_label_prompt,
     prepare_generation_target,
     place_object_on_plate,
     rebuild_object,
@@ -232,6 +234,8 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                 )
             elif session["object_order"] and is_bottom_plate_prompt(data.prompt):
                 actions = add_bottom_plate_from_prompt(session, data.prompt)
+            elif session["object_order"] and is_text_label_prompt(data.prompt):
+                actions = add_text_label_from_prompt(session, data.prompt)
             else:
                 edit_only = is_edit_only_prompt(data.prompt)
                 if edit_only:
