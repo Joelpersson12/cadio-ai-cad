@@ -16,7 +16,6 @@ const QUICK_COMMANDS = [
   "Add hanging hook",
   "Adjust slot spacing",
   "Make 3 slots",
-  "Add screw holes",
   "Add screw bosses",
   "Add cable cutout",
   "Add snap clip",
@@ -137,9 +136,9 @@ export default function AiPanel() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-4 text-sm leading-relaxed text-white">
+      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3 text-sm leading-relaxed text-white">
         {latestActions.length ? (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {latestActions.map((action) => (
               <p key={action}>{action}</p>
             ))}
@@ -152,80 +151,99 @@ export default function AiPanel() {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {objects.length > 0 && (
-          <>
-            <button
-              onClick={() => void switchModel("previous")}
-              disabled={isLoading}
-              className="rounded-full border border-[#38383a] bg-[#242424] px-3 py-2 text-xs font-semibold text-white hover:border-[#555] hover:bg-[#2d2d2f] disabled:opacity-40"
-            >
-              Previous model
-            </button>
-            <button
-              onClick={() => void switchModel("next")}
-              disabled={isLoading}
-              className="rounded-full border border-[#28c7df] bg-[#123038] px-3 py-2 text-xs font-semibold text-white hover:bg-[#173a43] disabled:opacity-40"
-            >
-              Next model
-            </button>
-          </>
-        )}
-        {QUICK_COMMANDS.map((cmd) => (
+      {objects.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
           <button
-            key={cmd}
-            onClick={() => void run(cmd, false)}
+            onClick={() => void switchModel("previous")}
             disabled={isLoading}
-            className="rounded-full border border-[#38383a] bg-[#242424] px-3 py-2 text-xs font-semibold text-white hover:border-[#555] hover:bg-[#2d2d2f] disabled:opacity-40"
+            className="rounded-lg border border-[#38383a] bg-[#242424] px-3 py-2 text-xs font-semibold text-white hover:border-[#555] hover:bg-[#2d2d2f] disabled:opacity-40"
           >
-            {cmd}
+            Previous model
           </button>
-        ))}
-      </div>
-
-      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#858585]">Search filters</div>
-          {activeFilters.length > 0 && (
-            <button
-              onClick={() => setActiveFilters([])}
-              className="text-[11px] font-semibold text-[#28c7df] hover:text-white"
-            >
-              Clear
-            </button>
-          )}
+          <button
+            onClick={() => void switchModel("next")}
+            disabled={isLoading}
+            className="rounded-lg border border-[#28c7df] bg-[#123038] px-3 py-2 text-xs font-semibold text-white hover:bg-[#173a43] disabled:opacity-40"
+          >
+            Next model
+          </button>
         </div>
-        <div className="space-y-2">
-          {SEARCH_FILTER_GROUPS.map((group) => (
-            <div key={group.label}>
-              <div className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[#68686b]">{group.label}</div>
-              <div className="flex flex-wrap gap-1.5">
-                {group.filters.map((filter) => {
-                  const active = activeFilters.includes(filter);
-                  return (
-                    <button
-                      key={filter}
-                      onClick={() => toggleFilter(filter)}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                        active
-                          ? "border-[#28c7df] bg-[#123038] text-white"
-                          : "border-[#343436] bg-[#222] text-[#bdbdbd] hover:border-[#555] hover:text-white"
-                      }`}
-                    >
-                      {filter}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+      )}
+
+      <details className="group rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
+          <span>Tools</span>
+          <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f] group-open:hidden">
+            {QUICK_COMMANDS.length}
+          </span>
+          <span className="hidden rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f] group-open:inline">
+            Close
+          </span>
+        </summary>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {QUICK_COMMANDS.map((cmd) => (
+            <button
+              key={cmd}
+              onClick={() => void run(cmd, false)}
+              disabled={isLoading}
+              className="rounded-lg border border-[#38383a] bg-[#242424] px-3 py-2 text-left text-xs font-semibold text-white hover:border-[#555] hover:bg-[#2d2d2f] disabled:opacity-40"
+            >
+              {cmd}
+            </button>
           ))}
         </div>
-        {activeFilters.length > 0 && (
-          <p className="mt-3 truncate text-[11px] text-[#8f8f8f]">
-            Query adds: {activeFilters.join(", ")}
-          </p>
-        )}
-      </div>
+      </details>
+
+      <details className="group rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
+          <span>Search filters</span>
+          <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">
+            {activeFilters.length ? `${activeFilters.length} active` : "Optional"}
+          </span>
+        </summary>
+        <div className="mt-3">
+          <div className="mb-2 flex items-center justify-end">
+            {activeFilters.length > 0 && (
+              <button
+                onClick={() => setActiveFilters([])}
+                className="text-[11px] font-semibold text-[#28c7df] hover:text-white"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            {SEARCH_FILTER_GROUPS.map((group) => (
+              <div key={group.label}>
+                <div className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[#68686b]">{group.label}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {group.filters.map((filter) => {
+                    const active = activeFilters.includes(filter);
+                    return (
+                      <button
+                        key={filter}
+                        onClick={() => toggleFilter(filter)}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                          active
+                            ? "border-[#28c7df] bg-[#123038] text-white"
+                            : "border-[#343436] bg-[#222] text-[#bdbdbd] hover:border-[#555] hover:text-white"
+                        }`}
+                      >
+                        {filter}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          {activeFilters.length > 0 && (
+            <p className="mt-3 truncate text-[11px] text-[#8f8f8f]">
+              Query adds: {activeFilters.join(", ")}
+            </p>
+          )}
+        </div>
+      </details>
 
       <form
         onSubmit={handleSubmit}

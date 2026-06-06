@@ -356,6 +356,40 @@ function MobileModelVariantBar() {
   );
 }
 
+function isModelBusyStatus(status: string) {
+  return /applying|loading|sketching|generating|importing/i.test(status || "");
+}
+
+function ModelLoadingOverlay({ status }: { status: string }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-[#111]/20 backdrop-blur-[1px]">
+      <div className="relative flex h-44 w-44 items-center justify-center">
+        <div className="absolute inset-0 rounded-full border border-[#28c7df]/25" />
+        <div className="absolute inset-4 animate-spin rounded-full border border-dashed border-[#28c7df]/60" />
+        <div className="absolute inset-8 animate-pulse rounded-full border border-[#facc15]/25" />
+        <div className="grid h-24 w-24 place-items-center rounded-2xl border border-[#28c7df]/45 bg-[#181819]/90 shadow-[0_0_40px_rgba(40,199,223,0.18)]">
+          <div className="space-y-1">
+            {[0, 1, 2, 3].map((index) => (
+              <div
+                key={index}
+                className="h-1.5 rounded-full bg-[#28c7df]"
+                style={{
+                  width: `${28 + index * 8}px`,
+                  opacity: 0.35 + index * 0.14,
+                  animation: `pulse 1.4s ease-in-out ${index * 0.12}s infinite`,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="absolute -bottom-10 rounded-full border border-[#333] bg-[#181819]/95 px-4 py-2 text-xs font-semibold text-white shadow-xl">
+          {status || "Building model..."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WorkspaceApp() {
   const {
     sessionId,
@@ -389,8 +423,6 @@ function WorkspaceApp() {
     onDeleteObject,
     snapSelectedObjects,
     setPrinter,
-    undo,
-    redo,
     runPrompt,
   } = useCadStore();
 
@@ -443,6 +475,7 @@ function WorkspaceApp() {
       title: creationName(promptFromHistory(item)),
     }));
   const selectedCount = selectedObjectIds.length || (selectedObjectId ? 1 : 0);
+  const modelBusy = isModelBusyStatus(status);
 
   return (
     <div className="w-full h-full relative bg-cadio-bg text-cadio-text">
@@ -570,22 +603,6 @@ function WorkspaceApp() {
                     </button>
                   ))}
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => void snapSelectedObjects("on_plate")}
-                    disabled={!selectedObjectId}
-                    className="rounded-lg border border-[#303033] bg-[#222] px-3 py-2 text-left text-xs font-semibold text-[#e6e6e6] hover:border-[#28c7df] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    On plate
-                  </button>
-                  <button
-                    onClick={() => void snapSelectedObjects("center_on_plate")}
-                    disabled={!selectedObjectId}
-                    className="rounded-lg border border-[#303033] bg-[#222] px-3 py-2 text-left text-xs font-semibold text-[#e6e6e6] hover:border-[#28c7df] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    Center on plate
-                  </button>
-                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-[11px] uppercase tracking-[0.16em] text-[#858585]">
@@ -658,10 +675,8 @@ function WorkspaceApp() {
                 Select all
               </button>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <button onClick={() => void undo()} className="rounded-lg bg-[#2a2a2c] px-2 py-2 text-xs font-semibold hover:bg-[#343436]">Undo</button>
-              <button onClick={() => void redo()} className="rounded-lg bg-[#2a2a2c] px-2 py-2 text-xs font-semibold hover:bg-[#343436]">Redo</button>
-              <button onClick={() => void onDeleteObject()} disabled={!selectedObjectId} className="rounded-lg bg-[#2a2a2c] px-2 py-2 text-xs font-semibold text-[#ff8b8b] hover:bg-[#343436] disabled:opacity-35">Delete</button>
+            <div className="mt-3">
+              <button onClick={() => void onDeleteObject()} disabled={!selectedObjectId} className="w-full rounded-lg bg-[#2a2a2c] px-2 py-2 text-xs font-semibold text-[#ff8b8b] hover:bg-[#343436] disabled:opacity-35">Delete selected</button>
             </div>
           </div>
         </aside>
@@ -720,6 +735,7 @@ function WorkspaceApp() {
             onCreatePrimitive={(payload) => void createPrimitive(payload)}
             showMeasurements={showMeasurements}
           />
+          {modelBusy && <ModelLoadingOverlay status={status} />}
         </main>
 
         <aside className="min-h-0 overflow-hidden border-l border-[#303033] bg-[#1d1d1e]">
@@ -814,7 +830,7 @@ function WorkspaceApp() {
         </div>
 
         {/* Viewport - takes most space */}
-        <div className="flex-1 min-h-0">
+        <div className="relative flex-1 min-h-0">
           <CadViewport
             objects={objects}
             selectedObjectId={selectedObjectId}
@@ -828,6 +844,7 @@ function WorkspaceApp() {
             mobileMode
             showMeasurements={showMeasurements}
           />
+          {modelBusy && <ModelLoadingOverlay status={status} />}
         </div>
 
         <MobileModelVariantBar />
