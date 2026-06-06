@@ -31,6 +31,16 @@ import {
 } from "../utils/api";
 
 const SESSION_KEY = "cadio_session_id";
+const MIN_BUSY_MS = 650;
+
+async function waitForMinimumBusy(startedAt: number) {
+  const remaining = MIN_BUSY_MS - (Date.now() - startedAt);
+  if (remaining > 0) {
+    await new Promise<void>((resolve) => {
+      globalThis.setTimeout(resolve, remaining);
+    });
+  }
+}
 
 interface CadState {
   // Session
@@ -54,6 +64,7 @@ interface CadState {
 
   // UI
   status: string;
+  isBusy: boolean;
   transformMode: TransformMode;
   expertMode: boolean;
   expertTool: ExpertTool;
@@ -123,6 +134,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
   printSettings: null,
   status: "Ready",
+  isBusy: false,
   transformMode: "off",
   expertMode: false,
   expertTool: "select",
@@ -211,7 +223,8 @@ export const useCadStore = create<CadState>((set, get) => ({
 
   runPrompt: async (prompt: string) => {
     const { sessionId, printer } = get();
-    set({ status: "Applying AI command..." });
+    const startedAt = Date.now();
+    set({ status: "Generating model...", isBusy: true });
     try {
       const data = await apiGenerate({
         session_id: sessionId || undefined,
@@ -220,9 +233,11 @@ export const useCadStore = create<CadState>((set, get) => ({
         fit: true,
       });
       get().applyScenePayload(data);
-      set({ status: `Updated v${data.version}` });
+      await waitForMinimumBusy(startedAt);
+      set({ status: `Updated v${data.version}`, isBusy: false });
     } catch (err) {
-      set({ status: err instanceof Error ? err.message : "Error" });
+      await waitForMinimumBusy(startedAt);
+      set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
     }
   },
 
@@ -370,16 +385,19 @@ export const useCadStore = create<CadState>((set, get) => ({
   switchSourceModel: async (direction) => {
     const { sessionId } = get();
     if (!sessionId) return;
-    set({ status: direction === "next" ? "Loading next model..." : "Loading previous model..." });
+    const startedAt = Date.now();
+    set({ status: direction === "next" ? "Loading next model..." : "Loading previous model...", isBusy: true });
     try {
       const data = await apiSwitchSourceModel({
         session_id: sessionId,
         direction,
       });
       get().applyScenePayload(data);
-      set({ status: `Updated v${data.version}` });
+      await waitForMinimumBusy(startedAt);
+      set({ status: `Updated v${data.version}`, isBusy: false });
     } catch (err) {
-      set({ status: err instanceof Error ? err.message : "Error" });
+      await waitForMinimumBusy(startedAt);
+      set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
     }
   },
 
@@ -409,7 +427,8 @@ export const useCadStore = create<CadState>((set, get) => ({
 
   createPrimitive: async ({ primitive, center, size, radius }) => {
     const { sessionId, sketchHeight } = get();
-    set({ status: `Sketching ${primitive}...` });
+    const startedAt = Date.now();
+    set({ status: `Sketching ${primitive}...`, isBusy: true });
     try {
       const data = await apiCreatePrimitive({
         session_id: sessionId || undefined,
@@ -421,9 +440,11 @@ export const useCadStore = create<CadState>((set, get) => ({
         height: sketchHeight,
       });
       get().applyScenePayload(data);
-      set({ status: `Created ${primitive}` });
+      await waitForMinimumBusy(startedAt);
+      set({ status: `Created ${primitive}`, isBusy: false });
     } catch (err) {
-      set({ status: err instanceof Error ? err.message : "Error" });
+      await waitForMinimumBusy(startedAt);
+      set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
     }
   },
 
@@ -431,7 +452,8 @@ export const useCadStore = create<CadState>((set, get) => ({
     const { sessionId, selectedObjectId, selectionMode, operationAmount } = get();
     const objectId = objectIdOverride || selectedObjectId;
     if (!sessionId || !objectId) return;
-    set({ status: `Applying ${operation}...` });
+    const startedAt = Date.now();
+    set({ status: `Applying ${operation}...`, isBusy: true });
     try {
       const data = await apiApplyExpertOperation({
         session_id: sessionId,
@@ -441,9 +463,11 @@ export const useCadStore = create<CadState>((set, get) => ({
         target: selectionMode,
       });
       get().applyScenePayload(data);
-      set({ status: `${operation} applied` });
+      await waitForMinimumBusy(startedAt);
+      set({ status: `${operation} applied`, isBusy: false });
     } catch (err) {
-      set({ status: err instanceof Error ? err.message : "Error" });
+      await waitForMinimumBusy(startedAt);
+      set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
     }
   },
 

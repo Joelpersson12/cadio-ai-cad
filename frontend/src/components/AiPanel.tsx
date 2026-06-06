@@ -47,6 +47,10 @@ function creationTitle(prompt: string) {
     .join(" ");
 }
 
+function isTechnicalAction(action: string) {
+  return /^(source-|translated-query:|generative-recipe:|generated clean|source-search:|source-match:|source-files:)/i.test(action.trim());
+}
+
 export default function AiPanel() {
   const [prompt, setPrompt] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
@@ -63,7 +67,9 @@ export default function AiPanel() {
   const latestActions = useMemo(() => {
     const latest = editHistory[editHistory.length - 1];
     const actions = latest?.actions;
-    return Array.isArray(actions) ? actions.map(String).slice(0, 3) : [];
+    return Array.isArray(actions)
+      ? actions.map(String).filter((action) => !isTechnicalAction(action)).slice(0, 2)
+      : [];
   }, [editHistory]);
 
   const filteredPrompt = (text: string) => {
@@ -117,7 +123,12 @@ export default function AiPanel() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] shadow-xl">
+      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] px-3 py-3 shadow-xl">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#777]">Current model</div>
+        <div className="mt-1 truncate text-sm font-semibold text-white">{creationTitle(latestPrompt || "New Creation")}</div>
+      </div>
+
+      <div className="hidden">
         <div className="h-20 overflow-hidden rounded-t-lg bg-[#3a3a3a]">
           <div className="grid h-full place-items-center text-center text-sm text-[#9d9d9d]">
             <div>
@@ -136,7 +147,7 @@ export default function AiPanel() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3 text-sm leading-relaxed text-white">
+      <div className={latestActions.length ? "rounded-lg border border-[#2d2d2f] bg-[#151515] p-3 text-sm leading-relaxed text-white" : "hidden"}>
         {latestActions.length ? (
           <div className="space-y-1.5">
             {latestActions.map((action) => (

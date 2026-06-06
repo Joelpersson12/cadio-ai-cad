@@ -401,6 +401,7 @@ function WorkspaceApp() {
     printers,
     printer,
     status,
+    isBusy,
     expertMode,
     expertTool,
     selectionMode,
@@ -432,6 +433,9 @@ function WorkspaceApp() {
   const [exportOpen, setExportOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [showMeasurements, setShowMeasurements] = useState(false);
+  const [workspacePanelOpen, setWorkspacePanelOpen] = useState(true);
+  const [assistantPanelOpen, setAssistantPanelOpen] = useState(true);
+  const [parametersPanelOpen, setParametersPanelOpen] = useState(true);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
     await runPrompt(example.prompt);
@@ -475,20 +479,35 @@ function WorkspaceApp() {
       title: creationName(promptFromHistory(item)),
     }));
   const selectedCount = selectedObjectIds.length || (selectedObjectId ? 1 : 0);
-  const modelBusy = isModelBusyStatus(status);
+  const modelBusy = isBusy || isModelBusyStatus(status);
+  const desktopGridColumns = `${workspacePanelOpen ? "292px" : "48px"} ${assistantPanelOpen ? "380px" : "48px"} minmax(0,1fr) ${parametersPanelOpen ? "330px" : "48px"}`;
 
   return (
     <div className="w-full h-full relative bg-cadio-bg text-cadio-text">
       {/* Desktop layout */}
-      <div className="hidden md:grid h-full w-full grid-cols-[292px_380px_minmax(0,1fr)_330px] overflow-hidden bg-[#171717] text-white">
-        <aside className="flex min-h-0 flex-col border-r border-[#272729] bg-[#181818] px-5 py-5">
+      <div
+        className="hidden h-full w-full overflow-hidden bg-[#171717] text-white transition-[grid-template-columns] duration-300 ease-out md:grid"
+        style={{ gridTemplateColumns: desktopGridColumns }}
+      >
+        <aside className={`flex min-h-0 flex-col border-r border-[#272729] bg-[#181818] ${workspacePanelOpen ? "px-5 py-5" : "items-center px-2 py-3"}`}>
+          {workspacePanelOpen ? (
+            <>
           <div className="mb-5 rounded-xl border border-[#2d2d2f] bg-[#202020] p-4">
-            <div className="flex items-center gap-3">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-[#28c7df] text-base font-black text-[#101010]">C</span>
-              <div>
-                <div className="text-sm font-black uppercase tracking-[0.22em] text-white">Cadio</div>
-                <div className="text-[11px] text-[#9a9a9a]">AI CAD workspace</div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#28c7df] text-base font-black text-[#101010]">C</span>
+                <div className="min-w-0">
+                  <div className="text-sm font-black uppercase tracking-[0.22em] text-white">Cadio</div>
+                  <div className="text-[11px] text-[#9a9a9a]">AI CAD workspace</div>
+                </div>
               </div>
+              <button
+                onClick={() => setWorkspacePanelOpen(false)}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-[#333] bg-[#171717] text-xs font-semibold text-[#bdbdbd] hover:border-[#555] hover:text-white"
+                title="Collapse workspace panel"
+              >
+                {"<"}
+              </button>
             </div>
           </div>
           <button
@@ -538,9 +557,12 @@ function WorkspaceApp() {
           </div>
 
           {!expertMode ? (
-            <div className="mb-5">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#858585]">Easy edits</div>
-              <div className="grid grid-cols-2 gap-2">
+            <details className="mb-5 rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
+              <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
+                <span>Easy edits</span>
+                <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">{EASY_ACTIONS.length}</span>
+              </summary>
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 {EASY_ACTIONS.map((action) => (
                   <button
                     key={action.label}
@@ -551,12 +573,15 @@ function WorkspaceApp() {
                   </button>
                 ))}
               </div>
-            </div>
+            </details>
           ) : (
-            <div className="mb-5 space-y-4">
-              <div>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#858585]">Sketch tools</div>
-                <div className="grid grid-cols-2 gap-2">
+            <div className="mb-5 space-y-3">
+              <details className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
+                <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
+                  <span>Sketch tools</span>
+                  <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">{expertTool}</span>
+                </summary>
+                <div className="mt-3 grid grid-cols-2 gap-2">
                   {EXPERT_TOOLS.map((tool) => (
                     <button
                       key={tool.id}
@@ -571,10 +596,13 @@ function WorkspaceApp() {
                     </button>
                   ))}
                 </div>
-              </div>
-              <div>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#858585]">Selection</div>
-                <div className="grid grid-cols-3 gap-1 rounded-lg border border-[#333] bg-[#202020] p-1">
+              </details>
+              <details className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
+                <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
+                  <span>Selection</span>
+                  <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">{selectionMode}</span>
+                </summary>
+                <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg border border-[#333] bg-[#202020] p-1">
                   {SELECTION_MODES.map((mode) => (
                     <button
                       key={mode.id}
@@ -587,10 +615,13 @@ function WorkspaceApp() {
                     </button>
                   ))}
                 </div>
-              </div>
-              <div>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#858585]">Transform</div>
-                <div className="grid grid-cols-4 gap-1 rounded-lg border border-[#333] bg-[#202020] p-1">
+              </details>
+              <details className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
+                <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
+                  <span>Transform</span>
+                  <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">{transformMode}</span>
+                </summary>
+                <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg border border-[#333] bg-[#202020] p-1">
                   {TRANSFORM_MODES.map((mode) => (
                     <button
                       key={mode.id}
@@ -603,43 +634,49 @@ function WorkspaceApp() {
                     </button>
                   ))}
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-[11px] uppercase tracking-[0.16em] text-[#858585]">
-                  Height
-                  <input
-                    type="number"
-                    min={0.5}
-                    step={0.5}
-                    value={sketchHeight}
-                    onChange={(e) => setSketchHeight(Number(e.target.value))}
-                    className="mt-1 h-9 w-full rounded-lg border border-[#303033] bg-[#111827] px-3 text-xs text-white outline-none"
-                  />
-                </label>
-                <label className="text-[11px] uppercase tracking-[0.16em] text-[#858585]">
-                  Amount
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    value={operationAmount}
-                    onChange={(e) => setOperationAmount(Number(e.target.value))}
-                    className="mt-1 h-9 w-full rounded-lg border border-[#303033] bg-[#111827] px-3 text-xs text-white outline-none"
-                  />
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {["extrude", "fillet", "chamfer", "shell"].map((operation) => (
-                  <button
-                    key={operation}
-                    onClick={() => void applyExpertOperation(operation)}
-                    disabled={!selectedObjectId}
-                    className="rounded-lg border border-[#303033] bg-[#222] px-3 py-2 text-left text-xs font-semibold capitalize text-[#e6e6e6] hover:border-[#28c7df] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    {operation}
-                  </button>
-                ))}
-              </div>
+              </details>
+              <details className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
+                <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
+                  <span>CAD operations</span>
+                  <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">{operationAmount} mm</span>
+                </summary>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <label className="text-[11px] uppercase tracking-[0.16em] text-[#858585]">
+                    Height
+                    <input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      value={sketchHeight}
+                      onChange={(e) => setSketchHeight(Number(e.target.value))}
+                      className="mt-1 h-9 w-full rounded-lg border border-[#303033] bg-[#111827] px-3 text-xs text-white outline-none"
+                    />
+                  </label>
+                  <label className="text-[11px] uppercase tracking-[0.16em] text-[#858585]">
+                    Amount
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={operationAmount}
+                      onChange={(e) => setOperationAmount(Number(e.target.value))}
+                      className="mt-1 h-9 w-full rounded-lg border border-[#303033] bg-[#111827] px-3 text-xs text-white outline-none"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {["extrude", "fillet", "chamfer", "shell"].map((operation) => (
+                    <button
+                      key={operation}
+                      onClick={() => void applyExpertOperation(operation)}
+                      disabled={!selectedObjectId}
+                      className="rounded-lg border border-[#303033] bg-[#222] px-3 py-2 text-left text-xs font-semibold capitalize text-[#e6e6e6] hover:border-[#28c7df] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      {operation}
+                    </button>
+                  ))}
+                </div>
+              </details>
             </div>
           )}
 
@@ -679,10 +716,38 @@ function WorkspaceApp() {
               <button onClick={() => void onDeleteObject()} disabled={!selectedObjectId} className="w-full rounded-lg bg-[#2a2a2c] px-2 py-2 text-xs font-semibold text-[#ff8b8b] hover:bg-[#343436] disabled:opacity-35">Delete selected</button>
             </div>
           </div>
+            </>
+          ) : (
+            <div className="flex h-full flex-col items-center gap-3">
+              <button
+                onClick={() => setWorkspacePanelOpen(true)}
+                className="grid h-9 w-9 place-items-center rounded-lg bg-[#28c7df] text-sm font-black text-[#101010] shadow-[0_0_18px_rgba(40,199,223,0.18)]"
+                title="Open workspace panel"
+              >
+                C
+              </button>
+              <button
+                onClick={() => setWorkspacePanelOpen(true)}
+                className="grid h-9 w-9 place-items-center rounded-lg border border-[#333] bg-[#202020] text-xs font-semibold text-[#e6e6e6] hover:border-[#28c7df]"
+                title="Open tools"
+              >
+                T
+              </button>
+            </div>
+          )}
         </aside>
 
-        <section className="grid min-h-0 grid-rows-[56px_1fr] border-r border-[#252527] bg-[#202020]">
-          <header className="flex items-center justify-between px-5">
+        <section className={`${assistantPanelOpen ? "grid grid-rows-[56px_1fr]" : "flex items-start justify-center px-2 py-3"} min-h-0 border-r border-[#252527] bg-[#202020]`}>
+          {assistantPanelOpen ? (
+            <>
+          <header className="flex items-center justify-between px-5 [&>button:nth-child(2)]:hidden">
+            <button
+              onClick={() => setAssistantPanelOpen(false)}
+              className="grid h-8 w-8 place-items-center rounded-lg text-xs font-semibold text-[#aaa] hover:bg-[#2b2b2c]"
+              title="Collapse AI panel"
+            >
+              {"<"}
+            </button>
             <button className="grid h-8 w-8 place-items-center rounded-lg text-[#aaa] hover:bg-[#2b2b2c]">◫</button>
             <div className="min-w-0 px-4 text-center text-sm font-semibold">
               <div className="truncate">{projectTitle}</div>
@@ -696,6 +761,16 @@ function WorkspaceApp() {
           <div className="min-h-0 overflow-y-auto px-4 pb-4">
             <AiPanel />
           </div>
+            </>
+          ) : (
+            <button
+              onClick={() => setAssistantPanelOpen(true)}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[#333] bg-[#202020] text-xs font-semibold text-[#e6e6e6] hover:border-[#28c7df]"
+              title="Open AI panel"
+            >
+              AI
+            </button>
+          )}
         </section>
 
         <main className="relative min-h-0 overflow-hidden bg-[#3a3a3a]">
@@ -738,8 +813,27 @@ function WorkspaceApp() {
           {modelBusy && <ModelLoadingOverlay status={status} />}
         </main>
 
-        <aside className="min-h-0 overflow-hidden border-l border-[#303033] bg-[#1d1d1e]">
-          <ObjectInspector />
+        <aside className={`${parametersPanelOpen ? "relative" : "flex items-start justify-center px-2 py-3"} min-h-0 overflow-hidden border-l border-[#303033] bg-[#1d1d1e]`}>
+          {parametersPanelOpen ? (
+            <>
+              <button
+                onClick={() => setParametersPanelOpen(false)}
+                className="absolute right-3 top-3 z-30 grid h-7 w-7 place-items-center rounded-md border border-[#333] bg-[#171717] text-xs font-semibold text-[#bdbdbd] hover:border-[#555] hover:text-white"
+                title="Collapse parameters panel"
+              >
+                {">"}
+              </button>
+              <ObjectInspector />
+            </>
+          ) : (
+            <button
+              onClick={() => setParametersPanelOpen(true)}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[#333] bg-[#202020] text-[10px] font-semibold text-[#e6e6e6] hover:border-[#28c7df]"
+              title="Open parameters panel"
+            >
+              P
+            </button>
+          )}
         </aside>
       </div>
 
