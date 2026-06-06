@@ -13,6 +13,15 @@ import unicodedata
 _TOKEN_RE = re.compile(r"[a-z0-9]+(?:\.[0-9]+)?")
 
 _PHRASE_TRANSLATIONS: tuple[tuple[str, str], ...] = (
+    (r"\b(?:vagg\s*monterad|vaggmonterad|vagg\s*hangd|vagghangd)\b", "wall mounted"),
+    (r"\b(?:bord\s*monterad|bordmonterad|skrivbord\s*monterad|skrivbordsmonterad)\b", "desk mount"),
+    (r"\b(?:klam\s*faste(?:t)?|klamfaste(?:t)?|klamma\s*faste(?:t)?|klammafaste(?:t)?|clamp\s*faste(?:t)?)\b", "clamp mount"),
+    (r"\b(?:ihop\s*fallbar|ihopfallbar|hop\s*fallbar|hopfallbar|vikbar)\b", "foldable"),
+    (r"\b(?:svangbar|vridbar|roterande|roterbar)\b", "rotating"),
+    (r"\b(?:verktyg\s*hallaren?|verktygshallaren?)\b", "tool holder"),
+    (r"\b(?:borr\s*hallaren?|borrhallaren?)\b", "drill holder"),
+    (r"\b(?:skruvmejsel\s*hallaren?|skruvmejselhallaren?)\b", "screwdriver holder"),
+    (r"\b(?:nyckel\s*hallaren?|nyckelhallaren?)\b", "wrench holder"),
     (r"\b(?:batteri\s*hallaren?|batterihallaren?)\b", "battery holder"),
     (r"\b(?:batteri\s*faste(?:t)?|batterifaste(?:t)?)\b", "battery mount"),
     (r"\b(?:vagg\s*faste(?:t)?|vaggfaste(?:t)?|vagg\s*montering(?:en)?|vaggmontering(?:en)?|vagg\s*hallaren?|vagghallaren?)\b", "wall mount"),
@@ -25,9 +34,13 @@ _PHRASE_TRANSLATIONS: tuple[tuple[str, str], ...] = (
     (r"\b(?:headset\s*stall(?:et)?|headsetstall(?:et)?)\b", "headset stand"),
     (r"\b(?:mugg\s*hallaren?|mugghallaren?)\b", "mug holder"),
     (r"\b(?:kopp\s*hallaren?|kopphallaren?)\b", "cup holder"),
+    (r"\b(?:mugg\s*stall(?:et)?|muggstall(?:et)?)\b", "mug stand"),
+    (r"\b(?:kopp\s*stall(?:et)?|koppstall(?:et)?)\b", "cup stand"),
     (r"\b(?:dryck\s*hallaren?|dryckeshallaren?)\b", "drink holder"),
     (r"\b(?:kabel\s*hallaren?|kabelhallaren?|sladd\s*hallaren?|sladdhallaren?)\b", "cable holder"),
+    (r"\b(?:kabel\s*klamma|kabelklamma|sladd\s*klamma|sladdklamma)\b", "cable clip"),
     (r"\b(?:laddare\s*hallaren?|laddarhallaren?)\b", "charger holder"),
+    (r"\b(?:laddstation|laddnings\s*station|laddningsstation)\b", "charging station"),
     (r"\b(?:magsafe\s*laddare)\b", "magsafe charger"),
     (r"\b(?:skruv\s*hal|skruvhal)\b", "screw holes"),
     (r"\b(?:monterings\s*hal|monteringshal)\b", "mounting holes"),
@@ -42,7 +55,7 @@ _PHRASE_TRANSLATIONS: tuple[tuple[str, str], ...] = (
     (r"\b(?:skruv\s*bossar|skruvbossar|skruv\s*boss|skruvboss|distanser)\b", "screw bosses"),
     (r"\b(?:hangande\s*krok|upphangnings\s*krok|upphangningskrok)\b", "hanging hook"),
     (r"\b(?:starkare\s*modell|gor\s*den\s*starkare|gor\s*det\s*starkare)\b", "make stronger"),
-    (r"\b(?:snusdosa\s*hallaren?|snus\s*dosa\s*hallaren?)\b", "snus can holder"),
+    (r"\b(?:snusdosa\s*hallaren?|snus\s*dosa\s*hallaren?|snusdose\s*hallaren?)\b", "snus can holder"),
     (r"\bblackfisk\b", "octopus"),
 )
 
@@ -61,6 +74,8 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "bredd": "width",
     "boss": "boss",
     "bossar": "bosses",
+    "borr": "drill",
+    "borrmaskin": "drill",
     "del": "part",
     "delar": "parts",
     "djup": "depth",
@@ -72,9 +87,11 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "fasa": "chamfer",
     "faste": "mount",
     "fasten": "mounts",
+    "fastet": "mount",
     "fillet": "fillet",
     "flytta": "move",
     "foldbar": "foldable",
+    "grej": "thing",
     "forvaring": "storage",
     "forsankt": "countersunk",
     "genomforing": "cutout",
@@ -84,6 +101,7 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "hall": "hole",
     "hallare": "holder",
     "hallaren": "holder",
+    "hallarna": "holders",
     "hal": "holes",
     "halen": "holes",
     "halet": "hole",
@@ -93,10 +111,12 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "horisontell": "horizontal",
     "horlur": "headphone",
     "horlurar": "headphones",
+    "horlurs": "headphone",
     "hylla": "shelf",
     "kabel": "cable",
     "klamma": "clip",
     "klammor": "clips",
+    "klamfaste": "clamp mount",
     "kopp": "cup",
     "kortsida": "short side",
     "kortsidor": "short sides",
@@ -104,6 +124,7 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "krok": "hook",
     "krokar": "hooks",
     "laddare": "charger",
+    "laddar": "charger",
     "laddning": "charging",
     "lada": "box",
     "langsida": "long side",
@@ -115,6 +136,9 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "langre": "longer",
     "liggande": "horizontal",
     "magnetisk": "magnetic",
+    "magnet": "magnet",
+    "magnetiskt": "magnetic",
+    "magsafeladdare": "magsafe charger",
     "material": "material",
     "mobil": "phone",
     "montering": "mounting",
@@ -125,6 +149,7 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "platta": "plate",
     "plattan": "plate",
     "popular": "popular",
+    "populart": "popular",
     "praglad": "embossed",
     "radera": "delete",
     "rektangel": "rectangle",
@@ -132,6 +157,7 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "ribbor": "ribs",
     "rotera": "rotate",
     "roterbar": "rotating",
+    "roterande": "rotating",
     "rund": "rounded",
     "runda": "rounded",
     "sida": "side",
@@ -145,12 +171,14 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "skenor": "rails",
     "skal": "shell",
     "skrivbord": "desk",
+    "skrivbords": "desk",
     "sladd": "cable",
     "snygg": "clean",
     "staende": "vertical",
     "stativ": "stand",
     "stall": "stand",
     "stallet": "stand",
+    "stallning": "stand",
     "storre": "larger",
     "stark": "strong",
     "starkare": "stronger",
@@ -165,8 +193,11 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "utskarning": "cutout",
     "utskarningar": "cutouts",
     "utanfor": "outside",
+    "vagghangd": "wall mounted",
+    "vaggmonterad": "wall mounted",
     "vagg": "wall",
     "verktyg": "tool",
+    "verktygs": "tool",
     "vertikal": "vertical",
     "vikbar": "foldable",
     "ingravera": "engrave",
@@ -177,6 +208,28 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "distans": "standoff",
     "distanser": "standoffs",
 }
+
+_COMPOUND_SUFFIX_TRANSLATIONS: tuple[tuple[str, str], ...] = (
+    ("hallarna", "holders"),
+    ("hallaren", "holder"),
+    ("hallare", "holder"),
+    ("stallet", "stand"),
+    ("stallning", "stand"),
+    ("stall", "stand"),
+    ("fastet", "mount"),
+    ("faste", "mount"),
+    ("monteringen", "mount"),
+    ("montering", "mount"),
+    ("hyllan", "shelf"),
+    ("hylla", "shelf"),
+    ("krokar", "hooks"),
+    ("krok", "hook"),
+    ("klamma", "clip"),
+    ("klammor", "clips"),
+    ("lada", "box"),
+    ("boxen", "box"),
+    ("box", "box"),
+)
 
 _STOP_WORDS = {
     "a",
@@ -344,6 +397,26 @@ def _dedupe_words(words: list[str]) -> list[str]:
     return result
 
 
+def _translate_token(token: str, depth: int = 0) -> str:
+    mapped = _WORD_TRANSLATIONS.get(token)
+    if mapped:
+        return mapped
+    if depth >= 3 or len(token) < 6:
+        return token
+    for suffix, suffix_translation in _COMPOUND_SUFFIX_TRANSLATIONS:
+        if not token.endswith(suffix):
+            continue
+        prefix = token[: -len(suffix)]
+        if len(prefix) < 3:
+            continue
+        prefix_translation = _translate_token(prefix, depth + 1)
+        if prefix_translation == prefix and prefix.endswith("s") and len(prefix) > 4:
+            prefix_translation = _translate_token(prefix[:-1], depth + 1)
+        words = [prefix_translation, suffix_translation]
+        return " ".join(word for word in words if word).strip()
+    return token
+
+
 def normalize_source_query(prompt: str) -> str:
     """Translate common Swedish CAD/model wording into an English search query."""
     folded = fold_prompt_text(prompt)
@@ -352,7 +425,7 @@ def normalize_source_query(prompt: str) -> str:
     translated_text = _apply_phrase_translations(folded)
     words: list[str] = []
     for token in _TOKEN_RE.findall(translated_text):
-        mapped = _WORD_TRANSLATIONS.get(token, token)
+        mapped = _translate_token(token)
         for word in mapped.split():
             if len(word) <= 1 or word in _STOP_WORDS:
                 continue

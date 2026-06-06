@@ -362,27 +362,33 @@ function isModelBusyStatus(status: string) {
 
 function ModelLoadingOverlay({ status }: { status: string }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-[#111]/20 backdrop-blur-[1px]">
-      <div className="relative flex h-44 w-44 items-center justify-center">
-        <div className="absolute inset-0 rounded-full border border-[#28c7df]/25" />
-        <div className="absolute inset-4 animate-spin rounded-full border border-dashed border-[#28c7df]/60" />
-        <div className="absolute inset-8 animate-pulse rounded-full border border-[#facc15]/25" />
-        <div className="grid h-24 w-24 place-items-center rounded-2xl border border-[#28c7df]/45 bg-[#181819]/90 shadow-[0_0_40px_rgba(40,199,223,0.18)]">
-          <div className="space-y-1">
-            {[0, 1, 2, 3].map((index) => (
-              <div
-                key={index}
-                className="h-1.5 rounded-full bg-[#28c7df]"
-                style={{
-                  width: `${28 + index * 8}px`,
-                  opacity: 0.35 + index * 0.14,
-                  animation: `pulse 1.4s ease-in-out ${index * 0.12}s infinite`,
-                }}
-              />
-            ))}
-          </div>
+    <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-[#111]/25 backdrop-blur-[1px]">
+      <div className="relative flex h-52 w-52 items-center justify-center">
+        <div className="absolute inset-0 rounded-full border border-[#28c7df]/20 bg-[radial-gradient(circle,rgba(40,199,223,0.14),rgba(17,17,17,0)_64%)] blur-[1px]" />
+        <div className="absolute inset-2 animate-spin rounded-full border border-dashed border-[#28c7df]/70 shadow-[0_0_34px_rgba(40,199,223,0.2)]" />
+        <div
+          className="absolute inset-8 rounded-[26px] border border-[#facc15]/40 bg-[#facc15]/5"
+          style={{ animation: "spin 2.8s linear infinite reverse" }}
+        />
+        <div className="absolute h-24 w-24 rotate-45 animate-spin rounded-2xl border border-[#28c7df]/75 bg-[linear-gradient(135deg,rgba(40,199,223,0.34),rgba(250,204,21,0.08))] shadow-[0_0_46px_rgba(40,199,223,0.28)]" />
+        <div
+          className="absolute h-14 w-14 rounded-xl border border-white/35 bg-[#1b1b1c]/90 shadow-[inset_0_0_24px_rgba(40,199,223,0.18),0_0_26px_rgba(250,204,21,0.12)]"
+          style={{ transform: "rotateX(62deg) rotateZ(45deg)" }}
+        />
+        <div className="absolute flex h-32 w-32 items-center justify-center">
+          {[0, 1, 2, 3].map((index) => (
+            <span
+              key={index}
+              className="absolute h-2.5 w-2.5 rounded-full bg-[#28c7df] shadow-[0_0_16px_rgba(40,199,223,0.85)]"
+              style={{
+                transform: `rotate(${index * 90}deg) translateY(-62px)`,
+                opacity: 0.4 + index * 0.16,
+                animation: `pulse 1.2s ease-in-out ${index * 0.16}s infinite`,
+              }}
+            />
+          ))}
         </div>
-        <div className="absolute -bottom-10 rounded-full border border-[#333] bg-[#181819]/95 px-4 py-2 text-xs font-semibold text-white shadow-xl">
+        <div className="absolute -bottom-8 rounded-full border border-[#28c7df]/30 bg-[#181819]/95 px-4 py-2 text-xs font-semibold text-white shadow-[0_0_28px_rgba(40,199,223,0.18)]">
           {status || "Building model..."}
         </div>
       </div>
@@ -985,11 +991,16 @@ function WorkspaceApp() {
 function MobileAiBar() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
-  const { runPrompt } = useCadStore();
+  const { runPrompt, isBusy } = useCadStore();
+  const busy = loading || isBusy;
 
   const handleSend = async () => {
-    if (!prompt.trim() || loading) return;
+    if (!prompt.trim() || busy) return;
     setLoading(true);
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
     try {
       await runPrompt(prompt.trim());
       setPrompt("");
@@ -999,21 +1010,25 @@ function MobileAiBar() {
   };
 
   return (
-    <div className="flex gap-2 items-center">
+    <div className={`flex items-center gap-2 rounded-2xl border p-1.5 transition-all ${
+      busy
+        ? "border-[#28c7df]/70 bg-[#101820] shadow-[0_0_28px_rgba(40,199,223,0.24)]"
+        : "border-transparent"
+    }`}>
       <input
         type="text"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && void handleSend()}
         placeholder="Ask AI to change the model..."
-        className="flex-1 bg-[#111827] border border-cadio-border rounded-lg px-3 py-2 text-sm text-cadio-text placeholder:text-cadio-muted focus:outline-none focus:border-cadio-accent"
+        className="min-h-11 flex-1 rounded-xl border border-cadio-border bg-[#111827] px-3 py-2 text-base text-cadio-text placeholder:text-cadio-muted focus:border-cadio-accent focus:outline-none"
       />
       <button
         onClick={() => void handleSend()}
-        disabled={loading || !prompt.trim()}
-        className="px-4 py-2 rounded-lg bg-cadio-accent text-[#081225] text-sm font-semibold disabled:opacity-40"
+        disabled={busy || !prompt.trim()}
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cadio-accent text-base font-black text-[#081225] shadow-[0_0_18px_rgba(40,199,223,0.22)] disabled:opacity-40"
       >
-        {loading ? "..." : ">"}
+        {busy ? "..." : ">"}
       </button>
     </div>
   );
