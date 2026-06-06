@@ -118,18 +118,18 @@ export default function AiPanel() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] shadow-2xl">
-        <div className="aspect-[4/3] overflow-hidden rounded-t-lg bg-[#3a3a3a]">
+      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] shadow-xl">
+        <div className="h-20 overflow-hidden rounded-t-lg bg-[#3a3a3a]">
           <div className="grid h-full place-items-center text-center text-sm text-[#9d9d9d]">
             <div>
-              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl border border-[#555] bg-[#2a2a2a] text-xl">
+              <div className="mx-auto mb-1 grid h-8 w-8 place-items-center rounded-lg border border-[#555] bg-[#2a2a2a] text-base">
                 C
               </div>
               <p>{objects.length ? `${objects.length} editable part${objects.length > 1 ? "s" : ""}` : "No model yet"}</p>
             </div>
           </div>
         </div>
-        <div className="border-t border-[#303033] px-4 py-3">
+        <div className="border-t border-[#303033] px-3 py-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="grid h-5 w-5 place-items-center rounded border border-[#555] text-[11px]">◇</span>
             <span className="truncate">{creationTitle(latestPrompt || "New Creation")}</span>

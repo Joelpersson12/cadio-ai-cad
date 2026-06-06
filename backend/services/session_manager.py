@@ -2401,6 +2401,8 @@ def _label_placement(prompt: str, width: float, depth: float) -> str:
         return "x_sides" if width >= depth else "y_sides"
     if any(token in text for token in ("long side", "long sides", "langsida", "langsidorna")):
         return "y_sides" if width >= depth else "x_sides"
+    if re.search(r"\b(?:side|sides|sida|sidor|sidorna)\b", text):
+        return "y_sides" if width >= depth else "x_sides"
     if any(token in text for token in ("left", "right", "vanster", "hoger")):
         return "x_sides"
     if any(token in text for token in ("front", "back", "framsida", "baksida")):
@@ -2422,7 +2424,7 @@ def _fit_label_height(label: str, available_width: float, available_height: floa
     return max(2.5, min(28.0, by_width, by_height))
 
 
-def _make_block_text_mesh(label: str, letter_height: float, depth: float) -> tuple[TriMesh, float, float]:
+def _make_block_text_mesh(label: str, letter_height: float, depth: float, *, mirror_x: bool = False) -> tuple[TriMesh, float, float]:
     label = _sanitize_label_text(label)
     cell = max(0.25, float(letter_height) / 7.0)
     pixel = cell * 0.86
@@ -2460,6 +2462,8 @@ def _make_block_text_mesh(label: str, letter_height: float, depth: float) -> tup
     max_x = max(v[0] for v in mesh.verts)
     center_x = (min_x + max_x) / 2.0
     mesh.verts = [(x - center_x, y, z) for x, y, z in mesh.verts]
+    if mirror_x:
+        mesh.verts = [(-x, y, z) for x, y, z in mesh.verts]
     width = max_x - min_x
     height = cell * 7.0
     return mesh, width, height
@@ -2503,8 +2507,9 @@ def _create_text_label_object(
     rotation: list[float],
     style: str,
     target_color: str,
+    mirror_x: bool = False,
 ) -> CadObject:
-    mesh, text_width, text_height = _make_block_text_mesh(label, letter_height, depth)
+    mesh, text_width, text_height = _make_block_text_mesh(label, letter_height, depth, mirror_x=mirror_x)
     obj = create_manual_object(
         f"{label.lower()}_{style}_text",
         mesh,
@@ -2521,6 +2526,7 @@ def _create_text_label_object(
     )
     obj["primitive"] = "text_label"
     obj["text_label"] = label
+    obj["text_mirror_x"] = bool(mirror_x)
     obj["text_style"] = style
     obj["color"] = "#151515" if style == "engraved" else target_color
     obj["transform"] = Transform(
@@ -2588,6 +2594,7 @@ def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
                 rotation=[-90.0, 0.0, 0.0],
                 style=style,
                 target_color=target_color,
+                mirror_x=True,
             )
         )
     elif placement == "x_sides":
@@ -2603,6 +2610,7 @@ def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
                     rotation=[0.0, 0.0, 90.0],
                     style=style,
                     target_color=target_color,
+                    mirror_x=True,
                 ),
                 _create_text_label_object(
                     label,
@@ -2628,6 +2636,7 @@ def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
                     rotation=[0.0, 0.0, 180.0],
                     style=style,
                     target_color=target_color,
+                    mirror_x=True,
                 ),
                 _create_text_label_object(
                     label,
@@ -2643,7 +2652,7 @@ def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
 
     for obj in created:
         add_object(session, obj)
-    session["selected_object_id"] = ""
+    session["selected_object_id"] = str(targets[0].get("id", ""))
     return [f"add {style} '{label}' text on {placement.replace('_', ' ')}"]
 
 
@@ -2673,6 +2682,7 @@ def rebuild_manual_object(obj: CadObject) -> None:
             label,
             max(1.0, float(params.get("text_height", params.get("height", 8.0)))),
             max(0.2, float(params.get("text_depth", params.get("depth", 0.8)))),
+            mirror_x=bool(obj.get("text_mirror_x", False)),
         )[0]
     else:
         fillet = max(0.0, float(params.get("fillet_radius", 0.0)))
