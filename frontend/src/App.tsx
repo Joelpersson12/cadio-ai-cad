@@ -1,6 +1,7 @@
 /** Cadio App shell - Shapr3D-inspired layout with mobile support. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useCadStore } from "./stores/cadStore";
 import { useWebSocket } from "./hooks/useWebSocket";
 import CadViewport from "./components/CadViewport";
@@ -442,6 +443,10 @@ function WorkspaceApp() {
   const [workspacePanelOpen, setWorkspacePanelOpen] = useState(true);
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(true);
   const [parametersPanelOpen, setParametersPanelOpen] = useState(true);
+  const [workspacePanelWidth, setWorkspacePanelWidth] = useState(292);
+  const [assistantPanelWidth, setAssistantPanelWidth] = useState(380);
+  const [parametersPanelWidth, setParametersPanelWidth] = useState(330);
+  const desktopLayoutRef = useRef<HTMLDivElement>(null);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
     await runPrompt(example.prompt);
@@ -486,12 +491,45 @@ function WorkspaceApp() {
     }));
   const selectedCount = selectedObjectIds.length || (selectedObjectId ? 1 : 0);
   const modelBusy = isBusy || isModelBusyStatus(status);
-  const desktopGridColumns = `${workspacePanelOpen ? "292px" : "48px"} ${assistantPanelOpen ? "380px" : "48px"} minmax(0,1fr) ${parametersPanelOpen ? "330px" : "48px"}`;
+  const workspaceTrackWidth = workspacePanelOpen ? workspacePanelWidth : 52;
+  const assistantTrackWidth = assistantPanelOpen ? assistantPanelWidth : 52;
+  const parametersTrackWidth = parametersPanelOpen ? parametersPanelWidth : 52;
+  const desktopGridColumns = `${workspaceTrackWidth}px 6px ${assistantTrackWidth}px 6px minmax(0,1fr) 6px ${parametersTrackWidth}px`;
+  const startPanelResize = (
+    panel: "workspace" | "assistant" | "parameters",
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    const rect = desktopLayoutRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+    if (panel === "workspace") setWorkspacePanelOpen(true);
+    if (panel === "assistant") setAssistantPanelOpen(true);
+    if (panel === "parameters") setParametersPanelOpen(true);
+
+    const onMove = (moveEvent: MouseEvent) => {
+      if (panel === "workspace") {
+        setWorkspacePanelWidth(clamp(moveEvent.clientX - rect.left, 72, 460));
+      } else if (panel === "assistant") {
+        const leftWidth = workspacePanelOpen ? workspacePanelWidth : 52;
+        setAssistantPanelWidth(clamp(moveEvent.clientX - rect.left - leftWidth - 6, 72, 520));
+      } else {
+        setParametersPanelWidth(clamp(rect.right - moveEvent.clientX, 72, 480));
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   return (
     <div className="w-full h-full relative bg-cadio-bg text-cadio-text">
       {/* Desktop layout */}
       <div
+        ref={desktopLayoutRef}
         className="hidden h-full w-full overflow-hidden bg-[#171717] text-white transition-[grid-template-columns] duration-300 ease-out md:grid"
         style={{ gridTemplateColumns: desktopGridColumns }}
       >
@@ -742,6 +780,13 @@ function WorkspaceApp() {
             </div>
           )}
         </aside>
+        <div
+          className="group relative z-20 cursor-col-resize border-r border-[#242426] bg-[#111]/70"
+          onMouseDown={(event) => startPanelResize("workspace", event)}
+          title="Drag to resize workspace panel"
+        >
+          <div className="absolute left-1/2 top-1/2 h-12 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#3d3d40] transition-colors group-hover:bg-[#28c7df]" />
+        </div>
 
         <section className={`${assistantPanelOpen ? "grid grid-rows-[56px_1fr]" : "flex items-start justify-center px-2 py-3"} min-h-0 border-r border-[#252527] bg-[#202020]`}>
           {assistantPanelOpen ? (
@@ -778,6 +823,13 @@ function WorkspaceApp() {
             </button>
           )}
         </section>
+        <div
+          className="group relative z-20 cursor-col-resize border-r border-[#242426] bg-[#111]/70"
+          onMouseDown={(event) => startPanelResize("assistant", event)}
+          title="Drag to resize AI panel"
+        >
+          <div className="absolute left-1/2 top-1/2 h-12 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#3d3d40] transition-colors group-hover:bg-[#28c7df]" />
+        </div>
 
         <main className="relative min-h-0 overflow-hidden bg-[#3a3a3a]">
           <div className="absolute right-4 top-3 z-10 flex items-center gap-2 text-xs text-white/90">
@@ -818,6 +870,13 @@ function WorkspaceApp() {
           />
           {modelBusy && <ModelLoadingOverlay status={status} />}
         </main>
+        <div
+          className="group relative z-20 cursor-col-resize border-l border-[#242426] bg-[#111]/70"
+          onMouseDown={(event) => startPanelResize("parameters", event)}
+          title="Drag to resize parameters panel"
+        >
+          <div className="absolute left-1/2 top-1/2 h-12 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#3d3d40] transition-colors group-hover:bg-[#28c7df]" />
+        </div>
 
         <aside className={`${parametersPanelOpen ? "relative" : "flex items-start justify-center px-2 py-3"} min-h-0 overflow-hidden border-l border-[#303033] bg-[#1d1d1e]`}>
           {parametersPanelOpen ? (

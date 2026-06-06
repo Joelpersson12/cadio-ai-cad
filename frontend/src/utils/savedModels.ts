@@ -2,6 +2,11 @@ import type { CadObject } from "./types";
 
 const STORAGE_KEY = "cadio_saved_models_v1";
 
+function storageKey(accountId?: string | null) {
+  const clean = (accountId || "").trim().toLowerCase();
+  return clean ? `${STORAGE_KEY}:${clean}` : STORAGE_KEY;
+}
+
 export interface SavedModel {
   id: string;
   folderId: string;
@@ -38,9 +43,10 @@ function uid(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function loadSavedLibrary(): SavedLibrary {
+export function loadSavedLibrary(accountId?: string | null): SavedLibrary {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!accountId) return defaultLibrary();
+    const raw = localStorage.getItem(storageKey(accountId));
     if (!raw) return defaultLibrary();
     const parsed = JSON.parse(raw) as SavedLibrary;
     if (!Array.isArray(parsed.folders) || !Array.isArray(parsed.models)) {
@@ -53,8 +59,9 @@ export function loadSavedLibrary(): SavedLibrary {
   }
 }
 
-export function saveSavedLibrary(library: SavedLibrary) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(library));
+export function saveSavedLibrary(library: SavedLibrary, accountId?: string | null) {
+  if (!accountId) return;
+  localStorage.setItem(storageKey(accountId), JSON.stringify(library));
 }
 
 export function createSavedFolder(library: SavedLibrary, name: string): SavedLibrary {

@@ -8,6 +8,7 @@ import {
   saveSavedLibrary,
   type SavedLibrary,
 } from "../utils/savedModels";
+import { getCadioAccount, type CadioAccount } from "../utils/auth";
 
 export default function SavedModelsPanel({
   title,
@@ -24,13 +25,31 @@ export default function SavedModelsPanel({
   objects: CadObject[];
   onOpenPrompt: (prompt: string) => void;
 }) {
-  const [library, setLibrary] = useState<SavedLibrary>(() => loadSavedLibrary());
+  const [account, setAccount] = useState<CadioAccount | null>(() => getCadioAccount());
+  const accountId = account?.accountId || "";
+  const [library, setLibrary] = useState<SavedLibrary>(() => loadSavedLibrary(accountId));
   const [folderId, setFolderId] = useState(() => library.folders[0]?.id || "favorites");
   const [folderName, setFolderName] = useState("");
 
   useEffect(() => {
-    saveSavedLibrary(library);
-  }, [library]);
+    saveSavedLibrary(library, accountId);
+  }, [accountId, library]);
+
+  useEffect(() => {
+    const syncAccount = () => {
+      const nextAccount = getCadioAccount();
+      setAccount(nextAccount);
+      const nextLibrary = loadSavedLibrary(nextAccount?.accountId || "");
+      setLibrary(nextLibrary);
+      setFolderId(nextLibrary.folders[0]?.id || "favorites");
+    };
+    window.addEventListener("cadio-auth-changed", syncAccount);
+    window.addEventListener("storage", syncAccount);
+    return () => {
+      window.removeEventListener("cadio-auth-changed", syncAccount);
+      window.removeEventListener("storage", syncAccount);
+    };
+  }, []);
 
   const activeFolder = library.folders.find((folder) => folder.id === folderId) ?? library.folders[0];
   const visibleModels = useMemo(
@@ -39,6 +58,7 @@ export default function SavedModelsPanel({
   );
 
   const addFolder = () => {
+    if (!accountId) return;
     const next = createSavedFolder(library, folderName);
     const created = next.folders.find((folder) => folder.name.toLowerCase() === folderName.trim().toLowerCase());
     setLibrary(next);
@@ -47,7 +67,7 @@ export default function SavedModelsPanel({
   };
 
   const saveCurrent = () => {
-    if (!objects.length) return;
+    if (!objects.length || !accountId) return;
     setLibrary((current) =>
       saveCurrentModelToLibrary({
         library: current,
@@ -81,7 +101,7 @@ export default function SavedModelsPanel({
           </select>
           <button
             onClick={saveCurrent}
-            disabled={!objects.length}
+            disabled={!objects.length || !accountId}
             className="h-9 rounded-lg border border-[#28c7df] bg-[#123038] px-3 text-xs font-semibold text-white disabled:opacity-35"
           >
             Save
@@ -99,7 +119,7 @@ export default function SavedModelsPanel({
           />
           <button
             onClick={addFolder}
-            disabled={!folderName.trim()}
+            disabled={!folderName.trim() || !accountId}
             className="h-8 rounded-lg bg-[#2a2a2c] px-3 text-xs font-semibold text-[#d8d8d8] disabled:opacity-35"
           >
             Add
@@ -137,7 +157,9 @@ export default function SavedModelsPanel({
           )}
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-[#6f6f72]">
-          Local library now. Ready for account sync when auth is connected.
+          {accountId
+            ? `Only visible for ${account?.email || account?.phone || "this account"}.`
+            : "Log in with email or phone to save private models."}
         </p>
       </div>
     </details>

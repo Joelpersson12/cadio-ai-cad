@@ -817,26 +817,41 @@ function AuthDialog({
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
-            markCadioAuthenticated();
+            const form = new FormData(event.currentTarget);
+            markCadioAuthenticated({
+              name: String(form.get("name") || ""),
+              email: String(form.get("email") || ""),
+              phone: String(form.get("phone") || ""),
+            });
             onStartBuilding();
           }}
         >
           {mode === "signup" && (
             <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#8f8f92]">
               {text.auth.name}
-              <input className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]" />
+              <input name="name" className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]" />
             </label>
           )}
           <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#8f8f92]">
             {text.auth.email}
             <input
+              name="email"
               type="email"
+              className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]"
+            />
+          </label>
+          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#8f8f92]">
+            Tel
+            <input
+              name="phone"
+              type="tel"
               className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]"
             />
           </label>
           <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#8f8f92]">
             {text.auth.password}
             <input
+              name="password"
               type="password"
               className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]"
             />
