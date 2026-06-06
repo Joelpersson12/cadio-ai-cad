@@ -425,6 +425,10 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
         with lock:
             session = get_or_create_session(data.session_id)
             save_undo_snapshot(session)
+            if data.replace_scene:
+                session["objects"] = {}
+                session["object_order"] = []
+                session["selected_object_id"] = ""
             if data.primitive.strip().lower() == "hole" and session.get("selected_object_id") and session["object_order"]:
                 obj = get_selected_object(session)
                 diameter = max(0.5, float(data.radius or max(data.size or [5.0]) / 2.0) * 2.0)

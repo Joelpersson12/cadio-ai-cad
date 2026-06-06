@@ -426,7 +426,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
 
   createPrimitive: async ({ primitive, center, size, radius }) => {
-    const { sessionId, sketchHeight } = get();
+    const { sessionId, sketchHeight, objects } = get();
     const startedAt = Date.now();
     set({ status: `Sketching ${primitive}...`, isBusy: true });
     try {
@@ -438,6 +438,7 @@ export const useCadStore = create<CadState>((set, get) => ({
         size,
         radius,
         height: sketchHeight,
+        replace_scene: objects.length === 0,
       });
       get().applyScenePayload(data);
       await waitForMinimumBusy(startedAt);

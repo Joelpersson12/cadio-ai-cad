@@ -153,6 +153,7 @@ class PrimitiveCreateRequest(BaseModel):
     size: list[float] = Field(default_factory=lambda: [40.0, 30.0])
     height: float = 8.0
     radius: float | None = None
+    replace_scene: bool = False
 
 
 class ExpertOperationRequest(BaseModel):

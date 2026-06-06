@@ -168,6 +168,7 @@ export async function createPrimitive(payload: {
   size: [number, number];
   height: number;
   radius?: number;
+  replace_scene?: boolean;
 }): Promise<ScenePayload> {
   return request<ScenePayload>("/api/object/primitive", {
     method: "POST",

@@ -9,9 +9,9 @@ import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../uti
 const VIEW_COLORS = {
   background: "#343435",
   plate: "#5a5a5c",
-  plateEdge: "#74777b",
-  gridCell: "#505154",
-  gridSection: "#686b70",
+  plateEdge: "#9da3aa",
+  gridCell: "#777b83",
+  gridSection: "#c7cbd1",
   neutralBody: "#b9b8b3",
   selectedBody: "#28c7df",
   hoveredBody: "#cfd1d2",
@@ -24,6 +24,7 @@ const VIEW_COLORS = {
   measure: "#f8fafc",
   measureAccent: "#facc15",
 };
+const SKETCH_GRID_STEP_MM = 5;
 
 function visibleBodyColor(obj: CadObject, selected: boolean, hovered: boolean) {
   if (selected) return VIEW_COLORS.selectedBody;
@@ -483,7 +484,7 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
           roughness={0.82}
           metalness={0.02}
           transparent
-          opacity={0.18}
+          opacity={0.11}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
@@ -497,7 +498,7 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       ].map((pos, i) => (
         <mesh key={i} position={[pos[0], pos[1], pos[2]]}>
           <sphereGeometry args={[2, 8, 8]} />
-          <meshStandardMaterial color="#d6d8db" emissive="#22252a" />
+          <meshStandardMaterial color="#f1f5f9" emissive="#33383f" />
         </mesh>
       ))}
       {/* Border frame - enhanced visibility */}
@@ -511,8 +512,8 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
 
 function snapSketchPoint(start: THREE.Vector3, point: THREE.Vector3, tool: ExpertTool): THREE.Vector3 {
   const snapped = point.clone();
-  snapped.x = Math.round(snapped.x);
-  snapped.z = Math.round(snapped.z);
+  snapped.x = Math.round(snapped.x / SKETCH_GRID_STEP_MM) * SKETCH_GRID_STEP_MM;
+  snapped.z = Math.round(snapped.z / SKETCH_GRID_STEP_MM) * SKETCH_GRID_STEP_MM;
   if (tool !== "line") return snapped;
 
   const dx = snapped.x - start.x;
@@ -847,15 +848,16 @@ export default function CadViewport({
       {/* Grid - improved visibility */}
       <Grid
         args={[printerVolume[0] * 2.2, printerVolume[1] * 2.2]}
-        cellSize={10}
-        cellThickness={0.2}
+        cellSize={SKETCH_GRID_STEP_MM}
+        cellThickness={0.42}
         cellColor={VIEW_COLORS.gridCell}
-        sectionSize={50}
-        sectionThickness={0.5}
+        sectionSize={25}
+        sectionThickness={1.05}
         sectionColor={VIEW_COLORS.gridSection}
         fadeDistance={1000}
-        fadeStrength={2.35}
-        position={[0, -0.78, 0]}
+        fadeStrength={1.15}
+        infiniteGrid={false}
+        position={[0, 0.055, 0]}
       />
  
       {/* Build plate */}
