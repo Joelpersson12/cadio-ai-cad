@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import makitaBatteryStlUrl from "../assets/makita-battery.stl?url";
-import { markCadioAuthenticated } from "../utils/auth";
+import { loginCadioAccount } from "../utils/auth";
 
 type Language = "en" | "sv" | "es" | "fr" | "it" | "de" | "pt";
 type AuthMode = "login" | "signup" | null;
@@ -108,7 +108,7 @@ const copy = {
       password: "Password",
       name: "Name",
       continue: "Continue to workspace",
-      hint: "Authentication is prepared in the frontend and can be connected to real auth later.",
+      hint: "Saved models are private to the email or phone account you use here.",
     },
     cta: {
       title: "Ready to build?",
@@ -203,7 +203,7 @@ const copy = {
       password: "Losenord",
       name: "Namn",
       continue: "Fortsatt till workspace",
-      hint: "Autentisering ar forberedd i frontend och kan kopplas till riktig auth senare.",
+      hint: "Sparade modeller ar privata for den e-post eller telefon du anvander har.",
     },
     cta: {
       title: "Redo att bygga?",
@@ -298,7 +298,7 @@ const copy = {
       password: "Contrasena",
       name: "Nombre",
       continue: "Continuar al workspace",
-      hint: "La autenticacion esta preparada en frontend y se puede conectar a auth real mas adelante.",
+      hint: "Los modelos guardados son privados para el email o telefono que uses aqui.",
     },
     cta: {
       title: "Listo para construir?",
@@ -393,7 +393,7 @@ const copy = {
       password: "Mot de passe",
       name: "Nom",
       continue: "Continuer vers le workspace",
-      hint: "L'authentification est preparee en frontend et pourra etre connectee a une vraie auth plus tard.",
+      hint: "Les modeles enregistres restent prives pour l'email ou le telephone utilise ici.",
     },
     cta: {
       title: "Pret a construire?",
@@ -488,7 +488,7 @@ const copy = {
       password: "Password",
       name: "Nome",
       continue: "Continua al workspace",
-      hint: "L'autenticazione e pronta nel frontend e puo essere collegata a una vera auth piu avanti.",
+      hint: "I modelli salvati sono privati per l'email o telefono usato qui.",
     },
     cta: {
       title: "Pronto a costruire?",
@@ -583,7 +583,7 @@ const copy = {
       password: "Passwort",
       name: "Name",
       continue: "Weiter zum Workspace",
-      hint: "Authentifizierung ist im Frontend vorbereitet und kann spater mit echter Auth verbunden werden.",
+      hint: "Gespeicherte Modelle sind privat fur die hier genutzte E-Mail oder Telefonnummer.",
     },
     cta: {
       title: "Bereit zu bauen?",
@@ -678,7 +678,7 @@ const copy = {
       password: "Senha",
       name: "Nome",
       continue: "Continuar para o workspace",
-      hint: "A autenticacao esta preparada no frontend e pode ser conectada a auth real depois.",
+      hint: "Modelos salvos ficam privados para o email ou telefone usado aqui.",
     },
     cta: {
       title: "Pronto para construir?",
@@ -796,6 +796,9 @@ function AuthDialog({
   onClose: () => void;
   onStartBuilding: () => void;
 }) {
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+
   if (!mode) return null;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
@@ -815,15 +818,24 @@ function AuthDialog({
         </div>
         <form
           className="space-y-3"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
-            markCadioAuthenticated({
-              name: String(form.get("name") || ""),
-              email: String(form.get("email") || ""),
-              phone: String(form.get("phone") || ""),
-            });
-            onStartBuilding();
+            setAuthError("");
+            setAuthBusy(true);
+            try {
+              await loginCadioAccount({
+                name: String(form.get("name") || ""),
+                email: String(form.get("email") || ""),
+                phone: String(form.get("phone") || ""),
+                password: String(form.get("password") || ""),
+              });
+              onStartBuilding();
+            } catch (err) {
+              setAuthError(err instanceof Error ? err.message : "Could not log in.");
+            } finally {
+              setAuthBusy(false);
+            }
           }}
         >
           {mode === "signup" && (
@@ -853,11 +865,21 @@ function AuthDialog({
             <input
               name="password"
               type="password"
+              minLength={4}
+              required
               className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]"
             />
           </label>
-          <button className="h-11 w-full rounded-lg bg-[#e8e8e8] text-sm font-semibold text-[#151515] hover:bg-white">
-            {text.auth.continue}
+          {authError && (
+            <p className="rounded-lg border border-[#6b2d2d] bg-[#2a1717] px-3 py-2 text-xs text-[#ffb3b3]">
+              {authError}
+            </p>
+          )}
+          <button
+            disabled={authBusy}
+            className="h-11 w-full rounded-lg bg-[#e8e8e8] text-sm font-semibold text-[#151515] hover:bg-white disabled:cursor-wait disabled:opacity-60"
+          >
+            {authBusy ? "Signing in..." : text.auth.continue}
           </button>
         </form>
         <p className="mt-4 text-xs leading-relaxed text-[#8f8f92]">{text.auth.hint}</p>

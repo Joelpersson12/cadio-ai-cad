@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CadObject } from "../utils/types";
+import { loadAccountSavedLibrary, saveAccountSavedLibrary } from "../utils/api";
 import {
   createSavedFolder,
   loadSavedLibrary,
@@ -8,7 +9,15 @@ import {
   saveSavedLibrary,
   type SavedLibrary,
 } from "../utils/savedModels";
-import { getCadioAccount, type CadioAccount } from "../utils/auth";
+import { getCadioAccount, getCadioAuthToken, type CadioAccount } from "../utils/auth";
+
+function libraryHasContent(library: SavedLibrary) {
+  return library.models.length > 0 || library.folders.length > 1;
+}
+
+function isValidLibrary(library: SavedLibrary | null | undefined): library is SavedLibrary {
+  return Boolean(library && Array.isArray(library.folders) && Array.isArray(library.models));
+}
 
 export default function SavedModelsPanel({
   title,
@@ -26,6 +35,9 @@ export default function SavedModelsPanel({
   onOpenPrompt: (prompt: string) => void;
 }) {
   const [account, setAccount] = useState<CadioAccount | null>(() => getCadioAccount());
+  const [authToken, setAuthToken] = useState(() => getCadioAuthToken());
+  const [syncState, setSyncState] = useState<"idle" | "loading" | "syncing" | "synced" | "offline">("idle");
+  const [remoteReady, setRemoteReady] = useState(false);
   const accountId = account?.accountId || "";
   const [library, setLibrary] = useState<SavedLibrary>(() => loadSavedLibrary(accountId));
   const [folderId, setFolderId] = useState(() => library.folders[0]?.id || "favorites");
@@ -33,12 +45,23 @@ export default function SavedModelsPanel({
 
   useEffect(() => {
     saveSavedLibrary(library, accountId);
-  }, [accountId, library]);
+    if (!accountId || !authToken || !remoteReady) return;
+    setSyncState("syncing");
+    const timer = window.setTimeout(() => {
+      saveAccountSavedLibrary(authToken, library)
+        .then(() => setSyncState("synced"))
+        .catch(() => setSyncState("offline"));
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [accountId, authToken, library, remoteReady]);
 
   useEffect(() => {
     const syncAccount = () => {
       const nextAccount = getCadioAccount();
+      const nextToken = getCadioAuthToken();
       setAccount(nextAccount);
+      setAuthToken(nextToken);
+      setRemoteReady(false);
       const nextLibrary = loadSavedLibrary(nextAccount?.accountId || "");
       setLibrary(nextLibrary);
       setFolderId(nextLibrary.folders[0]?.id || "favorites");
@@ -50,6 +73,50 @@ export default function SavedModelsPanel({
       window.removeEventListener("storage", syncAccount);
     };
   }, []);
+
+  useEffect(() => {
+    if (!accountId || !authToken) {
+      setRemoteReady(false);
+      setSyncState("idle");
+      return;
+    }
+
+    let cancelled = false;
+    const localLibrary = loadSavedLibrary(accountId);
+    setRemoteReady(false);
+    setSyncState("loading");
+    loadAccountSavedLibrary(authToken)
+      .then((result) => {
+        if (cancelled) return;
+        const remoteLibrary = isValidLibrary(result.library) ? result.library : localLibrary;
+        const shouldSeedRemote = libraryHasContent(localLibrary) && !libraryHasContent(remoteLibrary);
+        const nextLibrary = shouldSeedRemote ? localLibrary : remoteLibrary;
+        setLibrary(nextLibrary);
+        setFolderId(nextLibrary.folders[0]?.id || "favorites");
+        setRemoteReady(true);
+        setSyncState(shouldSeedRemote ? "syncing" : "synced");
+        if (shouldSeedRemote) {
+          saveAccountSavedLibrary(authToken, nextLibrary)
+            .then(() => {
+              if (!cancelled) setSyncState("synced");
+            })
+            .catch(() => {
+              if (!cancelled) setSyncState("offline");
+            });
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLibrary(localLibrary);
+        setFolderId(localLibrary.folders[0]?.id || "favorites");
+        setRemoteReady(false);
+        setSyncState("offline");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, authToken]);
 
   const activeFolder = library.folders.find((folder) => folder.id === folderId) ?? library.folders[0];
   const visibleModels = useMemo(
@@ -157,9 +224,15 @@ export default function SavedModelsPanel({
           )}
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-[#6f6f72]">
-          {accountId
-            ? `Only visible for ${account?.email || account?.phone || "this account"}.`
-            : "Log in with email or phone to save private models."}
+          {!accountId
+            ? "Log in with email or phone to save private models."
+            : syncState === "loading"
+              ? "Loading this account's saved models..."
+              : syncState === "syncing"
+                ? "Syncing saved models..."
+                : syncState === "offline"
+                  ? `Local backup for ${account?.email || account?.phone || "this account"}. Cloud sync is offline.`
+                  : `Cloud saved for ${account?.email || account?.phone || "this account"}.`}
         </p>
       </div>
     </details>

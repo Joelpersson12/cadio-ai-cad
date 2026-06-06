@@ -1,5 +1,8 @@
+import { authLogin, type AuthPayload, type AccountProfile } from "./api";
+
 const CADIO_AUTH_KEY = "cadio_auth_ready";
 const CADIO_ACCOUNT_KEY = "cadio_account_profile_v1";
+const CADIO_AUTH_TOKEN_KEY = "cadio_auth_token_v1";
 
 export interface CadioAccount {
   name?: string;
@@ -12,6 +15,23 @@ function normalizeAccountId(email?: string, phone?: string) {
   const cleanEmail = (email || "").trim().toLowerCase();
   const cleanPhone = (phone || "").replace(/[^\d+]/g, "");
   return cleanEmail || cleanPhone || "guest";
+}
+
+function storeAccount(account: Partial<CadioAccount>, token?: string) {
+  const accountId = account.accountId || normalizeAccountId(account.email, account.phone);
+  window.localStorage.setItem(CADIO_AUTH_KEY, "true");
+  if (accountId !== "guest") {
+    window.localStorage.setItem(CADIO_ACCOUNT_KEY, JSON.stringify({
+      name: account.name || "",
+      email: account.email || "",
+      phone: account.phone || "",
+      accountId,
+    }));
+  }
+  if (token) {
+    window.localStorage.setItem(CADIO_AUTH_TOKEN_KEY, token);
+  }
+  window.dispatchEvent(new Event("cadio-auth-changed"));
 }
 
 export function isCadioAuthenticated() {
@@ -38,19 +58,20 @@ export function getCadioAccount(): CadioAccount | null {
   }
 }
 
+export function getCadioAuthToken() {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(CADIO_AUTH_TOKEN_KEY) || "";
+}
+
+export async function loginCadioAccount(payload: AuthPayload): Promise<AccountProfile> {
+  const result = await authLogin(payload);
+  storeAccount(result.account, result.token);
+  return result.account;
+}
+
 export function markCadioAuthenticated(account?: { name?: string; email?: string; phone?: string }) {
   if (typeof window === "undefined") return;
-  const accountId = normalizeAccountId(account?.email, account?.phone);
-  window.localStorage.setItem(CADIO_AUTH_KEY, "true");
-  if (accountId !== "guest") {
-    window.localStorage.setItem(CADIO_ACCOUNT_KEY, JSON.stringify({
-      name: account?.name || "",
-      email: account?.email || "",
-      phone: account?.phone || "",
-      accountId,
-    }));
-  }
-  window.dispatchEvent(new Event("cadio-auth-changed"));
+  storeAccount(account || {});
 }
 
 export function requestCadioAuth() {

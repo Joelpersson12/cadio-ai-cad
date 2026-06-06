@@ -96,6 +96,17 @@ class GenerateRequest(BaseModel):
     fit: bool = True
 
 
+class AuthRequest(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    password: str | None = None
+
+
+class SavedLibraryRequest(BaseModel):
+    library: dict[str, Any]
+
+
 class ParameterUpdateRequest(BaseModel):
     session_id: str
     object_id: str | None = None

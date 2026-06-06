@@ -11,11 +11,12 @@ import re
 import traceback
 from typing import Any
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Header, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 
 from backend.models.schema import (
     AppearanceUpdateRequest,
+    AuthRequest,
     FeatureToggleRequest,
     ExpertOperationRequest,
     GenerateRequest,
@@ -24,6 +25,7 @@ from backend.models.schema import (
     ParameterUpdateRequest,
     PrinterUpdateRequest,
     PrimitiveCreateRequest,
+    SavedLibraryRequest,
     ScenePayload,
     SourceModelSwitchRequest,
     TransformUpdateRequest,
@@ -45,6 +47,11 @@ from backend.services.object_manager import (
     duplicate_object,
 )
 from backend.services.print_profiles import material_profiles_response, normalize_material
+from backend.services.account_store import (
+    load_saved_library,
+    login_or_create_account,
+    save_saved_library,
+)
 from backend.services.prompt_translation import normalize_source_query
 from backend.services.session_manager import (
     acquire_lock,
@@ -123,14 +130,71 @@ def _error(status: int, message: str) -> JSONResponse:
     )
 
 
+def _bearer_token(authorization: str | None) -> str:
+    value = (authorization or "").strip()
+    if value.lower().startswith("bearer "):
+        return value[7:].strip()
+    return value
+
+
 # ---------------------------------------------------------------------------
-# Health / Printers
+# Health / Account / Printers
 # ---------------------------------------------------------------------------
 
 
 @router.get("/api/health")
 def health() -> dict[str, Any]:
     return {"status": "ok", "service": "cadio-v2"}
+
+
+@router.post("/api/auth/login", response_model=None)
+def auth_login(data: AuthRequest) -> dict[str, Any] | JSONResponse:
+    try:
+        result = login_or_create_account(
+            name=data.name,
+            email=data.email,
+            phone=data.phone,
+            password=data.password,
+        )
+        return {"status": "ok", **result}
+    except ValueError as exc:
+        return _error(400, str(exc))
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.get("/api/account/saved-models", response_model=None)
+def get_account_saved_models(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any] | JSONResponse:
+    try:
+        token = _bearer_token(authorization)
+        result = load_saved_library(token)
+        return {"status": "ok", **result}
+    except PermissionError as exc:
+        return _error(401, str(exc))
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.put("/api/account/saved-models", response_model=None)
+def put_account_saved_models(
+    data: SavedLibraryRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any] | JSONResponse:
+    try:
+        token = _bearer_token(authorization)
+        result = save_saved_library(token, data.library)
+        return {"status": "ok", **result}
+    except PermissionError as exc:
+        return _error(401, str(exc))
+    except ValueError as exc:
+        return _error(400, str(exc))
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
 
 
 @router.get("/api/printers")

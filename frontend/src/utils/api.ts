@@ -1,6 +1,7 @@
 /** HTTP API client for the Cadio backend. */
 
 import type { ScenePayload, PrinterProfile, MaterialProfile } from "./types";
+import type { SavedLibrary } from "./savedModels";
 
 const REMOTE_API_BASE = "https://cadio-ai-cad-production.up.railway.app";
 
@@ -37,16 +38,22 @@ const API_FALLBACKS = Array.from(
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let lastError: unknown = null;
+  const optionHeaders =
+    options.headers instanceof Headers
+      ? Object.fromEntries(options.headers.entries())
+      : Array.isArray(options.headers)
+        ? Object.fromEntries(options.headers)
+        : options.headers || {};
   for (const base of API_FALLBACKS) {
     try {
       const res = await fetch(`${base}${path}`, {
-        headers: { "Content-Type": "application/json" },
         ...options,
+        headers: { "Content-Type": "application/json", ...optionHeaders },
       });
       const contentType = res.headers.get("content-type") || "";
       const data = contentType.includes("application/json")
         ? await res.json()
-        : { status: res.ok ? "ok" : "error", message: await res.text() };
+        : { status: "error", message: await res.text() || "Expected JSON API response" };
       if (!res.ok || data.status === "error") {
         lastError = new Error(data.message || "API request failed");
         continue;
@@ -72,6 +79,57 @@ export async function generate(payload: {
   return request<ScenePayload>("/api/generate", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export interface AuthPayload {
+  name?: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+}
+
+export interface AccountProfile {
+  accountId: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+}
+
+export async function authLogin(payload: AuthPayload): Promise<{
+  status: string;
+  token: string;
+  account: AccountProfile;
+}> {
+  return request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function loadAccountSavedLibrary(token: string): Promise<{
+  status: string;
+  account: AccountProfile;
+  library: SavedLibrary;
+}> {
+  return request("/api/account/saved-models", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function saveAccountSavedLibrary(
+  token: string,
+  library: SavedLibrary,
+): Promise<{
+  status: string;
+  account: AccountProfile;
+  library: SavedLibrary;
+}> {
+  return request("/api/account/saved-models", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ library }),
   });
 }
 
