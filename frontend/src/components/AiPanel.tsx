@@ -17,6 +17,9 @@ const QUICK_COMMANDS = [
   "Adjust slot spacing",
   "Make 3 slots",
   "Add screw holes",
+  "Add screw bosses",
+  "Add cable cutout",
+  "Add snap clip",
   "Make it stronger",
 ];
 

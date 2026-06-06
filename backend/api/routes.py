@@ -30,9 +30,7 @@ from backend.models.schema import (
 )
 from backend.services.ai_parser import (
     is_edit_only_prompt,
-    is_mounting_hole_edit,
     parse_ai_command,
-    parse_hole_edit,
 )
 from backend.services.export_service import (
     SUPPORTED_FORMATS,
@@ -52,9 +50,9 @@ from backend.services.session_manager import (
     acquire_lock,
     add_history,
     add_hole_to_object,
-    add_mounting_holes_to_session,
     add_bottom_plate_from_prompt,
     add_text_label_from_prompt,
+    apply_structural_ai_edit_from_prompt,
     apply_expert_operation,
     bump_version,
     center_object_on_plate,
@@ -65,6 +63,7 @@ from backend.services.session_manager import (
     get_selected_object,
     get_session,
     is_bottom_plate_prompt,
+    is_structural_ai_edit_prompt,
     is_text_label_prompt,
     prepare_generation_target,
     place_object_on_plate,
@@ -218,24 +217,18 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                 add_object(session, obj)
                 session["selected_object_id"] = obj["id"]
                 actions = ["create new object"]
-            elif is_mounting_hole_edit(data.prompt):
-                if not session["object_order"]:
-                    obj = create_object("part_1")
-                    add_object(session, obj)
-                    session["selected_object_id"] = obj["id"]
-                selected = get_object(session, session.get("selected_object_id"))
-                hole_options = parse_hole_edit(data.prompt)
-                actions = add_mounting_holes_to_session(
-                    session,
-                    selected,
-                    count=int(hole_options["count"]),
-                    diameter=hole_options["diameter"],
-                    counterbore_diameter=hole_options["counterbore_diameter"],
-                )
             elif session["object_order"] and is_bottom_plate_prompt(data.prompt):
                 actions = add_bottom_plate_from_prompt(session, data.prompt)
             elif session["object_order"] and is_text_label_prompt(data.prompt):
                 actions = add_text_label_from_prompt(session, data.prompt)
+            elif is_structural_ai_edit_prompt(data.prompt):
+                if not session["object_order"]:
+                    obj = create_object("part_1")
+                    add_object(session, obj)
+                    session["selected_object_id"] = obj["id"]
+                actions = apply_structural_ai_edit_from_prompt(session, data.prompt)
+                if not actions:
+                    actions = ["edit skipped: command was not specific enough"]
             else:
                 edit_only = is_edit_only_prompt(data.prompt)
                 if edit_only:

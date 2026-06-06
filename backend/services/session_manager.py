@@ -2026,6 +2026,88 @@ def _hole_specs(params: dict[str, float]) -> list[tuple[float, float, float]]:
     return specs
 
 
+def _cutout_specs(params: dict[str, float]) -> list[dict[str, float]]:
+    specs: list[dict[str, float]] = []
+    count = max(0, int(params.get("custom_cutout_count", 0.0)))
+    for index in range(count):
+        x_key = f"custom_cutout_{index}_x"
+        y_key = f"custom_cutout_{index}_y"
+        w_key = f"custom_cutout_{index}_width"
+        d_key = f"custom_cutout_{index}_depth"
+        if x_key not in params or y_key not in params:
+            continue
+        width = max(0.5, float(params.get(w_key, params.get("cutout_width", 18.0))))
+        depth = max(0.5, float(params.get(d_key, params.get("cutout_depth", 8.0))))
+        specs.append(
+            {
+                "x": float(params[x_key]),
+                "y": float(params[y_key]),
+                "width": width,
+                "depth": depth,
+                "z0": float(params.get(f"custom_cutout_{index}_z0", -0.2)),
+                "z1": float(params.get(f"custom_cutout_{index}_z1", params.get("height", 20.0) + 0.2)),
+            }
+        )
+    return specs
+
+
+def _add_rect_cutout_walls(mesh: TriMesh, spec: dict[str, float]) -> None:
+    x = spec["x"]
+    y = spec["y"]
+    hw = spec["width"] / 2.0
+    hd = spec["depth"] / 2.0
+    z0 = spec["z0"]
+    z1 = spec["z1"]
+    if z1 <= z0 or hw <= 0.0 or hd <= 0.0:
+        return
+
+    corners = [
+        (x - hw, y - hd, z0),
+        (x + hw, y - hd, z0),
+        (x + hw, y + hd, z0),
+        (x - hw, y + hd, z0),
+        (x - hw, y - hd, z1),
+        (x + hw, y - hd, z1),
+        (x + hw, y + hd, z1),
+        (x - hw, y + hd, z1),
+    ]
+    ids = [mesh.add_vertex(point) for point in corners]
+    # Winding faces inward so these render as the inside walls of the cut.
+    mesh.add_quad(ids[0], ids[4], ids[5], ids[1])
+    mesh.add_quad(ids[1], ids[5], ids[6], ids[2])
+    mesh.add_quad(ids[2], ids[6], ids[7], ids[3])
+    mesh.add_quad(ids[3], ids[7], ids[4], ids[0])
+
+
+def _apply_mesh_rect_cutouts(mesh: TriMesh, params: dict[str, float]) -> TriMesh:
+    specs = _cutout_specs(params)
+    if not specs or not mesh.verts:
+        return mesh
+
+    cut = TriMesh()
+    cut.verts = list(mesh.verts)
+    for a, b, c in mesh.tris:
+        va, vb, vc = mesh.verts[a], mesh.verts[b], mesh.verts[c]
+        cx = (va[0] + vb[0] + vc[0]) / 3.0
+        cy = (va[1] + vb[1] + vc[1]) / 3.0
+        cz = (va[2] + vb[2] + vc[2]) / 3.0
+        inside_cutout = False
+        for spec in specs:
+            if (
+                spec["z0"] <= cz <= spec["z1"]
+                and abs(cx - spec["x"]) <= spec["width"] / 2.0
+                and abs(cy - spec["y"]) <= spec["depth"] / 2.0
+            ):
+                inside_cutout = True
+                break
+        if not inside_cutout:
+            cut.tris.append((a, b, c))
+
+    for spec in specs:
+        _add_rect_cutout_walls(cut, spec)
+    return cut
+
+
 def _make_box_with_rect_holes(width: float, depth: float, height: float, params: dict[str, float]) -> TriMesh:
     """Approximate through-holes in mesh fallback by subdividing the box."""
     holes = _hole_specs(params)
@@ -2098,7 +2180,7 @@ def _apply_mesh_hole_cuts(mesh: TriMesh, params: dict[str, float]) -> TriMesh:
     """
     holes = _hole_specs(params)
     if not holes or not mesh.verts:
-        return shift_mesh_to_buildplate(mesh)
+        return shift_mesh_to_buildplate(_apply_mesh_rect_cutouts(mesh, params))
 
     mins, maxs = _mesh_extents(mesh)
     z0 = mins[2] - 0.2
@@ -2134,7 +2216,7 @@ def _apply_mesh_hole_cuts(mesh: TriMesh, params: dict[str, float]) -> TriMesh:
         if counterbore_diameter > diameter and counterbore_depth > 0:
             _add_cylinder_wall(cut, x, y, counterbore_diameter / 2.0, counterbore_z0, z1)
 
-    return shift_mesh_to_buildplate(cut)
+    return shift_mesh_to_buildplate(_apply_mesh_rect_cutouts(cut, params))
 
 
 _TEXT_GLYPHS: dict[str, tuple[str, ...]] = {
@@ -2248,6 +2330,8 @@ def is_text_label_prompt(prompt: str) -> bool:
             "add",
             "write",
             "create",
+            "set",
+            "adjust",
             "remove",
             "delete",
             "change",
@@ -2268,6 +2352,43 @@ def _label_style(prompt: str) -> str:
     if any(token in text for token in ("engrave", "engraved", "engraving", "recessed", "ingravera", "ingraverat", "gravyr")):
         return "engraved"
     return "raised"
+
+
+def _label_depth(prompt: str, style: str) -> float:
+    text = _prompt_match_text(prompt)
+    match = re.search(r"\b(\d+(?:\.\d+)?)\s*mm\b", text)
+    default = 0.55 if style == "engraved" else 0.9
+    if not match:
+        return default
+    return max(0.25, min(4.0, float(match.group(1))))
+
+
+def _is_text_depth_edit_prompt(prompt: str) -> bool:
+    text = _prompt_match_text(prompt)
+    adding_text = any(token in text for token in ("add", "write", "lagg till", "skriv", "engrave", "ingravera"))
+    return (
+        not adding_text
+        and "text" in text
+        and any(token in text for token in ("depth", "deep", "thickness", "djup", "tjocklek"))
+    )
+
+
+def _update_text_label_depths(session: Session, prompt: str) -> list[str]:
+    style = _label_style(prompt)
+    depth = _label_depth(prompt, style)
+    targets = [
+        obj
+        for obj in session.get("objects", {}).values()
+        if obj.get("primitive") == "text_label"
+    ]
+    if not targets:
+        return ["text depth skipped: no text labels found"]
+    for obj in targets:
+        obj["parameters"]["text_depth"] = depth
+        obj["parameters"]["depth"] = depth
+        obj["parameters"]["thickness"] = depth
+        rebuild_manual_object(obj)
+    return [f"set text depth to {depth:g}mm"]
 
 
 def _label_placement(prompt: str, width: float, depth: float) -> str:
@@ -2419,6 +2540,8 @@ def _create_text_label_object(
 
 def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
     """Add simple raised/engraved block text to the current model."""
+    if _is_text_depth_edit_prompt(prompt):
+        return _update_text_label_depths(session, prompt)
     if _is_text_removal_prompt(prompt):
         label = _extract_label_text(prompt)
         return _remove_text_labels(session, None if label == "TEXT" else label)
@@ -2436,7 +2559,7 @@ def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
     label = _extract_label_text(prompt)
     style = _label_style(prompt)
     placement = _label_placement(prompt, width, depth)
-    text_depth = 0.55 if style == "engraved" else 0.9
+    text_depth = _label_depth(prompt, style)
     offset = text_depth / 2.0 + 0.05
     target_color = str(targets[0].get("color", "#d6c12a"))
     created: list[CadObject] = []
@@ -2580,6 +2703,8 @@ def rebuild_manual_object(obj: CadObject) -> None:
         else:
             obj["shape"] = _make_box_with_rect_holes(width, depth, height, params)
 
+    if primitive not in {"text_label", "imported_source_mesh"}:
+        obj["shape"] = _apply_mesh_rect_cutouts(obj["shape"], params)
     obj["shape"] = shift_mesh_to_buildplate(obj["shape"])
 
 
@@ -2747,6 +2872,604 @@ def add_mounting_holes_to_session(
 
     names = ", ".join(str(target.get("name", "part")) for target in candidates[:4])
     return [f"added mounting holes with counterbore to {names}"]
+
+
+_AI_EDIT_DECORATION_PRIMITIVES = {
+    "text_label",
+    "screw_boss",
+    "support_rib",
+    "clip_component",
+    "hanging_hook",
+}
+
+
+def _edit_match_text(prompt: str) -> str:
+    return _prompt_match_text(prompt)
+
+
+def _parse_mm_values(prompt: str) -> list[float]:
+    text = _edit_match_text(prompt)
+    return [
+        float(match.group(1))
+        for match in re.finditer(r"\b(\d+(?:\.\d+)?)\s*mm\b", text)
+    ]
+
+
+def _parse_named_mm(prompt: str, names: tuple[str, ...], default: float) -> float:
+    text = _edit_match_text(prompt)
+    for name in names:
+        match = re.search(rf"\b{name}\b[^\d]{{0,18}}(\d+(?:\.\d+)?)\s*mm\b", text)
+        if match:
+            return float(match.group(1))
+        match = re.search(rf"\b(\d+(?:\.\d+)?)\s*mm[^\w]{{0,18}}\b{name}\b", text)
+        if match:
+            return float(match.group(1))
+    values = _parse_mm_values(prompt)
+    return values[0] if values else default
+
+
+def _parse_feature_count(prompt: str, words: tuple[str, ...], default: int, minimum: int = 1, maximum: int = 8) -> int:
+    text = _edit_match_text(prompt)
+    word_numbers = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "en": 1,
+        "ett": 1,
+        "tva": 2,
+        "tre": 3,
+        "fyra": 4,
+        "fem": 5,
+        "sex": 6,
+    }
+    joined_words = "|".join(re.escape(word) for word in words)
+    descriptor = r"(?:screw|mounting|support|battery|batteries|skruv)?"
+    match = re.search(rf"\b([1-8])\s*(?:x|st|pcs|pieces)?\s*{descriptor}\s*(?:{joined_words})\b", text)
+    if match:
+        return max(minimum, min(maximum, int(match.group(1))))
+    for word, value in word_numbers.items():
+        if re.search(rf"\b{word}\s+{descriptor}\s*(?:{joined_words})\b", text):
+            return max(minimum, min(maximum, value))
+    return max(minimum, min(maximum, default))
+
+
+def _object_dimensions(obj: CadObject) -> tuple[float, float, float]:
+    source_dimensions = obj.get("source_dimensions") if isinstance(obj.get("source_dimensions"), dict) else {}
+    params = obj.get("parameters", {})
+    if source_dimensions:
+        return (
+            max(1.0, float(source_dimensions.get("width") or params.get("width", 80.0))),
+            max(1.0, float(source_dimensions.get("depth") or params.get("depth", 70.0))),
+            max(0.5, float(source_dimensions.get("height") or params.get("height", params.get("thickness", 8.0)))),
+        )
+    return (
+        max(1.0, float(params.get("width", 80.0))),
+        max(1.0, float(params.get("depth", 70.0))),
+        max(0.5, float(params.get("height", params.get("thickness", params.get("base_thickness", 8.0))))),
+    )
+
+
+def _editable_search_space(session: Session, selected: CadObject | None = None) -> list[CadObject]:
+    if selected and selected.get("source_group_id"):
+        space = _source_group_objects(session, selected)
+    else:
+        space = [session["objects"][oid] for oid in session.get("object_order", [])]
+    return [
+        obj
+        for obj in space
+        if obj.get("primitive") not in _AI_EDIT_DECORATION_PRIMITIVES
+    ]
+
+
+def _select_ai_edit_targets(session: Session, *, prefer_base: bool = True) -> list[CadObject]:
+    selected = get_object(session, session.get("selected_object_id"))
+    search_space = _editable_search_space(session, selected)
+    if not search_space:
+        return []
+    if selected and selected.get("primitive") not in _AI_EDIT_DECORATION_PRIMITIVES:
+        if prefer_base and not _is_base_like(selected):
+            base_candidates = [obj for obj in search_space if _is_base_like(obj)]
+            if base_candidates:
+                return sorted(base_candidates, key=_base_candidate_score, reverse=True)[:1]
+        return [selected]
+    if prefer_base:
+        base_candidates = [obj for obj in search_space if _is_base_like(obj)]
+        if base_candidates:
+            return sorted(base_candidates, key=_base_candidate_score, reverse=True)[:1]
+    return sorted(search_space, key=_base_candidate_score, reverse=True)[:1]
+
+
+def _rebuild_ai_target(obj: CadObject, changed_keys: set[str] | None = None) -> None:
+    if obj.get("manual"):
+        if changed_keys and update_imported_source_dimensions(obj, changed_keys):
+            return
+        rebuild_manual_object(obj)
+    else:
+        rebuild_object(obj)
+    place_object_on_plate(obj)
+
+
+def _local_hole_positions_for_target(obj: CadObject, count: int, diameter: float) -> list[tuple[float, float]]:
+    existing = _hole_specs(obj.get("parameters", {}))
+    if existing:
+        return [(x, y) for x, y, _d in existing[:count]]
+    width, depth, _height = _object_dimensions(obj)
+    return _mounting_hole_positions(width, depth, count)
+
+
+def _make_tube_mesh(outer_radius: float, inner_radius: float, height: float, segments: int = 40) -> TriMesh:
+    outer = max(0.6, float(outer_radius))
+    inner = max(0.1, min(float(inner_radius), outer - 0.2))
+    h = max(0.5, float(height))
+    segments = max(12, int(segments))
+    mesh = TriMesh()
+    outer_bottom: list[int] = []
+    outer_top: list[int] = []
+    inner_bottom: list[int] = []
+    inner_top: list[int] = []
+
+    for index in range(segments):
+        angle = 2.0 * math.pi * index / segments
+        co = math.cos(angle)
+        si = math.sin(angle)
+        outer_bottom.append(mesh.add_vertex((co * outer, si * outer, 0.0)))
+        outer_top.append(mesh.add_vertex((co * outer, si * outer, h)))
+        inner_bottom.append(mesh.add_vertex((co * inner, si * inner, 0.0)))
+        inner_top.append(mesh.add_vertex((co * inner, si * inner, h)))
+
+    for index in range(segments):
+        nxt = (index + 1) % segments
+        mesh.add_quad(outer_bottom[index], outer_bottom[nxt], outer_top[nxt], outer_top[index])
+        mesh.add_quad(inner_bottom[nxt], inner_bottom[index], inner_top[index], inner_top[nxt])
+        mesh.add_quad(outer_top[index], outer_top[nxt], inner_top[nxt], inner_top[index])
+        mesh.add_quad(outer_bottom[nxt], outer_bottom[index], inner_bottom[index], inner_bottom[nxt])
+    return mesh
+
+
+def _add_screw_bosses_to_session(session: Session, prompt: str) -> list[str]:
+    targets = _select_ai_edit_targets(session, prefer_base=True)
+    if not targets:
+        return ["screw bosses skipped: no editable base body found"]
+    target = targets[0]
+    count = _parse_feature_count(prompt, ("boss", "bosses", "standoff", "standoffs", "post", "posts", "holes", "hal"), 2, 1, 6)
+    screw_d = max(2.0, min(10.0, _parse_named_mm(prompt, ("screw", "hole", "diameter", "hal"), 4.5)))
+    boss_d = max(screw_d + 3.0, min(24.0, _parse_named_mm(prompt, ("boss", "standoff", "post", "outer"), screw_d * 2.25)))
+    boss_h = max(2.0, min(25.0, _parse_named_mm(prompt, ("height", "tall", "boss height", "hojd"), 7.0)))
+    _apply_mounting_holes_to_object(target, count=count, diameter=screw_d, counterbore_diameter=max(screw_d + 2.0, boss_d * 0.72))
+
+    transform: Transform = target["transform"]
+    sx = max(0.001, float(transform.scale[0]))
+    sy = max(0.001, float(transform.scale[1]))
+    _mins, maxs = _world_extents(target)
+    top_z = maxs[2]
+    color = str(target.get("color", "#d6c12a"))
+    created = 0
+    for index, (local_x, local_y) in enumerate(_local_hole_positions_for_target(target, count, screw_d), start=1):
+        boss = create_manual_object(
+            f"screw_boss_{index}",
+            _make_tube_mesh(boss_d / 2.0, screw_d / 2.0, boss_h),
+            {
+                "width": boss_d,
+                "depth": boss_d,
+                "height": boss_h,
+                "thickness": boss_h,
+                "hole_diameter": screw_d,
+            },
+        )
+        boss["primitive"] = "screw_boss"
+        boss["color"] = color
+        boss["transform"] = Transform(
+            position=[
+                float(transform.position[0]) + local_x * sx,
+                float(transform.position[1]) + local_y * sy,
+                top_z,
+            ],
+            rotation=[0.0, 0.0, 0.0],
+            scale=[1.0, 1.0, 1.0],
+        )
+        add_object(session, boss)
+        created += 1
+
+    session["selected_object_id"] = ""
+    return [f"added {created} screw bosses with {screw_d:g}mm holes"]
+
+
+def _parse_cutout_size(prompt: str, target: CadObject) -> tuple[float, float]:
+    text = _edit_match_text(prompt)
+    width, depth, _height = _object_dimensions(target)
+    pair = re.search(r"\b(\d+(?:\.\d+)?)\s*(?:x|by)\s*(\d+(?:\.\d+)?)\s*mm\b", text)
+    if pair:
+        return (
+            max(2.0, min(width * 0.9, float(pair.group(1)))),
+            max(2.0, min(depth * 0.9, float(pair.group(2)))),
+        )
+    values = _parse_mm_values(prompt)
+    if len(values) >= 2:
+        return (
+            max(2.0, min(width * 0.9, values[0])),
+            max(2.0, min(depth * 0.9, values[1])),
+        )
+    if any(token in text for token in ("cable", "cord", "sladd", "kabel")):
+        return max(8.0, min(width * 0.45, 24.0)), max(5.0, min(depth * 0.35, 14.0))
+    if "slot" in text or "slits" in text:
+        return max(12.0, min(width * 0.65, 48.0)), max(4.0, min(depth * 0.22, 10.0))
+    return max(10.0, min(width * 0.35, 28.0)), max(6.0, min(depth * 0.28, 16.0))
+
+
+def _add_cutout_to_object(obj: CadObject, prompt: str) -> str:
+    text = _edit_match_text(prompt)
+    width, depth, height = _object_dimensions(obj)
+    cut_w, cut_d = _parse_cutout_size(prompt, obj)
+    if any(token in text for token in ("front", "framsida", "fram", "cable", "cord", "sladd", "kabel")):
+        x = 0.0
+        y = -depth / 2.0 + cut_d / 2.0
+    elif any(token in text for token in ("back", "baksida", "bak")):
+        x = 0.0
+        y = depth / 2.0 - cut_d / 2.0
+    elif any(token in text for token in ("left", "vanster")):
+        x = -width / 2.0 + cut_w / 2.0
+        y = 0.0
+    elif any(token in text for token in ("right", "hoger")):
+        x = width / 2.0 - cut_w / 2.0
+        y = 0.0
+    else:
+        x = 0.0
+        y = 0.0
+
+    pocket = any(token in text for token in ("pocket", "recess", "indent", "forsank", "forsankt"))
+    pocket_depth = max(1.0, min(height * 0.7, _parse_named_mm(prompt, ("depth", "deep", "djup"), 3.0)))
+    z0 = max(0.0, height - pocket_depth) if pocket else -0.2
+    z1 = height + 0.2
+
+    params = obj["parameters"]
+    index = max(0, int(params.get("custom_cutout_count", 0.0)))
+    params[f"custom_cutout_{index}_x"] = x
+    params[f"custom_cutout_{index}_y"] = y
+    params[f"custom_cutout_{index}_width"] = cut_w
+    params[f"custom_cutout_{index}_depth"] = cut_d
+    params[f"custom_cutout_{index}_z0"] = z0
+    params[f"custom_cutout_{index}_z1"] = z1
+    params["custom_cutout_count"] = float(index + 1)
+    params["cutout_width"] = cut_w
+    params["cutout_depth"] = cut_d
+    _rebuild_ai_target(obj, {"custom_cutout_count"})
+    kind = "pocket" if pocket else "cutout"
+    return f"added {cut_w:g}x{cut_d:g}mm {kind} to {obj.get('name', 'part')}"
+
+
+def _add_cutout_to_session(session: Session, prompt: str) -> list[str]:
+    targets = _select_ai_edit_targets(session, prefer_base=True)
+    if not targets:
+        return ["cutout skipped: no editable body found"]
+    return [_add_cutout_to_object(targets[0], prompt)]
+
+
+def _add_clip_to_session(session: Session, prompt: str) -> list[str]:
+    targets = _select_ai_edit_targets(session, prefer_base=True)
+    if not targets:
+        return ["clip skipped: no editable body found"]
+    target = targets[0]
+    mins, maxs = _world_extents(target)
+    width = max(1.0, maxs[0] - mins[0])
+    depth = max(1.0, maxs[1] - mins[1])
+    color = str(target.get("color", "#d6c12a"))
+    cx = (mins[0] + maxs[0]) / 2.0
+    cy = (mins[1] + maxs[1]) / 2.0
+    top_z = maxs[2]
+    clip_w = max(18.0, min(width * 0.5, _parse_named_mm(prompt, ("width", "wide", "bredd"), 34.0)))
+    clip_d = max(12.0, min(depth * 0.5, _parse_named_mm(prompt, ("depth", "djup"), 18.0)))
+    clip_h = max(8.0, min(34.0, _parse_named_mm(prompt, ("height", "tall", "hojd"), 16.0)))
+    wall = max(2.0, min(5.0, clip_w * 0.16))
+    parts = [
+        _create_box_component("clip_base", clip_w, clip_d, 3.0, [cx, cy, top_z], target["parameters"], color=color),
+        _create_box_component("clip_left_jaw", wall, clip_d, clip_h, [cx - clip_w / 2.0 + wall / 2.0, cy, top_z + 3.0], target["parameters"], color=color),
+        _create_box_component("clip_right_jaw", wall, clip_d, clip_h, [cx + clip_w / 2.0 - wall / 2.0, cy, top_z + 3.0], target["parameters"], color=color),
+        _create_box_component("clip_front_lip", clip_w, wall, max(3.0, clip_h * 0.24), [cx, cy - clip_d / 2.0 + wall / 2.0, top_z + 3.0], target["parameters"], color=color),
+    ]
+    for part in parts:
+        part["primitive"] = "clip_component"
+        add_object(session, part)
+    session["selected_object_id"] = ""
+    return [f"added printable clip to {target.get('name', 'part')}"]
+
+
+def _add_hanging_hook_to_session(session: Session, prompt: str) -> list[str]:
+    targets = _select_ai_edit_targets(session, prefer_base=True)
+    if not targets:
+        return ["hanging hook skipped: no editable body found"]
+    target = targets[0]
+    mins, maxs = _world_extents(target)
+    width = max(1.0, maxs[0] - mins[0])
+    depth = max(1.0, maxs[1] - mins[1])
+    color = str(target.get("color", "#d6c12a"))
+    tab_w = max(22.0, min(width * 0.55, _parse_named_mm(prompt, ("width", "wide", "bredd"), 42.0)))
+    tab_d = max(18.0, min(depth * 0.5, _parse_named_mm(prompt, ("length", "depth", "djup"), 30.0)))
+    tab_h = max(3.0, min(9.0, _parse_named_mm(prompt, ("thickness", "tjocklek"), 5.0)))
+    hole_d = max(4.0, min(tab_w * 0.35, _parse_named_mm(prompt, ("hole", "screw", "hal"), 7.0)))
+    params = dict(target["parameters"])
+    params["custom_hole_0_x"] = 0.0
+    params["custom_hole_0_y"] = 0.0
+    params["custom_hole_0_diameter"] = hole_d
+    params["custom_hole_count"] = 1.0
+    params["hole_count"] = 1.0
+    params["hole_diameter"] = hole_d
+    hook = _create_box_component(
+        "hanging_hook_tab",
+        tab_w,
+        tab_d,
+        tab_h,
+        [(mins[0] + maxs[0]) / 2.0, maxs[1] + tab_d / 2.0 + 1.0, max(0.0, mins[2])],
+        params,
+        color=color,
+        cut_holes=True,
+    )
+    hook["primitive"] = "hanging_hook"
+    add_object(session, hook)
+    session["selected_object_id"] = ""
+    return [f"added hanging hook tab with {hole_d:g}mm hole"]
+
+
+def _add_support_ribs_to_session(session: Session, prompt: str) -> list[str]:
+    targets = _select_ai_edit_targets(session, prefer_base=True)
+    if not targets:
+        return ["strength ribs skipped: no editable body found"]
+    target = targets[0]
+    mins, maxs = _world_extents(target)
+    width = max(1.0, maxs[0] - mins[0])
+    depth = max(1.0, maxs[1] - mins[1])
+    color = str(target.get("color", "#d6c12a"))
+    count = _parse_feature_count(prompt, ("rib", "ribs", "support", "supports", "ribba", "ribbor"), 2, 1, 4)
+    rib_w = max(2.0, min(8.0, _parse_named_mm(prompt, ("thickness", "rib", "tjocklek"), 3.0)))
+    rib_d = max(12.0, min(depth * 0.72, _parse_named_mm(prompt, ("length", "depth", "langd", "djup"), depth * 0.52)))
+    rib_h = max(6.0, min(40.0, _parse_named_mm(prompt, ("height", "tall", "hojd"), 14.0)))
+    positions = [0.0] if count == 1 else [
+        -width * 0.25 + (width * 0.5) * (index / max(1, count - 1))
+        for index in range(count)
+    ]
+    for index, x_offset in enumerate(positions, start=1):
+        rib = create_manual_object(
+            f"support_rib_{index}",
+            _make_triangular_prism(rib_w, rib_d, rib_h),
+            {
+                "width": rib_w,
+                "depth": rib_d,
+                "height": rib_h,
+                "thickness": rib_w,
+            },
+        )
+        rib["primitive"] = "support_rib"
+        rib["color"] = color
+        rib["transform"] = Transform(
+            position=[(mins[0] + maxs[0]) / 2.0 + x_offset, (mins[1] + maxs[1]) / 2.0, maxs[2]],
+            rotation=[0.0, 0.0, 0.0],
+            scale=[1.0, 1.0, 1.0],
+        )
+        add_object(session, rib)
+    session["selected_object_id"] = ""
+    return [f"added {len(positions)} support ribs"]
+
+
+def _apply_slot_edit_from_prompt(session: Session, prompt: str) -> list[str]:
+    text = _edit_match_text(prompt)
+    targets = _select_ai_edit_targets(session, prefer_base=False)
+    if not targets:
+        return []
+    target = targets[0]
+    params = target.get("parameters", {})
+    slot_keys = {"num_batteries", "battery_slots", "battery_spacing", "slots"}
+    if not (slot_keys & set(params.keys())):
+        return []
+    actions: list[str] = []
+    count = _parse_feature_count(prompt, ("slot", "slots", "batteries", "battery"), 0, 0, 6)
+    if count > 0 and any(token in text for token in ("slot", "slots", "battery", "batteries")):
+        if "num_batteries" in params:
+            params["num_batteries"] = float(count)
+        if "battery_slots" in params:
+            params["battery_slots"] = float(count)
+        if "slots" in params:
+            params["slots"] = float(count)
+        actions.append(f"set slot count to {count}")
+    if any(token in text for token in ("spacing", "space", "avstand")):
+        spacing = max(35.0, min(140.0, _parse_named_mm(prompt, ("spacing", "space", "avstand"), float(params.get("battery_spacing", 85.0)))))
+        params["battery_spacing"] = spacing
+        actions.append(f"set slot spacing to {spacing:g}mm")
+    if actions:
+        _rebuild_ai_target(target, {"num_batteries", "battery_slots", "slots", "battery_spacing"})
+    return actions
+
+
+def _apply_dimension_edit_from_prompt(session: Session, prompt: str) -> list[str]:
+    text = _edit_match_text(prompt)
+    if not any(token in text for token in ("thicker", "tjockare", "taller", "hogre", "wider", "bredare", "longer", "langre")):
+        return []
+    targets = _select_ai_edit_targets(session, prefer_base=False)
+    if not targets:
+        return []
+    target = targets[0]
+    params = target.get("parameters", {})
+    values = _parse_mm_values(prompt)
+    changed: set[str] = set()
+    pct_match = re.search(r"\b(\d+(?:\.\d+)?)\s*(?:percent|%)\b", text)
+    factor = 1.0 + (float(pct_match.group(1)) / 100.0 if pct_match else 0.20)
+
+    if any(token in text for token in ("thicker", "tjockare")):
+        amount = values[0] if values else None
+        for key in ("thickness", "base_thickness"):
+            if key in params:
+                params[key] = max(0.5, float(params.get(key, 5.0)) + (amount if amount is not None else max(1.0, float(params.get(key, 5.0)) * 0.20)))
+                changed.add(key)
+        if "height" in params and "thickness" in params:
+            params["height"] = max(float(params.get("height", 8.0)), float(params["thickness"]))
+            changed.add("height")
+    if any(token in text for token in ("taller", "hogre")) and "height" in params:
+        params["height"] = max(0.5, values[0] if values else float(params.get("height", 20.0)) * factor)
+        changed.add("height")
+    if any(token in text for token in ("wider", "bredare")) and "width" in params:
+        params["width"] = max(1.0, values[0] if values else float(params.get("width", 60.0)) * factor)
+        changed.add("width")
+    if any(token in text for token in ("longer", "langre")):
+        key = "holder_length" if "holder_length" in params else "depth"
+        if key in params:
+            params[key] = max(1.0, values[0] if values else float(params.get(key, 60.0)) * factor)
+            changed.add(key)
+    if not changed:
+        return []
+    _rebuild_ai_target(target, changed)
+    return [f"updated dimensions: {', '.join(sorted(changed))}"]
+
+
+def _expert_operation_from_prompt(prompt: str) -> tuple[str, float] | None:
+    text = _edit_match_text(prompt)
+    values = _parse_mm_values(prompt)
+    first = values[0] if values else 0.0
+    if "fillet" in text or "rounded" in text or "rund" in text:
+        return "fillet", first or 2.0
+    if "chamfer" in text or "fasa" in text:
+        return "chamfer", first or 2.0
+    if "shell" in text or "skal" in text:
+        return "shell", first or 2.0
+    if "extrude" in text or "extrudera" in text:
+        return "extrude", first or 5.0
+    return None
+
+
+def _looks_like_new_model_request(text: str) -> bool:
+    return bool(
+        re.search(r"\b(create|generate|build|design|skapa|generera|bygg|rita)\b", text)
+        or re.search(r"\bmake\s+(?:a|an|one|en|ett)\b", text)
+        or re.search(r"\bgor\s+(?:en|ett)\b", text)
+    )
+
+
+def is_structural_ai_edit_prompt(prompt: str) -> bool:
+    text = _edit_match_text(prompt)
+    if _looks_like_new_model_request(text):
+        return False
+    has_edit_action = any(
+        token in text
+        for token in (
+            "add",
+            "adjust",
+            "change",
+            "set",
+            "remove",
+            "delete",
+            "make it",
+            "make 2",
+            "make 3",
+            "make 4",
+            "increase",
+            "decrease",
+            "fillet",
+            "chamfer",
+            "shell",
+            "extrude",
+            "stronger",
+            "thicker",
+            "wider",
+            "taller",
+            "lagg till",
+            "andra",
+            "ta bort",
+            "gor den",
+            "gor det",
+            "starkare",
+            "tjockare",
+            "bredare",
+            "hogre",
+        )
+    )
+    if not has_edit_action:
+        return False
+    return any(
+        token in text
+        for token in (
+            "hole",
+            "holes",
+            "screw",
+            "boss",
+            "bosses",
+            "standoff",
+            "cutout",
+            "cut out",
+            "notch",
+            "slot",
+            "cable",
+            "clip",
+            "clamp",
+            "hook",
+            "hanger",
+            "stronger",
+            "rib",
+            "ribs",
+            "fillet",
+            "chamfer",
+            "shell",
+            "extrude",
+            "thicker",
+            "wider",
+            "taller",
+            "hal",
+            "skruv",
+            "klamma",
+            "krok",
+            "starkare",
+            "ribba",
+            "fasa",
+            "rund",
+            "tjockare",
+            "bredare",
+            "hogre",
+        )
+    )
+
+
+def apply_structural_ai_edit_from_prompt(session: Session, prompt: str) -> list[str]:
+    text = _edit_match_text(prompt)
+    slot_actions = _apply_slot_edit_from_prompt(session, prompt)
+    if slot_actions:
+        return slot_actions
+    if any(token in text for token in ("boss", "bosses", "standoff", "standoffs", "post", "posts")):
+        return _add_screw_bosses_to_session(session, prompt)
+    if any(token in text for token in ("clip", "clamp", "klamma")):
+        return _add_clip_to_session(session, prompt)
+    if any(token in text for token in ("hook", "hanger", "hanging", "krok")):
+        return _add_hanging_hook_to_session(session, prompt)
+    if any(token in text for token in ("cutout", "cut out", "notch", "cable", "cord", "pocket", "recess", "sladd", "kabel")):
+        return _add_cutout_to_session(session, prompt)
+    if any(token in text for token in ("stronger", "support rib", "ribs", "ribba", "starkare")):
+        return _add_support_ribs_to_session(session, prompt)
+    expert = _expert_operation_from_prompt(prompt)
+    if expert:
+        targets = _select_ai_edit_targets(session, prefer_base=False)
+        if not targets:
+            return ["operation skipped: no editable body found"]
+        operation, amount = expert
+        if targets[0].get("primitive") == "imported_source_mesh" and operation in {"fillet", "chamfer", "shell"}:
+            return [f"{operation} skipped: imported STL meshes need a CAD body for true edge operations"]
+        return apply_expert_operation(targets[0], operation, amount)
+    dimension_actions = _apply_dimension_edit_from_prompt(session, prompt)
+    if dimension_actions:
+        return dimension_actions
+    if any(token in text for token in ("hole", "holes", "screw", "hal", "skruv")):
+        targets = _select_ai_edit_targets(session, prefer_base=True)
+        selected = targets[0] if targets else get_object(session, session.get("selected_object_id"))
+        count = _parse_feature_count(prompt, ("hole", "holes", "screw", "screws", "hal"), 2, 1, 8)
+        diameter = max(1.0, min(16.0, _parse_named_mm(prompt, ("hole", "screw", "diameter", "hal"), 5.0)))
+        counterbore = max(diameter + 1.0, min(24.0, _parse_named_mm(prompt, ("counterbore", "head", "forsank"), max(9.0, diameter * 1.8))))
+        return add_mounting_holes_to_session(
+            session,
+            selected,
+            count=count,
+            diameter=diameter,
+            counterbore_diameter=counterbore,
+        )
+    return []
 
 
 def apply_expert_operation(
