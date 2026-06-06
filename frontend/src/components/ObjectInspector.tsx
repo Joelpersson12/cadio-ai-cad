@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCadStore } from "../stores/cadStore";
 import type { MaterialProfile, PrinterProfile } from "../utils/types";
 import { exportUrl } from "../utils/api";
-import { isCadioAuthenticated, requestCadioAuth } from "../utils/auth";
+import ScalePercentInput from "./ScalePercentInput";
 
 type ParamMeta = {
   label: string;
@@ -187,6 +187,7 @@ export default function ObjectInspector() {
     patchParam,
     patchAppearance,
     setPrinter,
+    setSelectedScalePercent,
     snapSelectedObjects,
     undo,
     redo,
@@ -195,6 +196,7 @@ export default function ObjectInspector() {
   const selectedObject = objects.find((o) => o.id === selectedObjectId) ?? objects[0];
   const selectedPrinter = printers[printer] as PrinterProfile | undefined;
   const materialKey = printSettings?.material ?? selectedObject?.material ?? "PLA";
+  const selectedScalePercent = ((selectedObject?.transform.scale[0] ?? 1) * 100);
 
   const parameterKeys = useMemo(() => {
     if (!selectedObject) return [];
@@ -347,7 +349,7 @@ export default function ObjectInspector() {
 
             <div className="mb-4 grid grid-cols-2 gap-2 text-xs">
               <div className="rounded-lg bg-[#242425] px-3 py-2">
-                <div className="text-[#8f8f8f]">Scale</div>
+                <div className="text-[#8f8f8f]">Recommended scale</div>
                 <div className="mt-1 text-base font-semibold text-white">
                   {printSettings.scale.recommended_scale_percent.toFixed(1)}%
                 </div>
@@ -363,6 +365,21 @@ export default function ObjectInspector() {
                 <div className="text-[10px] text-[#9a9a9a]">
                   first {printSettings.slicer.first_layer_height_mm} mm
                 </div>
+              </div>
+            </div>
+
+            <div className="mb-4 rounded-lg border border-[#303033] bg-[#202021] p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs text-[#8f8f8f]">Model scaling</div>
+                  <div className="mt-0.5 text-[10px] text-[#9a9a9a]">Type 98,3% and press Enter</div>
+                </div>
+                <ScalePercentInput
+                  value={selectedScalePercent}
+                  onCommit={(percent) => void setSelectedScalePercent(percent)}
+                  disabled={!selectedObject}
+                  className="w-28"
+                />
               </div>
             </div>
 
@@ -453,12 +470,6 @@ export default function ObjectInspector() {
         <a
           href={sessionId ? exportUrl(sessionId, exportFormat) : "#"}
           download={sessionId ? `cadio-${sessionId}.${exportFormat}` : undefined}
-          onClick={(event) => {
-            if (!sessionId) return;
-            if (isCadioAuthenticated()) return;
-            event.preventDefault();
-            requestCadioAuth();
-          }}
           className={`flex h-12 items-center justify-center rounded-lg text-sm font-semibold ${
             sessionId ? "bg-[#e8e8e8] text-[#171717] hover:bg-white" : "bg-[#333] text-[#777]"
           }`}

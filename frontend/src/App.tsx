@@ -8,10 +8,11 @@ import AiPanel from "./components/AiPanel";
 import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
 import LandingPage from "./components/LandingPage";
+import ScalePercentInput from "./components/ScalePercentInput";
 import type { ExampleObject } from "./components/ExampleBrowser";
 import type { ExpertTool, MaterialProfile, SelectionMode, TransformMode } from "./utils/types";
 import { exportUrl } from "./utils/api";
-import { isCadioAuthenticated, markCadioAuthenticated, requestCadioAuth } from "./utils/auth";
+import { markCadioAuthenticated } from "./utils/auth";
 
 function promptFromHistory(item: Record<string, unknown> | undefined) {
   const value = item?.prompt ?? item?.command ?? item?.input;
@@ -188,12 +189,6 @@ function MobileExportSheet({
           <a
             href={sessionId ? exportUrl(sessionId, format) : "#"}
             download={sessionId ? `cadio-${sessionId}.${format}` : undefined}
-            onClick={(event) => {
-              if (!sessionId) return;
-              if (isCadioAuthenticated()) return;
-              event.preventDefault();
-              requestCadioAuth();
-            }}
             className={`flex h-12 items-center justify-center rounded-xl text-sm font-semibold ${
               sessionId ? "bg-[#e8e8e8] text-[#171717]" : "bg-[#333] text-[#777]"
             }`}
@@ -214,11 +209,12 @@ function MobileEditSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const { objects, selectedObjectId, materials, printSettings, patchParam, patchAppearance, onToggleFeature } = useCadStore();
+  const { objects, selectedObjectId, materials, printSettings, patchParam, patchAppearance, setSelectedScalePercent, onToggleFeature } = useCadStore();
   const obj = objects.find((o) => o.id === selectedObjectId) ?? objects[0];
   const materialEntries: Array<[string, MaterialProfile]> = Object.entries(materials).length
     ? Object.entries(materials)
     : FALLBACK_MATERIAL_ENTRIES;
+  const modelScalePercent = ((obj?.transform.scale[0] ?? 1) * 100);
 
   if (!obj) return null;
 
@@ -277,6 +273,17 @@ function MobileEditSheet({
               <div className="mb-2 flex items-center justify-between">
                 <span className="font-semibold">Print setup</span>
                 <span className="text-cadio-accent">{printSettings.scale.recommended_scale_percent.toFixed(1)}% scale</span>
+              </div>
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-[#172033] p-2">
+                <div>
+                  <div className="text-cadio-muted">Model scaling</div>
+                  <div className="text-[10px] text-cadio-muted">98,3% works</div>
+                </div>
+                <ScalePercentInput
+                  value={modelScalePercent}
+                  onCommit={(percent) => void setSelectedScalePercent(percent)}
+                  className="w-28"
+                />
               </div>
               <div className="grid grid-cols-2 gap-2 text-cadio-muted">
                 <span>Layer {printSettings.slicer.layer_height_mm} mm</span>

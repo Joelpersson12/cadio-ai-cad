@@ -19,6 +19,8 @@ from typing import Any
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
+from backend.services.prompt_translation import normalize_source_query
+
 
 @dataclass
 class ExampleDesign:
@@ -446,6 +448,7 @@ def _looks_like_model_url(source: str, url: str, title: str) -> bool:
 
 
 def _query_words(query: str) -> list[str]:
+    query = normalize_source_query(query)
     base = [
         w
         for w in re.findall(r"[a-z0-9]+", query.lower())
@@ -477,7 +480,7 @@ def _query_words(query: str) -> list[str]:
 
 
 def _query_variants(query: str) -> list[str]:
-    normalized = re.sub(r"\s+", " ", query.strip().lower())
+    normalized = re.sub(r"\s+", " ", normalize_source_query(query).strip().lower())
     variants = [normalized] if normalized else []
     core_words = [
         word
@@ -532,6 +535,7 @@ def _query_variants(query: str) -> list[str]:
 
 
 def _design_score(query: str, design: ExampleDesign) -> float:
+    query = normalize_source_query(query)
     relevance = _query_relevance(query, design.title, design.tags)
     title = design.title.lower()
     words = [w for w in _query_words(query) if len(w) > 2]
@@ -1083,14 +1087,15 @@ class ProviderRegistry:
     def search_all(self, query: str, limit: int = 5) -> list[ExampleDesign]:
         """Search all available providers with source-aware query expansion."""
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
-        variants = _query_variants(query) or [query]
+        search_query = normalize_source_query(query) or query
+        variants = _query_variants(search_query) or [search_query]
         per_query_limit = max(limit, 6)
         for provider in self.providers.values():
             if not provider.is_available():
                 continue
             for variant in variants:
                 for design in provider.search(variant, per_query_limit):
-                    score = _design_score(query, design)
+                    score = _design_score(search_query, design)
                     if score <= 0:
                         continue
                     existing = ranked.get(design.url)

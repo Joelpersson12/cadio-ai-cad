@@ -47,6 +47,7 @@ from backend.services.object_manager import (
     duplicate_object,
 )
 from backend.services.print_profiles import material_profiles_response, normalize_material
+from backend.services.prompt_translation import normalize_source_query
 from backend.services.session_manager import (
     acquire_lock,
     add_history,
@@ -198,18 +199,19 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
             session["fit"] = bool(data.fit)
 
             prompt = (data.prompt or "").strip().lower()
+            command_prompt = f"{prompt} {normalize_source_query(data.prompt)}".strip().lower()
 
             # Special commands
-            if "duplicate" in prompt:
+            if "duplicate" in command_prompt:
                 duplicate_object(session)
                 actions = ["duplicate selected object"]
-            elif "delete object" in prompt:
+            elif "delete object" in command_prompt or "remove object" in command_prompt:
                 selected_id = session["selected_object_id"]
                 if remove_object(session, selected_id):
                     actions = ["delete selected object"]
                 else:
                     actions = ["cannot delete only object"]
-            elif any(kw in prompt for kw in ("new object", "add object", "new part")):
+            elif any(kw in command_prompt for kw in ("new object", "add object", "new part")):
                 obj = create_object(f"part_{len(session['object_order']) + 1}")
                 add_object(session, obj)
                 session["selected_object_id"] = obj["id"]

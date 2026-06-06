@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from backend.models.schema import Feature, Transform
+from backend.services.prompt_translation import normalize_source_query
 from backend.services.session_manager import CadObject, Session
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
@@ -16,30 +17,38 @@ CREATE_PATTERNS = (
     r"\b(create|generate|build|design)\b",
     r"\bmake\s+(a|an|one)\b",
     r"\b(skapa|generera|bygg|rita)\b",
+    r"\bgor\s+(en|ett|a|an)\b",
     r"\bgör\s+(en|ett)\b",
 )
 
 EDIT_PATTERNS = (
     r"\b(add|remove|delete|change|modify|edit|increase|decrease|resize|scale|rotate|move)\b",
     r"\b(make it|taller|wider|thicker|thinner|rounded|fillet|chamfer|extrude|shell|mirror|holes?)\b",
+    r"\b(lagg till|ta bort|andra|redigera|flytta|rotera|skala|hal|rund|fasa|tjockare|bredare|hogre)\b",
     r"\b(lägg till|ta bort|ändra|redigera|flytta|rotera|skala|hål|rund|fasa|tjockare|bredare|högre)\b",
+    r"\bgor\s+(den|det)\b",
     r"\bgör\s+(den|det)\b",
 )
 
 
+def _prompt_match_text(prompt: str) -> str:
+    translated = normalize_source_query(prompt)
+    return f"{prompt} {translated}".strip().lower()
+
+
 def is_new_model_prompt(prompt: str) -> bool:
-    text = prompt.strip().lower()
+    text = _prompt_match_text(prompt)
     return any(re.search(pattern, text) for pattern in CREATE_PATTERNS)
 
 
 def is_edit_only_prompt(prompt: str) -> bool:
-    text = prompt.strip().lower()
+    text = _prompt_match_text(prompt)
     has_edit = any(re.search(pattern, text) for pattern in EDIT_PATTERNS)
     return has_edit and not is_new_model_prompt(text)
 
 
 def is_mounting_hole_edit(prompt: str) -> bool:
-    text = prompt.strip().lower()
+    text = _prompt_match_text(prompt)
     if not is_edit_only_prompt(text):
         return False
     return any(
@@ -49,6 +58,7 @@ def is_mounting_hole_edit(prompt: str) -> bool:
             "mounting holes",
             "add holes",
             "holes",
+            "screw holes",
             "hål",
             "skruvhål",
             "monteringshål",
@@ -57,7 +67,7 @@ def is_mounting_hole_edit(prompt: str) -> bool:
 
 
 def parse_hole_edit(prompt: str) -> dict[str, float]:
-    text = prompt.strip().lower()
+    text = _prompt_match_text(prompt)
     count_match = re.search(r"\b([2-4])\s*(?:x\s*)?(?:mounting\s*)?(?:holes?|hål)\b", text)
     diameter_match = re.search(r"\b(\d+(?:\.\d+)?)\s*mm\s*(?:holes?|hål|screw|skruv)", text)
     counterbore_match = re.search(r"\b(?:counterbore|sänka|försänkning)\s*(\d+(?:\.\d+)?)\s*mm", text)
@@ -227,32 +237,32 @@ def _apply_deterministic_edit(
     transform: Transform,
 ) -> list[str]:
     """Handle common quick edits without relying on an external LLM."""
-    text = prompt.lower()
+    text = _prompt_match_text(prompt)
     actions: list[str] = []
 
     def scale_param(key: str, factor: float, minimum: float = 0.0, maximum: float = 500.0) -> None:
         params[key] = max(minimum, min(maximum, float(params.get(key, 0.0)) * factor))
 
-    if any(phrase in text for phrase in ("make it taller", "taller", "increase height")):
+    if any(phrase in text for phrase in ("make it taller", "taller", "increase height", "hogre")):
         scale_param("height", 1.25, 20.0)
         actions.append("increased height")
 
-    if any(phrase in text for phrase in ("make it wider", "wider", "increase width")):
+    if any(phrase in text for phrase in ("make it wider", "wider", "increase width", "bredare")):
         scale_param("width", 1.25, 10.0)
         actions.append("increased width")
 
-    if any(phrase in text for phrase in ("make it thicker", "thicker", "stronger", "heavy duty", "heavy-duty")):
+    if any(phrase in text for phrase in ("make it thicker", "thicker", "stronger", "heavy duty", "heavy-duty", "tjockare")):
         scale_param("thickness", 1.25, 2.0, 30.0)
         params["wall_thickness"] = max(float(params.get("wall_thickness", 3.0)), 4.0)
         actions.append("increased thickness")
 
-    if any(phrase in text for phrase in ("rounded", "round corners", "fillet")):
+    if any(phrase in text for phrase in ("rounded", "round corners", "fillet", "runda")):
         params["fillet_radius"] = max(float(params.get("fillet_radius", 2.0)), 4.0)
         _ensure_feature(features, "fillet_edges", True)
         _ensure_feature(features, "chamfer_edges", False)
         actions.append("enabled rounded corners")
 
-    if any(phrase in text for phrase in ("mounting holes", "add holes", "holes")):
+    if any(phrase in text for phrase in ("mounting holes", "add holes", "holes", "screw holes")):
         params["hole_count"] = max(float(params.get("hole_count", 0.0)), 2.0)
         params["hole_diameter"] = max(float(params.get("hole_diameter", 5.0)), 5.0)
         _ensure_feature(features, "mount_holes", True)
@@ -308,7 +318,7 @@ def _apply_prompt_shape_inference(
     features: list[Feature],
 ) -> list[str]:
     """Create a useful first sketch when no curated template exists yet."""
-    text = prompt.lower()
+    text = _prompt_match_text(prompt)
     actions: list[str] = []
 
     if any(word in text for word in ("holder", "mount", "bracket", "clip", "retainer")):
@@ -479,7 +489,7 @@ def parse_ai_command(
     # Call GPT-4o for fine-tuning if not a direct template match
     if quick_actions or inference_actions or brief_actions:
         actions = brief_actions + quick_actions + inference_actions
-    elif not template or "modify" in prompt.lower() or "change" in prompt.lower():
+    elif not template or "modify" in _prompt_match_text(prompt) or "change" in _prompt_match_text(prompt):
         result = _parse_with_gpt(prompt, params, current_transform)
         
         # Apply parameter changes

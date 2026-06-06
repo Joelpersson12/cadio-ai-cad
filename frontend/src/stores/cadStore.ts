@@ -87,6 +87,7 @@ interface CadState {
       scale?: [number, number, number];
     },
   ) => Promise<void>;
+  setSelectedScalePercent: (percent: number) => Promise<void>;
   snapSelectedObjects: (snap: "on_plate" | "center_on_plate") => Promise<void>;
   switchSourceModel: (direction: "next" | "previous") => Promise<void>;
   createPrimitive: (payload: {
@@ -308,6 +309,31 @@ export const useCadStore = create<CadState>((set, get) => ({
         ...transform,
       });
       get().applyScenePayload(data);
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Error" });
+    }
+  },
+
+  setSelectedScalePercent: async (percent) => {
+    const { sessionId, selectedObjectId, selectedObjectIds, objects } = get();
+    const fallbackObjectId = objects[0]?.id || "";
+    const targets = selectedObjectIds.length > 0 ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : fallbackObjectId ? [fallbackObjectId] : [];
+    if (!sessionId || !targets.length) return;
+    const safePercent = Math.max(0.1, Math.min(1000, percent));
+    const scale = safePercent / 100;
+    try {
+      let data: ScenePayload | null = null;
+      for (const objectId of targets) {
+        data = await apiUpdateTransform({
+          session_id: sessionId,
+          object_id: objectId,
+          scale: [scale, scale, scale],
+        });
+      }
+      if (data) {
+        get().applyScenePayload(data);
+      }
+      set({ status: `Scale ${safePercent.toFixed(1)}%` });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });
     }

@@ -12,6 +12,7 @@ import re
 from typing import Any
 
 from backend.services.design_providers import ExampleDesign
+from backend.services.prompt_translation import normalize_source_query
 
 
 @dataclass
@@ -216,17 +217,19 @@ def _search_sources(prompt: str, limit: int) -> list[ExampleDesign]:
 
 
 def _combined_text(prompt: str, examples: list[ExampleDesign]) -> str:
+    translated_prompt = normalize_source_query(prompt)
     source_text = " ".join(
         " ".join([ex.title or "", ex.description or "", " ".join(ex.tags or [])])
         for ex in examples
     )
-    return f"{prompt} {source_text}".lower()
+    return f"{prompt} {translated_prompt} {source_text}".lower()
 
 
 def _infer_category(prompt: str, examples: list[ExampleDesign]) -> tuple[str, float]:
     text = _combined_text(prompt, examples)
     words = set(re.findall(r"[a-z0-9]+", text.lower()))
-    prompt_words = set(re.findall(r"[a-z0-9]+", prompt.lower()))
+    translated_prompt = normalize_source_query(prompt)
+    prompt_words = set(re.findall(r"[a-z0-9]+", f"{prompt} {translated_prompt}".lower()))
 
     for priority_category in ("battery_holder", "electronics_holder", "organic"):
         if prompt_words & CATEGORY_KEYWORDS[priority_category]:

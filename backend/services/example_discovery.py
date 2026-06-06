@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend.services.design_providers import ExampleDesign, get_provider_registry
+from backend.services.prompt_translation import normalize_source_query
 from backend.services.product_templates import PRODUCT_TEMPLATES, ProductTemplate
 
 
@@ -149,7 +150,7 @@ class ExampleDiscovery:
     @staticmethod
     def evaluate_prompt_relevance(prompt: str, threshold: float = 0.5) -> float:
         """Rate how well we can match a prompt (0.0-1.0)."""
-        prompt_lower = prompt.lower()
+        prompt_lower = f"{prompt} {normalize_source_query(prompt)}".lower()
         
         # Perfect match (1.0)
         for template in PRODUCT_TEMPLATES.values():

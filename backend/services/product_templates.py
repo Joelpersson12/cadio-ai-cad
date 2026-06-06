@@ -659,8 +659,10 @@ PRODUCT_TEMPLATES: dict[str, ProductTemplate] = {
 def get_template_for_prompt(prompt: str) -> ProductTemplate | None:
     """Find the best matching template for a natural language prompt."""
     import re
+    from backend.services.prompt_translation import normalize_source_query
 
-    prompt_lower = prompt.lower()
+    translated_prompt = normalize_source_query(prompt)
+    prompt_lower = f"{prompt} {translated_prompt}".lower()
     words = set(re.findall(r"[a-z0-9]+", prompt_lower))
     aliases = {
         "phone_stand": {"phone", "smartphone", "mobile", "iphone", "android", "dock"},

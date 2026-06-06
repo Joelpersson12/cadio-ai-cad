@@ -1,0 +1,310 @@
+"""Prompt normalization for source-model searches.
+
+Cadio searches public model sites in English, but users can describe models in
+Swedish.  This module keeps that translation deterministic and local so source
+search, file ranking, and simple edit detection all see the same query words.
+"""
+
+from __future__ import annotations
+
+import re
+import unicodedata
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+(?:\.[0-9]+)?")
+
+_PHRASE_TRANSLATIONS: tuple[tuple[str, str], ...] = (
+    (r"\b(?:batteri\s*hallaren?|batterihallaren?)\b", "battery holder"),
+    (r"\b(?:batteri\s*faste(?:t)?|batterifaste(?:t)?)\b", "battery mount"),
+    (r"\b(?:vagg\s*faste(?:t)?|vaggfaste(?:t)?|vagg\s*montering(?:en)?|vaggmontering(?:en)?|vagg\s*hallaren?|vagghallaren?)\b", "wall mount"),
+    (r"\b(?:skrivbord\s*faste(?:t)?|skrivbordsfaste(?:t)?|bord\s*faste(?:t)?|bordfaste(?:t)?)\b", "desk mount"),
+    (r"\b(?:skrivbord\s*hallaren?|skrivbordshallaren?|bord\s*hallaren?|bordhallaren?)\b", "desk holder"),
+    (r"\b(?:telefon\s*stall(?:et)?|telefonstall(?:et)?|mobil\s*stall(?:et)?|mobilstall(?:et)?)\b", "phone stand"),
+    (r"\b(?:telefon\s*hallaren?|telefonhallaren?|mobil\s*hallaren?|mobilhallaren?)\b", "phone holder"),
+    (r"\b(?:horlur\s*stall(?:et)?|horlurs\s*stall(?:et)?|horlursstall(?:et)?)\b", "headphone stand"),
+    (r"\b(?:horlur\s*hallaren?|horlurs\s*hallaren?|horlurshallaren?)\b", "headphone holder"),
+    (r"\b(?:headset\s*stall(?:et)?|headsetstall(?:et)?)\b", "headset stand"),
+    (r"\b(?:mugg\s*hallaren?|mugghallaren?)\b", "mug holder"),
+    (r"\b(?:kopp\s*hallaren?|kopphallaren?)\b", "cup holder"),
+    (r"\b(?:dryck\s*hallaren?|dryckeshallaren?)\b", "drink holder"),
+    (r"\b(?:kabel\s*hallaren?|kabelhallaren?|sladd\s*hallaren?|sladdhallaren?)\b", "cable holder"),
+    (r"\b(?:laddare\s*hallaren?|laddarhallaren?)\b", "charger holder"),
+    (r"\b(?:magsafe\s*laddare)\b", "magsafe charger"),
+    (r"\b(?:skruv\s*hal|skruvhal)\b", "screw holes"),
+    (r"\b(?:monterings\s*hal|monteringshal)\b", "mounting holes"),
+    (r"\b(?:forsankt\s*hal|forsankta\s*hal)\b", "countersunk holes"),
+    (r"\b(?:forsankning|forsankta)\b", "counterbore"),
+    (r"\b(?:botten\s*platt(?:a|an)|bottenplatt(?:a|an))\b", "bottom plate"),
+    (r"\b(?:snusdosa\s*hallaren?|snus\s*dosa\s*hallaren?)\b", "snus can holder"),
+    (r"\bblackfisk\b", "octopus"),
+)
+
+_WORD_TRANSLATIONS: dict[str, str] = {
+    "andra": "change",
+    "backa": "undo",
+    "baksida": "back",
+    "batteri": "battery",
+    "batterier": "batteries",
+    "behallare": "container",
+    "bit": "part",
+    "bord": "desk",
+    "bricka": "tray",
+    "bred": "wide",
+    "bredare": "wider",
+    "bredd": "width",
+    "del": "part",
+    "delar": "parts",
+    "djup": "depth",
+    "duplicera": "duplicate",
+    "dubbel": "dual",
+    "dubbla": "dual",
+    "extrudera": "extrude",
+    "farg": "color",
+    "fasa": "chamfer",
+    "faste": "mount",
+    "fasten": "mounts",
+    "fillet": "fillet",
+    "flytta": "move",
+    "forvaring": "storage",
+    "forsankt": "countersunk",
+    "fram": "front",
+    "framsida": "front",
+    "hall": "hole",
+    "hallare": "holder",
+    "hallaren": "holder",
+    "hal": "holes",
+    "halen": "holes",
+    "halet": "hole",
+    "hog": "high",
+    "hogre": "taller",
+    "hojd": "height",
+    "horlur": "headphone",
+    "horlurar": "headphones",
+    "hylla": "shelf",
+    "kabel": "cable",
+    "klamma": "clip",
+    "kopp": "cup",
+    "krok": "hook",
+    "laddare": "charger",
+    "laddning": "charging",
+    "lada": "box",
+    "linje": "line",
+    "lock": "lid",
+    "lang": "long",
+    "langre": "longer",
+    "material": "material",
+    "mobil": "phone",
+    "montering": "mounting",
+    "mugg": "mug",
+    "ny": "new",
+    "objekt": "object",
+    "plat": "plate",
+    "platta": "plate",
+    "plattan": "plate",
+    "radera": "delete",
+    "rektangel": "rectangle",
+    "rotera": "rotate",
+    "rund": "rounded",
+    "runda": "rounded",
+    "sida": "side",
+    "sidor": "sides",
+    "skala": "scale",
+    "skapa": "create",
+    "skruv": "screw",
+    "skruvar": "screws",
+    "skena": "rail",
+    "skenor": "rails",
+    "skal": "shell",
+    "skrivbord": "desk",
+    "sladd": "cable",
+    "snygg": "clean",
+    "stativ": "stand",
+    "stall": "stand",
+    "stallet": "stand",
+    "storre": "larger",
+    "starkare": "stronger",
+    "tjock": "thick",
+    "tjockare": "thicker",
+    "tjocklek": "thickness",
+    "tunnare": "thinner",
+    "utanfor": "outside",
+    "vagg": "wall",
+    "verktyg": "tool",
+}
+
+_STOP_WORDS = {
+    "a",
+    "add",
+    "an",
+    "and",
+    "att",
+    "av",
+    "build",
+    "bygg",
+    "cad",
+    "create",
+    "change",
+    "den",
+    "det",
+    "design",
+    "do",
+    "en",
+    "ett",
+    "for",
+    "fran",
+    "from",
+    "generate",
+    "generera",
+    "gor",
+    "i",
+    "it",
+    "make",
+    "med",
+    "min",
+    "mina",
+    "mitt",
+    "model",
+    "modell",
+    "modify",
+    "och",
+    "pa",
+    "print",
+    "rita",
+    "skriv",
+    "som",
+    "that",
+    "the",
+    "till",
+    "to",
+    "ut",
+    "with",
+}
+
+_SWEDISH_HINTS = {
+    "andra",
+    "att",
+    "av",
+    "batteri",
+    "batterier",
+    "bottenplatta",
+    "bygg",
+    "del",
+    "duplicera",
+    "den",
+    "det",
+    "en",
+    "ett",
+    "farg",
+    "faste",
+    "flytta",
+    "for",
+    "forsankt",
+    "fran",
+    "generera",
+    "gor",
+    "hallare",
+    "hal",
+    "hogre",
+    "hojd",
+    "horlur",
+    "kabel",
+    "laddare",
+    "lagg",
+    "med",
+    "mobil",
+    "montering",
+    "och",
+    "objekt",
+    "pa",
+    "radera",
+    "rita",
+    "rotera",
+    "runda",
+    "skruv",
+    "skrivbord",
+    "sladd",
+    "stall",
+    "ta",
+    "tjockare",
+    "till",
+    "utanfor",
+    "vagg",
+}
+
+
+def _repair_mojibake(value: str) -> str:
+    if "\u00c3" not in value and "\u00c2" not in value:
+        return value
+    try:
+        repaired = value.encode("latin1").decode("utf-8")
+    except UnicodeError:
+        return value
+    nordic_chars = ("\u00e5", "\u00e4", "\u00f6", "\u00c5", "\u00c4", "\u00d6")
+    return repaired if any(char in repaired for char in nordic_chars) else value
+
+
+def fold_prompt_text(prompt: str) -> str:
+    """Return lowercase ASCII-ish prompt text suitable for token matching."""
+    text = _repair_mojibake(str(prompt or ""))
+    text = re.sub(r"(?<=\d),(?=\d)", ".", text)
+    text = text.replace("&", " and ")
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9.]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _apply_phrase_translations(text: str) -> str:
+    translated = text
+    for pattern, replacement in _PHRASE_TRANSLATIONS:
+        translated = re.sub(pattern, replacement, translated)
+    translated = re.sub(r"\b(?:lagg\s+till|lagga\s+till)\b", "add", translated)
+    translated = re.sub(r"\b(?:ta\s+bort)\b", "remove", translated)
+    translated = re.sub(r"\s+", " ", translated).strip()
+    return translated
+
+
+def _dedupe_words(words: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for word in words:
+        if word not in seen:
+            seen.add(word)
+            result.append(word)
+    return result
+
+
+def normalize_source_query(prompt: str) -> str:
+    """Translate common Swedish CAD/model wording into an English search query."""
+    folded = fold_prompt_text(prompt)
+    if not folded:
+        return ""
+    translated_text = _apply_phrase_translations(folded)
+    words: list[str] = []
+    for token in _TOKEN_RE.findall(translated_text):
+        mapped = _WORD_TRANSLATIONS.get(token, token)
+        for word in mapped.split():
+            if len(word) <= 1 or word in _STOP_WORDS:
+                continue
+            words.append(word)
+    query = " ".join(_dedupe_words(words))
+    return query or folded
+
+
+def looks_swedish_prompt(prompt: str) -> bool:
+    folded = fold_prompt_text(prompt)
+    if not folded:
+        return False
+    if any(re.search(pattern, folded) for pattern, _replacement in _PHRASE_TRANSLATIONS):
+        return True
+    return bool(set(_TOKEN_RE.findall(folded)) & _SWEDISH_HINTS)
+
+
+def translated_query_action(prompt: str) -> str | None:
+    """Return a UI/debug action when a Swedish prompt is translated."""
+    if not looks_swedish_prompt(prompt):
+        return None
+    query = normalize_source_query(prompt)
+    if not query:
+        return None
+    return f'translated-query: "{query}"'

@@ -28,6 +28,7 @@ from backend.services.cad_engine import (
     shift_mesh_to_buildplate,
 )
 from backend.services.cad_kernel import make_battery_holder_body, make_box_body, make_cylinder_body
+from backend.services.prompt_translation import normalize_source_query, translated_query_action
 
 # ---------------------------------------------------------------------------
 # Internal types
@@ -50,6 +51,11 @@ def _now_iso() -> str:
 
 def _new_scene_token() -> str:
     return str(uuid.uuid4())
+
+
+def _prompt_match_text(prompt: str) -> str:
+    translated = normalize_source_query(prompt)
+    return f"{prompt or ''} {translated}".strip().lower()
 
 
 # ---------------------------------------------------------------------------
@@ -364,7 +370,7 @@ SOURCE_BATTERY_HOLDER_META: dict[str, Any] = {
 
 
 def _source_prompt_kind(prompt: str) -> str | None:
-    text = (prompt or "").strip().lower()
+    text = _prompt_match_text(prompt)
     if not text:
         return None
     battery_terms = ("battery", "batteri", "batteries")
@@ -385,6 +391,7 @@ def _source_prompt_kind(prompt: str) -> str | None:
 
 def _source_signal_summary(prompt: str) -> str:
     """Return a short source-search summary without making generation depend on it."""
+    translation = translated_query_action(prompt)
     try:
         from backend.services.design_providers import get_provider_registry
 
@@ -393,9 +400,11 @@ def _source_signal_summary(prompt: str) -> str:
         examples = []
 
     if not examples:
-        return "source-search: no live provider hits; used curated popular source model"
+        fallback = "source-search: no live provider hits; used curated popular source model"
+        return f"{translation}; {fallback}" if translation else fallback
     top = "; ".join(f"{ex.source}:{ex.title}" for ex in examples[:3])
-    return f"source-search: {top}"
+    summary = f"source-search: {top}"
+    return f"{translation}; {summary}" if translation else summary
 
 
 def _source_file_value(source_file: Any, key: str, default: Any = None) -> Any:
@@ -405,7 +414,7 @@ def _source_file_value(source_file: Any, key: str, default: Any = None) -> Any:
 
 
 def _source_file_score(source_file: Any, prompt: str, preferred_slots: int = 0) -> float:
-    text = (prompt or "").lower()
+    text = _prompt_match_text(prompt)
     prompt_words = {word for word in re.findall(r"[a-z0-9]+", text) if len(word) > 2}
     name = str(_source_file_value(source_file, "name", "") or "").lower()
     file_type = str(_source_file_value(source_file, "file_type", "") or "").lower()
@@ -447,7 +456,7 @@ def _source_file_score(source_file: Any, prompt: str, preferred_slots: int = 0) 
 
 def _source_title_score(title: str, prompt: str) -> float:
     stop_words = {"with", "and", "the", "for", "from", "that", "this", "into", "onto", "under", "over"}
-    core_words = [word for word in re.findall(r"[a-z0-9]+", (prompt or "").lower()) if len(word) > 2 and word not in stop_words]
+    core_words = [word for word in re.findall(r"[a-z0-9]+", _prompt_match_text(prompt)) if len(word) > 2 and word not in stop_words]
     if not core_words:
         return 0.0
     cleaned = " ".join(core_words)
@@ -654,7 +663,7 @@ def _source_file_component_score(source_file: dict[str, Any], prompt: str, prefe
 
     name = _source_file_name(source_file).lower()
     size = max(0, int(source_file.get("file_size") or 0))
-    prompt_words = {word for word in re.findall(r"[a-z0-9]+", (prompt or "").lower()) if len(word) > 2}
+    prompt_words = {word for word in re.findall(r"[a-z0-9]+", _prompt_match_text(prompt)) if len(word) > 2}
     name_words = {word for word in re.findall(r"[a-z0-9]+", name) if len(word) > 2}
     roles = _source_part_roles(source_file)
     score = 40.0 + len(roles) * 16.0
@@ -668,7 +677,7 @@ def _source_file_component_score(source_file: dict[str, Any], prompt: str, prefe
         score += 28.0
     if any(token in name for token in ("screw", "bolt", "nut", "washer", "spacer", "pin")):
         score -= 34.0
-    if "small" in name and "small" not in (prompt or "").lower():
+    if "small" in name and "small" not in _prompt_match_text(prompt):
         score -= 10.0
     return score
 
@@ -771,7 +780,7 @@ def _mesh_dimensions(mesh: TriMesh) -> dict[str, float]:
 
 
 def _prefer_flat_for_prompt(prompt: str) -> bool:
-    text = (prompt or "").lower()
+    text = _prompt_match_text(prompt)
     return any(word in text for word in ("battery", "batteri", "wall mount", "vägg", "vagg")) and any(
         word in text for word in ("holder", "mount", "hållare", "hallare")
     )
@@ -825,8 +834,9 @@ def _create_imported_source_object(
             "selected_file": (selected_source_file or {}).get("name"),
         }
     ]
+    prompt_text = _prompt_match_text(prompt)
     source_obj["color"] = _battery_brand_color(prompt) if any(
-        brand in (prompt or "").lower() for brand in ("dewalt", "makita", "milwaukee", "ryobi", "bosch")
+        brand in prompt_text for brand in ("dewalt", "makita", "milwaukee", "ryobi", "bosch")
     ) else "#a9aaad"
     return source_obj
 
@@ -856,9 +866,9 @@ def _create_imported_source_objects(
     group_id = _source_group_id()
     selected_files = [source_file for source_file, _shape in imported_parts]
     objects: list[CadObject] = []
+    prompt_text = _prompt_match_text(prompt)
     color = _battery_brand_color(prompt) if any(
-        brand in (prompt or "").lower()
-        for brand in ("dewalt", "makita", "milwaukee", "ryobi", "bosch")
+        brand in prompt_text for brand in ("dewalt", "makita", "milwaukee", "ryobi", "bosch")
     ) else "#a9aaad"
 
     for index, (source_file, mesh) in enumerate(imported_parts):
@@ -1202,7 +1212,7 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
 
 
 def _battery_brand(prompt: str) -> str:
-    text = (prompt or "").lower()
+    text = _prompt_match_text(prompt)
     for brand in ("dewalt", "makita", "milwaukee", "ryobi", "bosch"):
         if brand in text:
             return brand
@@ -1221,22 +1231,22 @@ def _battery_brand_color(prompt: str) -> str:
 
 
 def is_bottom_plate_prompt(prompt: str) -> bool:
-    text = (prompt or "").lower()
+    text = _prompt_match_text(prompt)
     plate_terms = ("bottom plate", "base plate", "bottenplatta", "botten platta")
-    relation_terms = ("outside", "around", "under", "below", "utanför", "runt", "under")
+    relation_terms = ("outside", "around", "under", "below", "utanför", "utanfor", "runt", "under")
     return any(term in text for term in plate_terms) and any(term in text for term in relation_terms)
 
 
 def _plate_margin_from_prompt(prompt: str) -> float:
-    text = (prompt or "").lower()
-    match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:outside|around|extra|larger|bigger|utanför|runt)", text)
+    text = _prompt_match_text(prompt)
+    match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:outside|around|extra|larger|bigger|utanför|utanfor|runt)", text)
     if not match:
-        match = re.search(r"(?:outside|around|extra|larger|bigger|utanför|runt)\D{0,12}(\d+(?:\.\d+)?)\s*mm", text)
+        match = re.search(r"(?:outside|around|extra|larger|bigger|utanför|utanfor|runt)\D{0,12}(\d+(?:\.\d+)?)\s*mm", text)
     return max(1.0, min(200.0, float(match.group(1)))) if match else 20.0
 
 
 def _plate_thickness_from_prompt(prompt: str) -> float:
-    text = (prompt or "").lower()
+    text = _prompt_match_text(prompt)
     match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:thick|thickness|tjock)", text)
     return max(1.0, min(30.0, float(match.group(1)))) if match else 4.0
 
@@ -1296,7 +1306,8 @@ def _recent_generation_context(session: Session) -> str:
             prompt = item.get("prompt") or item.get("command") or item.get("input")
             if prompt:
                 recent.append(str(prompt))
-    return " ".join(recent).lower()
+    joined = " ".join(recent)
+    return _prompt_match_text(joined)
 
 
 def _merge_rounded_box(
@@ -1570,9 +1581,10 @@ def _make_source_phone_stand_mesh(params: dict[str, float]) -> TriMesh:
 
 def replace_object_with_source_model(session: Session, obj: CadObject, prompt: str) -> list[str]:
     """Replace generated seed with a source-matched reconstructed CAD model."""
+    prompt_text = _prompt_match_text(prompt)
     kind = _source_prompt_kind(prompt)
     recent_context = _recent_generation_context(session)
-    if kind is None and "wall mount" in (prompt or "").lower() and any(word in recent_context for word in ("dewalt", "battery")):
+    if kind is None and "wall mount" in prompt_text and any(word in recent_context for word in ("dewalt", "battery")):
         kind = "dewalt_battery_holder"
 
     generic_actions, _source_obj = _try_replace_with_imported_source_model(
@@ -1847,7 +1859,7 @@ def replace_object_with_research_assembly(
             ])
     elif category == "device_stand":
         angle = max(50.0, min(78.0, float(params.get("angle", 68.0))))
-        if any(word in str(brief.get("prompt", "")).lower() for word in ("headset", "headphone")):
+        if any(word in _prompt_match_text(str(brief.get("prompt", ""))) for word in ("headset", "headphone")):
             column_width = max(24.0, thickness * 3.0)
             column_depth = max(18.0, thickness * 2.2)
             column_height = max(120.0, height * 0.78)
@@ -1908,7 +1920,7 @@ def replace_object_with_research_assembly(
             _create_cylinder_component("organic_body", radius, max(height * 0.72, 18.0), [0.0, 0.0, 0.0], params, color=color),
             _create_cylinder_component("organic_head", radius * 0.78, max(height * 0.36, 14.0), [0.0, 0.0, height * 0.68], params, color=color),
         ]
-        appendages = 8 if "octopus" in str(brief.get("prompt", "")).lower() else 4
+        appendages = 8 if "octopus" in _prompt_match_text(str(brief.get("prompt", ""))) else 4
         import math
 
         for idx in range(appendages):
@@ -1933,7 +1945,7 @@ def replace_object_with_research_assembly(
             _create_box_component("tool_alignment_rib", width * 0.72, wall, max(height * 0.8, wall), [0.0, 0.0, max(height, thickness)], params, color=color),
         ]
     elif category == "generic":
-        prompt_text = str(brief.get("prompt", "")).strip().lower()
+        prompt_text = _prompt_match_text(str(brief.get("prompt", "")))
         base_h = max(thickness, min(height * 0.22, 14.0))
         core_h = max(height - base_h, base_h)
         core_w = max(width * 0.62, min(width - wall * 2.0, width * 0.78))
