@@ -20,6 +20,21 @@ const QUICK_COMMANDS = [
   "Make it stronger",
 ];
 
+const SEARCH_FILTER_GROUPS = [
+  {
+    label: "Device",
+    filters: ["rotating", "vertical", "horizontal", "foldable", "minimal", "magsafe", "charging dock"],
+  },
+  {
+    label: "Mounting",
+    filters: ["wall mounted", "desk mount", "clamp mount", "Gridfinity", "Pegboard", "Magnetic"],
+  },
+  {
+    label: "Print",
+    filters: ["popular", "flat print", "no supports", "screw holes", "counterbore", "strong"],
+  },
+];
+
 function creationTitle(prompt: string) {
   const text = prompt.trim();
   if (!text) return "Untitled creation";
@@ -32,6 +47,7 @@ function creationTitle(prompt: string) {
 
 export default function AiPanel() {
   const [prompt, setPrompt] = useState("");
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState(AI_MODELS[0]);
   const { status, runPrompt, editHistory, objects, switchSourceModel } = useCadStore();
@@ -48,13 +64,28 @@ export default function AiPanel() {
     return Array.isArray(actions) ? actions.map(String).slice(0, 3) : [];
   }, [editHistory]);
 
-  const run = async (text: string) => {
+  const filteredPrompt = (text: string) => {
+    const cleaned = text.trim();
+    if (!activeFilters.length) return cleaned;
+    return `${cleaned}, ${activeFilters.join(", ")}`;
+  };
+
+  const toggleFilter = (filter: string) => {
+    setActiveFilters((current) =>
+      current.includes(filter)
+        ? current.filter((item) => item !== filter)
+        : [...current, filter],
+    );
+  };
+
+  const run = async (text: string, includeFilters = true) => {
     const cleaned = text.trim();
     if (!cleaned || isLoading) return;
+    const query = includeFilters ? filteredPrompt(cleaned) : cleaned;
     setIsLoading(true);
     setPrompt("");
     try {
-      await runPrompt(cleaned);
+      await runPrompt(query);
     } finally {
       setIsLoading(false);
     }
@@ -140,13 +171,57 @@ export default function AiPanel() {
         {QUICK_COMMANDS.map((cmd) => (
           <button
             key={cmd}
-            onClick={() => void run(cmd)}
+            onClick={() => void run(cmd, false)}
             disabled={isLoading}
             className="rounded-full border border-[#38383a] bg-[#242424] px-3 py-2 text-xs font-semibold text-white hover:border-[#555] hover:bg-[#2d2d2f] disabled:opacity-40"
           >
             {cmd}
           </button>
         ))}
+      </div>
+
+      <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#858585]">Search filters</div>
+          {activeFilters.length > 0 && (
+            <button
+              onClick={() => setActiveFilters([])}
+              className="text-[11px] font-semibold text-[#28c7df] hover:text-white"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <div className="space-y-2">
+          {SEARCH_FILTER_GROUPS.map((group) => (
+            <div key={group.label}>
+              <div className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[#68686b]">{group.label}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {group.filters.map((filter) => {
+                  const active = activeFilters.includes(filter);
+                  return (
+                    <button
+                      key={filter}
+                      onClick={() => toggleFilter(filter)}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                        active
+                          ? "border-[#28c7df] bg-[#123038] text-white"
+                          : "border-[#343436] bg-[#222] text-[#bdbdbd] hover:border-[#555] hover:text-white"
+                      }`}
+                    >
+                      {filter}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        {activeFilters.length > 0 && (
+          <p className="mt-3 truncate text-[11px] text-[#8f8f8f]">
+            Query adds: {activeFilters.join(", ")}
+          </p>
+        )}
       </div>
 
       <form

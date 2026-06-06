@@ -853,7 +853,6 @@ function AuthDialog({
 
 export default function LandingPage({ onStartBuilding }: { onStartBuilding: () => void }) {
   const [language, setLanguage] = useState<Language>("en");
-  const [authMode, setAuthMode] = useState<AuthMode>(null);
   const text = copy[language];
 
   const openPricing = () => {
@@ -886,18 +885,9 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                 </option>
               ))}
             </select>
-            <button
-              onClick={() => setAuthMode("login")}
-              className="hidden h-9 rounded-lg px-3 text-sm font-semibold text-[#d5d5d6] hover:bg-white/10 hover:text-white sm:block"
-            >
-              {text.nav.login}
-            </button>
-            <button
-              onClick={() => setAuthMode("signup")}
-              className="hidden h-9 rounded-lg border border-white/15 px-3 text-sm font-semibold text-white hover:border-[#2bb8dc] sm:block"
-            >
-              {text.nav.signup}
-            </button>
+            <span className="hidden rounded-lg border border-[#2bb8dc]/40 bg-[#123038] px-3 py-2 text-xs font-semibold text-[#b7f3ff] sm:block">
+              Testing mode
+            </span>
             <button
               onClick={onStartBuilding}
               className="h-9 rounded-lg bg-[#e8e8e8] px-4 text-sm font-semibold text-[#151515] hover:bg-white"
@@ -1012,12 +1002,12 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   ))}
                 </ul>
                 <button
-                  onClick={tier.featured ? () => setAuthMode("signup") : onStartBuilding}
+                  onClick={onStartBuilding}
                   className={`mt-7 h-11 w-full rounded-lg text-sm font-semibold ${
                     tier.featured ? "bg-[#2bb8dc] text-[#101010] hover:bg-[#69d9f5]" : "bg-[#2b2b2d] text-white hover:bg-[#353537]"
                   }`}
                 >
-                  {tier.featured ? text.nav.signup : text.nav.start}
+                  {text.nav.start}
                 </button>
               </article>
             ))}
@@ -1043,12 +1033,6 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
         Cadio AI CAD Workspace
       </footer>
 
-      <AuthDialog
-        mode={authMode}
-        text={text}
-        onClose={() => setAuthMode(null)}
-        onStartBuilding={onStartBuilding}
-      />
     </div>
   );
 }

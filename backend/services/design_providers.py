@@ -517,6 +517,15 @@ def _query_variants(query: str) -> list[str]:
         add("foldable phone stand 3d print")
         add("phone tablet stand flat fold")
         add("popular phone stand printable")
+        if "magsafe" in words or "charger" in words or "charging" in words:
+            add("magsafe phone charger stand")
+            add("iphone magsafe dock stand")
+        if "rotating" in words or "rotatable" in words:
+            add("rotating phone stand 3d print")
+        if "vertical" in words:
+            add("vertical phone stand printable")
+        if "horizontal" in words:
+            add("horizontal phone stand printable")
     if {"headset", "headphone", "headphones"} & words:
         add("headphone stand 3d print")
         add("headset holder printable")
@@ -524,6 +533,23 @@ def _query_variants(query: str) -> list[str]:
         add("electronics module bracket 3d print")
         add("cdi box holder bracket")
     if {"holder", "mount", "bracket", "rack"} & words:
+        object_words = [
+            word
+            for word in core_words
+            if word not in {"holder", "mount", "bracket", "rack", "wall", "mounted", "gridfinity", "pegboard", "magnetic"}
+        ]
+        object_phrase = " ".join(object_words) or normalized
+        if "gridfinity" in words:
+            add(f"gridfinity {object_phrase} holder")
+            add(f"{object_phrase} gridfinity bin")
+        if "pegboard" in words:
+            add(f"pegboard {object_phrase} holder")
+            add(f"{object_phrase} pegboard mount")
+        if "magnetic" in words:
+            add(f"magnetic {object_phrase} holder")
+        if "wall" in words or "mounted" in words:
+            add(f"wall mounted {object_phrase} holder")
+            add(f"{object_phrase} wall mount")
         add(f"{normalized} 3d print")
         add(f"{normalized} printable")
         add(f"popular {normalized} stl")

@@ -9,10 +9,12 @@ import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
 import LandingPage from "./components/LandingPage";
 import ScalePercentInput from "./components/ScalePercentInput";
+import ExportFlowDialog, { ExportFlowContent } from "./components/ExportFlow";
+import SavedModelsPanel from "./components/SavedModelsPanel";
+import ShareProjectDialog from "./components/ShareProjectDialog";
 import type { ExampleObject } from "./components/ExampleBrowser";
 import type { ExpertTool, MaterialProfile, SelectionMode, TransformMode } from "./utils/types";
-import { exportUrl } from "./utils/api";
-import { markCadioAuthenticated } from "./utils/auth";
+import { readProjectShareFromHash } from "./utils/projectShare";
 
 function promptFromHistory(item: Record<string, unknown> | undefined) {
   const value = item?.prompt ?? item?.command ?? item?.input;
@@ -57,13 +59,6 @@ const TRANSFORM_MODES: Array<{ id: TransformMode; label: string }> = [
   { id: "translate", label: "Move" },
   { id: "rotate", label: "Rotate" },
   { id: "scale", label: "Scale" },
-];
-
-const EXPORT_FORMATS = [
-  { value: "stl", label: "STL", hint: "Most slicers" },
-  { value: "3mf", label: "3MF", hint: "Modern slicers" },
-  { value: "obj", label: "OBJ", hint: "Mesh editors" },
-  { value: "amf", label: "AMF", hint: "Legacy printers" },
 ];
 
 const FALLBACK_MATERIAL_ENTRIES: Array<[string, MaterialProfile]> = [
@@ -142,9 +137,6 @@ function MobileExportSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const { sessionId, printSettings, objects } = useCadStore();
-  const [format, setFormat] = useState("stl");
-
   return (
     <>
       {open && (
@@ -162,39 +154,8 @@ function MobileExportSheet({
         <div className="flex justify-center pb-2 pt-3">
           <div className="h-1 w-10 rounded-full bg-cadio-border" />
         </div>
-        <div className="flex flex-col gap-4 px-5 pb-8">
-          <div>
-            <h3 className="text-sm font-semibold text-cadio-text">Export</h3>
-            <p className="mt-1 text-xs text-cadio-muted">
-              {objects.length || 0} parts
-              {printSettings ? `, ${printSettings.scale.recommended_scale_percent.toFixed(1)}% suggested scale` : ""}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {EXPORT_FORMATS.map((item) => (
-              <button
-                key={item.value}
-                onClick={() => setFormat(item.value)}
-                className={`rounded-xl border px-3 py-3 text-left ${
-                  format === item.value
-                    ? "border-cadio-accent bg-[#14323a] text-white"
-                    : "border-cadio-border bg-[#282829] text-cadio-text"
-                }`}
-              >
-                <span className="block text-sm font-semibold">{item.label}</span>
-                <span className="mt-1 block text-[11px] text-cadio-muted">{item.hint}</span>
-              </button>
-            ))}
-          </div>
-          <a
-            href={sessionId ? exportUrl(sessionId, format) : "#"}
-            download={sessionId ? `cadio-${sessionId}.${format}` : undefined}
-            className={`flex h-12 items-center justify-center rounded-xl text-sm font-semibold ${
-              sessionId ? "bg-[#e8e8e8] text-[#171717]" : "bg-[#333] text-[#777]"
-            }`}
-          >
-            Download {format.toUpperCase()}
-          </a>
+        <div className="px-5 pb-8">
+          <ExportFlowContent onClose={onClose} />
         </div>
       </div>
     </>
@@ -427,6 +388,7 @@ function WorkspaceApp() {
     selectAllObjects,
     onDeleteObject,
     snapSelectedObjects,
+    setPrinter,
     undo,
     redo,
     runPrompt,
@@ -435,6 +397,8 @@ function WorkspaceApp() {
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [showMeasurements, setShowMeasurements] = useState(false);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
@@ -444,6 +408,18 @@ function WorkspaceApp() {
   useEffect(() => {
     void loadPrinters();
   }, [loadPrinters]);
+
+  useEffect(() => {
+    const shared = readProjectShareFromHash();
+    if (!shared?.prompt) return;
+    const key = `cadio-share-loaded:${window.location.hash}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    if (shared.printer) {
+      void setPrinter(shared.printer);
+    }
+    void runPrompt(shared.prompt);
+  }, [runPrompt, setPrinter]);
 
   useWebSocket(sessionId || null, applyScenePayload);
 
@@ -649,6 +625,16 @@ function WorkspaceApp() {
               </div>
             </div>
           )}
+
+          <SavedModelsPanel
+            title={projectTitle}
+            prompt={latestPrompt}
+            sessionId={sessionId}
+            printer={printer}
+            objects={objects}
+            onOpenPrompt={(savedPrompt) => void runPrompt(savedPrompt)}
+          />
+
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mb-3 flex items-center gap-2 text-sm text-[#858585] [&>span:first-child]:hidden">
               <span className="text-lg">▦</span>
@@ -687,7 +673,10 @@ function WorkspaceApp() {
               <div className="truncate">{projectTitle}</div>
               <div className="text-[11px] text-[#858585]">{objects.length} parts</div>
             </div>
-            <button className="text-sm font-semibold hover:text-[#18a8ff]">Export</button>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setShareOpen(true)} className="text-sm font-semibold hover:text-[#18a8ff]">Share</button>
+              <button onClick={() => setExportOpen(true)} className="text-sm font-semibold hover:text-[#18a8ff]">Export</button>
+            </div>
           </header>
           <div className="min-h-0 overflow-y-auto px-4 pb-4">
             <AiPanel />
@@ -746,22 +735,28 @@ function WorkspaceApp() {
             <span className="block text-sm font-bold tracking-widest text-cadio-text">CADIO</span>
             <span className="block truncate text-[11px] text-cadio-muted">{projectTitle}</span>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 gap-1.5">
             <button
               onClick={() => setMobileExamplesOpen(true)}
-              className="px-3 py-1.5 rounded-lg bg-[#1a2535] text-cadio-accent text-xs font-semibold hover:bg-[#243048]"
+              className="px-2.5 py-1.5 rounded-lg bg-[#1a2535] text-cadio-accent text-xs font-semibold hover:bg-[#243048]"
             >
               Ideas
             </button>
             <button
+              onClick={() => setShareOpen(true)}
+              className="rounded-lg bg-[#2b2b2d] px-2.5 py-1.5 text-xs font-semibold text-cadio-text"
+            >
+              Share
+            </button>
+            <button
               onClick={() => setMobileExportOpen(true)}
-              className="rounded-lg bg-[#2b2b2d] px-3 py-1.5 text-xs font-semibold text-cadio-text"
+              className="rounded-lg bg-[#2b2b2d] px-2.5 py-1.5 text-xs font-semibold text-cadio-text"
             >
               Export
             </button>
             <button
               onClick={() => setMobileEditOpen(true)}
-              className="px-3 py-1.5 rounded-lg bg-cadio-accent text-[#081225] text-xs font-semibold"
+              className="px-2.5 py-1.5 rounded-lg bg-cadio-accent text-[#081225] text-xs font-semibold"
             >
               Edit
             </button>
@@ -859,6 +854,17 @@ function WorkspaceApp() {
       <MobileEditSheet
         open={mobileEditOpen}
         onClose={() => setMobileEditOpen(false)}
+      />
+
+      <ExportFlowDialog open={exportOpen} onClose={() => setExportOpen(false)} />
+      <ShareProjectDialog
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title={projectTitle}
+        prompt={latestPrompt}
+        printer={printer}
+        sessionId={sessionId}
+        objects={objects}
       />
     </div>
   );
@@ -958,23 +964,16 @@ function AuthRequiredDialog({
 }
 
 export default function App() {
-  const [showBuilder, setShowBuilder] = useState(() => window.location.hash === "#builder");
-  const [authRequiredOpen, setAuthRequiredOpen] = useState(false);
+  const [showBuilder, setShowBuilder] = useState(() => window.location.hash.startsWith("#builder"));
 
   useEffect(() => {
-    const syncFromHash = () => setShowBuilder(window.location.hash === "#builder");
+    const syncFromHash = () => setShowBuilder(window.location.hash.startsWith("#builder"));
     window.addEventListener("hashchange", syncFromHash);
     window.addEventListener("popstate", syncFromHash);
     return () => {
       window.removeEventListener("hashchange", syncFromHash);
       window.removeEventListener("popstate", syncFromHash);
     };
-  }, []);
-
-  useEffect(() => {
-    const openAuth = () => setAuthRequiredOpen(true);
-    window.addEventListener("cadio-auth-required", openAuth);
-    return () => window.removeEventListener("cadio-auth-required", openAuth);
   }, []);
 
   const startBuilding = () => {
@@ -987,14 +986,6 @@ export default function App() {
   return (
     <>
       {showBuilder ? <WorkspaceApp /> : <LandingPage onStartBuilding={startBuilding} />}
-      <AuthRequiredDialog
-        open={authRequiredOpen}
-        onClose={() => setAuthRequiredOpen(false)}
-        onAuthenticated={() => {
-          markCadioAuthenticated();
-          setAuthRequiredOpen(false);
-        }}
-      />
     </>
   );
 }
