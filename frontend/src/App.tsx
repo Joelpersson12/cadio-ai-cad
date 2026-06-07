@@ -9,13 +9,16 @@ import AiPanel from "./components/AiPanel";
 import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
 import LandingPage from "./components/LandingPage";
+import LegalPage from "./components/LegalPage";
 import ScalePercentInput from "./components/ScalePercentInput";
 import ExportFlowDialog, { ExportFlowContent } from "./components/ExportFlow";
 import SavedModelsPanel from "./components/SavedModelsPanel";
 import ShareProjectDialog from "./components/ShareProjectDialog";
+import SiteFooter from "./components/SiteFooter";
 import type { ExampleObject } from "./components/ExampleBrowser";
 import type { ExpertTool, MaterialProfile, SelectionMode, TransformMode } from "./utils/types";
 import { readProjectShareFromHash } from "./utils/projectShare";
+import { initAnalytics, trackPageView } from "./utils/analytics";
 
 function promptFromHistory(item: Record<string, unknown> | undefined) {
   const value = item?.prompt ?? item?.command ?? item?.input;
@@ -75,6 +78,61 @@ const FALLBACK_MATERIAL_ENTRIES: Array<[string, MaterialProfile]> = [
     },
   ],
 ];
+
+const FEEDBACK_MAILTO = "mailto:support@cadio.net?subject=Cadio%20Feedback";
+const DEFAULT_TITLE = "Cadio - AI CAD for 3D Printing";
+const DEFAULT_DESCRIPTION = "Search, remix, edit, and generate printable 3D models with AI.";
+const CANONICAL_DOMAIN = "https://cadio.net";
+
+type StaticPage = "terms" | "privacy" | "contact";
+
+function staticPageFromPath(pathname: string): StaticPage | null {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  if (path === "/terms") return "terms";
+  if (path === "/privacy") return "privacy";
+  if (path === "/contact") return "contact";
+  return null;
+}
+
+function setOrCreateMeta(selector: string, create: () => HTMLMetaElement | HTMLLinkElement, value: string) {
+  let element = document.head.querySelector(selector) as HTMLMetaElement | HTMLLinkElement | null;
+  if (!element) {
+    element = create();
+    document.head.appendChild(element);
+  }
+  if (element instanceof HTMLMetaElement) {
+    element.content = value;
+  } else {
+    element.href = value;
+  }
+}
+
+function updatePageMetadata(pathname: string, showBuilder: boolean) {
+  const page = staticPageFromPath(pathname);
+  const titleByPage: Record<StaticPage, string> = {
+    terms: "Terms of Service - Cadio",
+    privacy: "Privacy Policy - Cadio",
+    contact: "Contact Cadio",
+  };
+  const path = page ? pathname.replace(/\/+$/, "") : "/";
+  const canonical = `${CANONICAL_DOMAIN}${path === "/" ? "/" : path}`;
+  document.title = page ? titleByPage[page] : showBuilder ? "Cadio Workspace - AI CAD for 3D Printing" : DEFAULT_TITLE;
+  setOrCreateMeta("meta[name='description']", () => {
+    const meta = document.createElement("meta");
+    meta.name = "description";
+    return meta;
+  }, DEFAULT_DESCRIPTION);
+  setOrCreateMeta("link[rel='canonical']", () => {
+    const link = document.createElement("link");
+    link.rel = "canonical";
+    return link;
+  }, canonical);
+  setOrCreateMeta("meta[property='og:url']", () => {
+    const meta = document.createElement("meta");
+    meta.setAttribute("property", "og:url");
+    return meta;
+  }, canonical);
+}
 
 // Mobile examples sheet for inspiration
 function MobileExamplesSheet({
@@ -762,6 +820,9 @@ function WorkspaceApp() {
               <button onClick={() => void onDeleteObject()} disabled={!selectedObjectId} className="w-full rounded-lg bg-[#2a2a2c] px-2 py-2 text-xs font-semibold text-[#ff8b8b] hover:bg-[#343436] disabled:opacity-35">Delete selected</button>
             </div>
           </div>
+          <div className="mt-4">
+            <SiteFooter compact />
+          </div>
             </>
           ) : (
             <div className="flex h-full flex-col items-center gap-3">
@@ -807,6 +868,7 @@ function WorkspaceApp() {
               <div className="text-[11px] text-[#858585]">{objects.length} parts</div>
             </div>
             <div className="flex items-center gap-3">
+              <a href={FEEDBACK_MAILTO} className="text-sm font-semibold text-[#bdbdbd] hover:text-[#18a8ff]">Feedback</a>
               <button onClick={() => setShareOpen(true)} className="text-sm font-semibold hover:text-[#18a8ff]">Share</button>
               <button onClick={() => setExportOpen(true)} className="text-sm font-semibold hover:text-[#18a8ff]">Export</button>
             </div>
@@ -1009,6 +1071,12 @@ function WorkspaceApp() {
         </div>
 
         <MobileModelVariantBar />
+        <a
+          href={FEEDBACK_MAILTO}
+          className="fixed bottom-[5.8rem] right-3 z-30 rounded-full border border-[#28c7df]/40 bg-[#151515]/90 px-3 py-2 text-xs font-semibold text-[#c9f7ff] shadow-xl backdrop-blur md:hidden"
+        >
+          Feedback
+        </a>
 
         {/* Bottom AI input bar */}
         <div className="border-t border-cadio-border bg-cadio-panel/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur-sm">
@@ -1152,23 +1220,43 @@ function AuthRequiredDialog({
 
 export default function App() {
   const [showBuilder, setShowBuilder] = useState(() => window.location.hash.startsWith("#builder"));
+  const [pathname, setPathname] = useState(() => window.location.pathname);
 
   useEffect(() => {
-    const syncFromHash = () => setShowBuilder(window.location.hash.startsWith("#builder"));
+    initAnalytics();
+  }, []);
+
+  useEffect(() => {
+    const syncLocation = () => {
+      setShowBuilder(window.location.hash.startsWith("#builder"));
+      setPathname(window.location.pathname);
+    };
+    const syncFromHash = syncLocation;
     window.addEventListener("hashchange", syncFromHash);
-    window.addEventListener("popstate", syncFromHash);
+    window.addEventListener("popstate", syncLocation);
     return () => {
       window.removeEventListener("hashchange", syncFromHash);
-      window.removeEventListener("popstate", syncFromHash);
+      window.removeEventListener("popstate", syncLocation);
     };
   }, []);
 
+  useEffect(() => {
+    updatePageMetadata(pathname, showBuilder);
+    trackPageView(window.location.pathname + window.location.hash);
+  }, [pathname, showBuilder]);
+
   const startBuilding = () => {
-    if (window.location.hash !== "#builder") {
-      window.history.pushState(null, "", "#builder");
+    if (window.location.pathname !== "/" || window.location.hash !== "#builder") {
+      window.history.pushState(null, "", "/#builder");
     }
+    setPathname("/");
     setShowBuilder(true);
   };
+
+  const staticPage = staticPageFromPath(pathname);
+  if (staticPage && !showBuilder) {
+    return <LegalPage page={staticPage} onStartBuilding={startBuilding} />;
+  }
 
   return (
     <>

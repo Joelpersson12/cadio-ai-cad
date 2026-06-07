@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import makitaBatteryStlUrl from "../assets/makita-battery.stl?url";
 import { loginCadioAccount } from "../utils/auth";
+import SiteFooter from "./SiteFooter";
 
 type Language = "en" | "sv" | "es" | "fr" | "it" | "de" | "pt";
 type AuthMode = "login" | "signup" | null;
@@ -1066,9 +1067,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
         </section>
       </main>
 
-      <footer className="border-t border-white/10 px-4 py-8 text-center text-xs text-[#8f8f92]">
-        Cadio AI CAD Workspace
-      </footer>
+      <SiteFooter />
 
     </div>
   );
