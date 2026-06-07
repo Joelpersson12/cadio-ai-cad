@@ -2688,6 +2688,11 @@ def rebuild_manual_object(obj: CadObject) -> None:
         fillet = max(0.0, float(params.get("fillet_radius", 0.0)))
         chamfer = max(0.0, float(params.get("chamfer_size", 0.0)))
         shell = bool(float(params.get("shell_enabled", 0.0)))
+        edge_target = str(obj.get("edge_operation_target", "all"))
+        edge_operations = [
+            item for item in obj.get("operation_history", [])
+            if item.get("operation") in {"fillet", "chamfer"} and str(item.get("target", "")).startswith("edge:")
+        ] if edge_target.startswith("edge:") else []
         kernel_shape = make_box_body(
             width,
             depth,
@@ -2696,6 +2701,8 @@ def rebuild_manual_object(obj: CadObject) -> None:
             chamfer=chamfer,
             shell_wall=max(0.0, float(params.get("wall_thickness", 0.0))) if shell else 0.0,
             params=params,
+            edge_target=edge_target,
+            edge_operations=edge_operations,
         )
         if kernel_shape:
             obj["shape"] = kernel_shape
@@ -2712,6 +2719,8 @@ def rebuild_manual_object(obj: CadObject) -> None:
             obj["shape"] = make_rounded_box(width, depth, height, chamfer, segments=1)
         else:
             obj["shape"] = _make_box_with_rect_holes(width, depth, height, params)
+        if not kernel_shape and _hole_specs(params):
+            obj["shape"] = _apply_mesh_hole_cuts(obj["shape"], params)
 
     if primitive not in {"text_label", "imported_source_mesh"}:
         obj["shape"] = _apply_mesh_rect_cutouts(obj["shape"], params)
@@ -3498,12 +3507,14 @@ def apply_expert_operation(
     if op == "fillet":
         params["fillet_radius"] = amt
         params["chamfer_size"] = 0.0
+        obj["edge_operation_target"] = target if target.startswith("edge:") else "all"
         _set_feature_enabled(features, "fillet_edges", True)
         _set_feature_enabled(features, "chamfer_edges", False)
         actions.append(f"fillet {target} radius {amt}mm")
     elif op == "chamfer":
         params["chamfer_size"] = amt
         params["fillet_radius"] = 0.0
+        obj["edge_operation_target"] = target if target.startswith("edge:") else "all"
         _set_feature_enabled(features, "chamfer_edges", True)
         _set_feature_enabled(features, "fillet_edges", False)
         actions.append(f"chamfer {target} size {amt}mm")

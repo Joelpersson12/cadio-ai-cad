@@ -9,6 +9,11 @@ export interface CadioAccount {
   email?: string;
   phone?: string;
   accountId: string;
+  plan?: string;
+  downloadsUsed?: number;
+  downloadLimit?: number;
+  downloadsRemaining?: number | null;
+  canDownload?: boolean;
 }
 
 function normalizeAccountId(email?: string, phone?: string) {
@@ -26,6 +31,11 @@ function storeAccount(account: Partial<CadioAccount>, token?: string) {
       email: account.email || "",
       phone: account.phone || "",
       accountId,
+      plan: account.plan || "free",
+      downloadsUsed: account.downloadsUsed ?? 0,
+      downloadLimit: account.downloadLimit ?? 1,
+      downloadsRemaining: account.downloadsRemaining ?? 1,
+      canDownload: account.canDownload ?? true,
     }));
   }
   if (token) {
@@ -52,6 +62,11 @@ export function getCadioAccount(): CadioAccount | null {
       email: parsed.email || "",
       phone: parsed.phone || "",
       accountId,
+      plan: parsed.plan || "free",
+      downloadsUsed: parsed.downloadsUsed ?? 0,
+      downloadLimit: parsed.downloadLimit ?? 1,
+      downloadsRemaining: parsed.downloadsRemaining ?? 1,
+      canDownload: parsed.canDownload ?? true,
     };
   } catch {
     return null;
@@ -67,6 +82,11 @@ export async function loginCadioAccount(payload: AuthPayload): Promise<AccountPr
   const result = await authLogin(payload);
   storeAccount(result.account, result.token);
   return result.account;
+}
+
+export function updateCadioAccount(account: AccountProfile) {
+  if (typeof window === "undefined") return;
+  storeAccount(account);
 }
 
 export function markCadioAuthenticated(account?: { name?: string; email?: string; phone?: string }) {

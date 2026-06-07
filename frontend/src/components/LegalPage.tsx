@@ -1,3 +1,4 @@
+import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
 
 type LegalPageKind = "terms" | "privacy" | "contact";
@@ -117,8 +118,7 @@ export default function LegalPage({
       <header className="border-b border-white/10 bg-[#151515]/95">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
           <a href="/" className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-[#28c7df] text-base font-black text-[#101010]">C</span>
-            <span className="text-sm font-black uppercase tracking-[0.24em]">Cadio</span>
+            <CadioLogo subtitle="" />
           </a>
           <button
             onClick={onStartBuilding}

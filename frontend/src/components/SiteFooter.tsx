@@ -14,7 +14,7 @@ export default function SiteFooter({ compact = false }: { compact?: boolean }) {
       }
     >
       <div className={compact ? "flex flex-col gap-2" : "mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 sm:flex-row"}>
-        <span>© 2026 Cadio</span>
+        <span>&copy; 2026 Cadio</span>
         <nav className={compact ? "flex flex-wrap gap-3" : "flex flex-wrap justify-center gap-5"}>
           {legalLinks.map((link) => (
             <a key={link.href} href={link.href} className="hover:text-white">

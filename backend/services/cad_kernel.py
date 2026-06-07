@@ -117,12 +117,26 @@ def make_box_body(
     chamfer: float = 0.0,
     shell_wall: float = 0.0,
     params: dict[str, float] | None = None,
+    edge_target: str = "all",
+    edge_operations: list[dict[str, Any]] | None = None,
 ) -> TriMesh | None:
     """Create a true CAD box with optional shell/fillet/chamfer."""
     if not CADQUERY_AVAILABLE:
         return None
 
     try:
+        def edge_selection(target: str):
+            normalized = (target or "all").lower()
+            if "hole" in normalized:
+                return body.edges("%CIRCLE")
+            if "top" in normalized:
+                return body.faces(">Z").edges()
+            if "bottom" in normalized or "under" in normalized:
+                return body.faces("<Z").edges()
+            if "side" in normalized:
+                return body.faces("|Z").edges()
+            return body.edges()
+
         body = cq.Workplane("XY").box(width, depth, height, centered=(True, True, False))
         body = _cut_vertical_holes(body, params or {}, height)
 
@@ -130,12 +144,29 @@ def make_box_body(
             wall = max(0.5, min(shell_wall, width / 3.0, depth / 3.0, height / 2.0))
             body = body.faces(">Z").shell(-wall)
 
-        if fillet > 0:
+        applied_edge_history = False
+        for item in edge_operations or []:
+            op = str(item.get("operation", "")).lower()
+            target = str(item.get("target", edge_target or "all"))
+            amount = max(0.0, float(item.get("amount", 0.0)))
+            if amount <= 0 or op not in {"fillet", "chamfer"}:
+                continue
+            try:
+                size = max(0.1, min(amount, width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1))
+                if op == "fillet":
+                    body = edge_selection(target).fillet(size)
+                else:
+                    body = edge_selection(target).chamfer(size)
+                applied_edge_history = True
+            except Exception:
+                continue
+
+        if not applied_edge_history and fillet > 0:
             radius = max(0.1, min(fillet, width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1))
-            body = body.edges().fillet(radius)
-        elif chamfer > 0:
+            body = edge_selection(edge_target).fillet(radius)
+        elif not applied_edge_history and chamfer > 0:
             size = max(0.1, min(chamfer, width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1))
-            body = body.edges().chamfer(size)
+            body = edge_selection(edge_target).chamfer(size)
 
         return to_trimesh(body)
     except Exception:

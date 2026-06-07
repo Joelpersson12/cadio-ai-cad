@@ -94,6 +94,11 @@ export interface AccountProfile {
   name?: string;
   email?: string;
   phone?: string;
+  plan?: string;
+  downloadsUsed?: number;
+  downloadLimit?: number;
+  downloadsRemaining?: number | null;
+  canDownload?: boolean;
 }
 
 export async function authLogin(payload: AuthPayload): Promise<{
@@ -104,6 +109,16 @@ export async function authLogin(payload: AuthPayload): Promise<{
   return request("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function getAccountProfile(token: string): Promise<{
+  status: string;
+  account: AccountProfile;
+}> {
+  return request("/api/account/me", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 
@@ -289,6 +304,60 @@ export async function redo(payload: { session_id: string }): Promise<ScenePayloa
 
 export function exportUrl(sessionId: string, format: string): string {
   return `${API_BASE}/api/export/${sessionId}/${format}`;
+}
+
+function filenameFromDisposition(value: string | null, fallback: string) {
+  if (!value) return fallback;
+  const match = value.match(/filename="?([^";]+)"?/i);
+  return match?.[1] || fallback;
+}
+
+async function downloadFromBase(
+  base: string,
+  sessionId: string,
+  format: string,
+  token: string,
+): Promise<void> {
+  const res = await fetch(`${base}/api/export/${sessionId}/${format}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const data = await res.json();
+      throw new Error(data.message || "Download failed");
+    }
+    throw new Error((await res.text()) || "Download failed");
+  }
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filenameFromDisposition(
+    res.headers.get("content-disposition"),
+    `cadio-${sessionId}.${format}`,
+  );
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+export async function downloadExport(
+  sessionId: string,
+  format: string,
+  token: string,
+): Promise<void> {
+  let lastError: unknown = null;
+  for (const base of API_FALLBACKS) {
+    try {
+      await downloadFromBase(base, sessionId, format, token);
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Download failed");
 }
 
 export { API_BASE };

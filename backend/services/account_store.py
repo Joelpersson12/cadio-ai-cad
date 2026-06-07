@@ -19,6 +19,7 @@ from typing import Any
 DB_ENV = "CADIO_ACCOUNT_DB"
 DATA_DIR_ENV = "CADIO_DATA_DIR"
 MAX_LIBRARY_BYTES = 350_000
+FREE_DOWNLOAD_LIMIT = 1
 
 
 def _now() -> str:
@@ -54,11 +55,17 @@ def _init(conn: sqlite3.Connection) -> None:
             email TEXT NOT NULL DEFAULT '',
             phone TEXT NOT NULL DEFAULT '',
             password_hash TEXT NOT NULL,
+            plan TEXT NOT NULL DEFAULT 'free',
+            downloads_used INTEGER NOT NULL DEFAULT 0,
+            download_limit INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
         """
     )
+    _ensure_column(conn, "accounts", "plan", "TEXT NOT NULL DEFAULT 'free'")
+    _ensure_column(conn, "accounts", "downloads_used", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "accounts", "download_limit", "INTEGER NOT NULL DEFAULT 1")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -81,6 +88,17 @@ def _init(conn: sqlite3.Connection) -> None:
         """
     )
     conn.commit()
+
+
+def _ensure_column(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def _clean_email(value: str | None) -> str:
@@ -135,12 +153,24 @@ def _verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(actual, expected)
 
 
-def _account_from_row(row: sqlite3.Row) -> dict[str, str]:
+def _row_value(row: sqlite3.Row, key: str, fallback: Any) -> Any:
+    return row[key] if key in row.keys() and row[key] is not None else fallback
+
+
+def _account_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    downloads_used = max(0, int(_row_value(row, "downloads_used", 0)))
+    download_limit = int(_row_value(row, "download_limit", FREE_DOWNLOAD_LIMIT))
+    downloads_remaining = None if download_limit < 0 else max(0, download_limit - downloads_used)
     return {
         "accountId": row["id"],
         "name": row["name"],
         "email": row["email"],
         "phone": row["phone"],
+        "plan": _row_value(row, "plan", "free"),
+        "downloadsUsed": downloads_used,
+        "downloadLimit": download_limit,
+        "downloadsRemaining": downloads_remaining,
+        "canDownload": download_limit < 0 or downloads_used < download_limit,
     }
 
 
@@ -208,8 +238,12 @@ def login_or_create_account(
             password_hash = _hash_password(password_value)
             conn.execute(
                 """
-                INSERT INTO accounts (id, name, email, phone, password_hash, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO accounts (
+                    id, name, email, phone, password_hash,
+                    plan, downloads_used, download_limit,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     account_id,
@@ -217,6 +251,9 @@ def login_or_create_account(
                     clean_email,
                     clean_phone,
                     password_hash,
+                    "free",
+                    0,
+                    FREE_DOWNLOAD_LIMIT,
                     now,
                     now,
                 ),
@@ -226,6 +263,11 @@ def login_or_create_account(
                 "name": (name or "").strip(),
                 "email": clean_email,
                 "phone": clean_phone,
+                "plan": "free",
+                "downloadsUsed": 0,
+                "downloadLimit": FREE_DOWNLOAD_LIMIT,
+                "downloadsRemaining": FREE_DOWNLOAD_LIMIT,
+                "canDownload": True,
             }
         conn.execute(
             """
@@ -238,7 +280,7 @@ def login_or_create_account(
     return {"token": token, "account": account}
 
 
-def account_from_token(token: str | None) -> dict[str, str] | None:
+def account_from_token(token: str | None) -> dict[str, Any] | None:
     if not token:
         return None
     now = _now()
@@ -260,6 +302,55 @@ def account_from_token(token: str | None) -> dict[str, str] | None:
         )
         conn.commit()
         return _account_from_row(row)
+
+
+def get_account_profile(token: str | None) -> dict[str, Any]:
+    account = account_from_token(token)
+    if account is None:
+        raise PermissionError("Login required")
+    return account
+
+
+def consume_download(token: str | None) -> dict[str, Any]:
+    if not token:
+        raise PermissionError("Login required to download")
+    now = _now()
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT accounts.*
+            FROM sessions
+            JOIN accounts ON accounts.id = sessions.account_id
+            WHERE sessions.token = ?
+            """,
+            (token,),
+        ).fetchone()
+        if row is None:
+            raise PermissionError("Login required to download")
+        account = _account_from_row(row)
+        if not account["canDownload"]:
+            raise ValueError(
+                "The free download for this account has already been used. Upgrade a plan to download more files."
+            )
+        if account["downloadLimit"] >= 0:
+            conn.execute(
+                """
+                UPDATE accounts
+                SET downloads_used = downloads_used + 1, updated_at = ?
+                WHERE id = ?
+                """,
+                (now, account["accountId"]),
+            )
+        conn.execute(
+            "UPDATE sessions SET last_seen = ? WHERE token = ?",
+            (now, token),
+        )
+        updated = conn.execute(
+            "SELECT * FROM accounts WHERE id = ?",
+            (account["accountId"],),
+        ).fetchone()
+        conn.commit()
+    return _account_from_row(updated)
 
 
 def load_saved_library(token: str) -> dict[str, Any]:

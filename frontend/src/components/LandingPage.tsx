@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import makitaBatteryStlUrl from "../assets/makita-battery.stl?url";
 import { loginCadioAccount } from "../utils/auth";
+import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
 
 type Language = "en" | "sv" | "es" | "fr" | "it" | "de" | "pt";
@@ -35,15 +36,15 @@ const copy = {
       eyebrow: "AI CAD for real 3D printing",
       title: "Describe the model. Edit like CAD. Print with the right profile.",
       body:
-        "Cadio combines AI search, parametric models, and a clean CAD workspace for makers, workshops, and product ideas.",
+        "Cadio helps you find printable model ideas, turn prompts into editable CAD geometry, and prepare exports with printer-aware settings.",
       prompt: heroPrompt,
       primary: "Start building",
       secondary: "See pricing",
     },
     stats: [
-      ["Source aware", "Uses signals from Printables and popular 3D model sources"],
-      ["Easy + Expert", "Fast AI edits or manual CAD control"],
-      ["Print ready", "Printer, material, scale, and export formats in one flow"],
+      ["Source aware", "Looks for proven printable patterns before it builds"],
+      ["Easy + Expert", "AI-guided edits for quick work, manual CAD tools when you need control"],
+      ["Print ready", "Printer, material, scaling, and export formats in one flow"],
     ],
     product: {
       title: "A CAD builder for every level",
@@ -51,9 +52,9 @@ const copy = {
         "Easy mode helps you describe what you want. Expert mode gives you control over sketches, parts, transforms, edges, and CAD operations.",
     },
     cards: [
-      ["AI model search", "Type what you want to build and Cadio creates a model from popular printable design signals."],
-      ["Manual CAD", "Draw, select parts, move, rotate, and refine the model when you want direct control."],
-      ["Printer profiles", "Choose printer, material, and export format before the model reaches your slicer."],
+      ["AI model search", "Type what you want to build. Cadio searches for source signals and creates a printable starting point."],
+      ["Manual CAD", "Draw, select parts, move, rotate, measure, and refine the model when you want direct control."],
+      ["Printer profiles", "Choose printer, material, scaling, and export format before the model reaches your slicer."],
     ],
     workflow: {
       title: "From idea to STL without switching tools",
@@ -73,7 +74,7 @@ const copy = {
         note: "1 downloadable generation",
         features: [
           "1 generation that can be downloaded",
-          "Downloads unlocked during testing",
+          "Login required before download",
           "Same Easy and Expert CAD",
           "Same model quality as paid plans",
         ],
@@ -86,7 +87,7 @@ const copy = {
           "10 downloadable generations/month",
           "Same CAD tools as every plan",
           "All printers, materials, and export formats",
-          "Downloads unlocked during testing",
+          "Upgrade checkout coming soon",
         ],
         featured: true,
       },
@@ -98,7 +99,7 @@ const copy = {
           "Unlimited downloadable generations",
           "Same CAD experience as every plan",
           "All printers, materials, and export formats",
-          "Downloads unlocked during testing",
+          "Upgrade checkout coming soon",
         ],
       },
     ],
@@ -109,7 +110,7 @@ const copy = {
       password: "Password",
       name: "Name",
       continue: "Continue to workspace",
-      hint: "Saved models are private to the email or phone account you use here.",
+      hint: "Saved models and download usage are private to the email account you use here.",
     },
     cta: {
       title: "Ready to build?",
@@ -130,15 +131,15 @@ const copy = {
       eyebrow: "AI CAD for verkliga 3D-utskrifter",
       title: "Beskriv modellen. Justera som i CAD. Skriv ut med ratt profil.",
       body:
-        "Cadio kombinerar AI-sokning, parametriska modeller och en ren CAD-arbetsyta for makers, verkstader och produktideer.",
+        "Cadio hjalper dig hitta printbara modellideer, skapa redigerbar CAD-geometri fran prompts och exportera med skrivarens installningar i tanken.",
       prompt: heroPrompt,
       primary: "Start building",
       secondary: "Se priser",
     },
     stats: [
-      ["Source aware", "Hamtar inspiration fran Printables och populara 3D-kallor"],
-      ["Easy + Expert", "Snabba AI-andringar eller manuell CAD-kontroll"],
-      ["Print ready", "Printer, material, scale och exportformat i samma flode"],
+      ["Source aware", "Letar efter beprovade printbara monster innan modellen byggs"],
+      ["Easy + Expert", "AI-styrda snabbandringar eller manuella CAD-verktyg nar du vill styra sjalv"],
+      ["Print ready", "Skrivare, material, scale och exportformat i samma flode"],
     ],
     product: {
       title: "En CAD-byggare for alla nivaer",
@@ -146,9 +147,9 @@ const copy = {
         "Easy mode hjalper dig beskriva vad du vill skapa. Expert mode ger dig kontroll over skisser, delar, transform, kanter och CAD-operationer.",
     },
     cards: [
-      ["AI model search", "Skriv vad du vill bygga och Cadio skapar en modell med signaler fran populara utskriftsmodeller."],
-      ["Manual CAD", "Rita, markera delar, flytta, rotera och forfina modellen nar du vill ta over sjalv."],
-      ["Printer profiles", "Valj skrivare, material och exportformat sa modellen ar anpassad innan slicern."],
+      ["AI model search", "Skriv vad du vill bygga. Cadio soker efter kall-signaler och skapar en printbar startpunkt."],
+      ["Manual CAD", "Rita, markera delar, flytta, rotera, mata och forfina modellen nar du vill ta over sjalv."],
+      ["Printer profiles", "Valj skrivare, material, scale och exportformat innan modellen hamnar i slicern."],
     ],
     workflow: {
       title: "Fran ide till STL utan att byta verktyg",
@@ -204,7 +205,7 @@ const copy = {
       password: "Losenord",
       name: "Namn",
       continue: "Fortsatt till workspace",
-      hint: "Sparade modeller ar privata for den e-post eller telefon du anvander har.",
+      hint: "Sparade modeller och nedladdningar ar privata for e-postkontot du anvander har.",
     },
     cta: {
       title: "Redo att bygga?",
@@ -299,7 +300,7 @@ const copy = {
       password: "Contrasena",
       name: "Nombre",
       continue: "Continuar al workspace",
-      hint: "Los modelos guardados son privados para el email o telefono que uses aqui.",
+      hint: "Los modelos guardados y las descargas son privados para el email que uses aqui.",
     },
     cta: {
       title: "Listo para construir?",
@@ -394,7 +395,7 @@ const copy = {
       password: "Mot de passe",
       name: "Nom",
       continue: "Continuer vers le workspace",
-      hint: "Les modeles enregistres restent prives pour l'email ou le telephone utilise ici.",
+      hint: "Les modeles enregistres et les telechargements restent prives pour l'email utilise ici.",
     },
     cta: {
       title: "Pret a construire?",
@@ -489,7 +490,7 @@ const copy = {
       password: "Password",
       name: "Nome",
       continue: "Continua al workspace",
-      hint: "I modelli salvati sono privati per l'email o telefono usato qui.",
+      hint: "I modelli salvati e i download sono privati per l'email usata qui.",
     },
     cta: {
       title: "Pronto a costruire?",
@@ -584,7 +585,7 @@ const copy = {
       password: "Passwort",
       name: "Name",
       continue: "Weiter zum Workspace",
-      hint: "Gespeicherte Modelle sind privat fur die hier genutzte E-Mail oder Telefonnummer.",
+      hint: "Gespeicherte Modelle und Downloads sind privat fur die hier genutzte E-Mail.",
     },
     cta: {
       title: "Bereit zu bauen?",
@@ -679,13 +680,40 @@ const copy = {
       password: "Senha",
       name: "Nome",
       continue: "Continuar para o workspace",
-      hint: "Modelos salvos ficam privados para o email ou telefone usado aqui.",
+      hint: "Modelos salvos e downloads ficam privados para o email usado aqui.",
     },
     cta: {
       title: "Pronto para construir?",
       body: "Abra o workspace Cadio e crie o primeiro modelo diretamente.",
       button: "Start building",
     },
+  },
+};
+
+const practicalDetails: Partial<Record<Language, {
+  title: string;
+  body: string;
+  items: Array<[string, string]>;
+}>> = {
+  en: {
+    title: "Made for the messy middle between idea and slicer",
+    body:
+      "Most print projects need more than a generated shape. Cadio keeps model variants, measurements, print settings, and manual edits close together so you can make a part feel usable before exporting it.",
+    items: [
+      ["Variant control", "Move between model options when the first result is not the right one."],
+      ["Real dimensions", "Check bounds and scale before the file reaches your printer profile."],
+      ["Editable workflow", "Start with AI, then adjust details by hand when precision matters."],
+    ],
+  },
+  sv: {
+    title: "Byggd for mellanlaget mellan ide och slicer",
+    body:
+      "De flesta printprojekt behover mer an en genererad form. Cadio haller modellvarianter, matt, printinstallningar och manuella andringar nara varandra sa modellen kanns anvandbar innan export.",
+    items: [
+      ["Variantkontroll", "Byt modellforslag nar forsta resultatet inte passar."],
+      ["Verkliga matt", "Kontrollera bounds och scale innan filen hamnar i skrivarprofilen."],
+      ["Redigerbart flode", "Borja med AI och finjustera sedan for hand nar precision spelar roll."],
+    ],
   },
 };
 
@@ -828,7 +856,6 @@ function AuthDialog({
               await loginCadioAccount({
                 name: String(form.get("name") || ""),
                 email: String(form.get("email") || ""),
-                phone: String(form.get("phone") || ""),
                 password: String(form.get("password") || ""),
               });
               onStartBuilding();
@@ -850,14 +877,7 @@ function AuthDialog({
             <input
               name="email"
               type="email"
-              className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]"
-            />
-          </label>
-          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#8f8f92]">
-            Tel
-            <input
-              name="phone"
-              type="tel"
+              required
               className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]"
             />
           </label>
@@ -891,7 +911,9 @@ function AuthDialog({
 
 export default function LandingPage({ onStartBuilding }: { onStartBuilding: () => void }) {
   const [language, setLanguage] = useState<Language>("en");
+  const [betaOpen, setBetaOpen] = useState(false);
   const text = copy[language];
+  const details = practicalDetails[language] ?? practicalDetails.en!;
 
   const openPricing = () => {
     document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -901,10 +923,10 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
     <div className="h-full overflow-y-auto bg-[#151515] text-white">
       <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-[#151515]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <button onClick={onStartBuilding} className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-[#28c7df] text-base font-black text-[#101010]">C</span>
-            <span className="text-sm font-black uppercase tracking-[0.24em]">Cadio</span>
-          </button>
+          <CadioLogo
+            subtitle=""
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          />
           <nav className="hidden items-center gap-7 text-sm text-[#c2c2c4] md:flex">
             <a href="#product" className="hover:text-white">{text.nav.product}</a>
             <a href="#workflow" className="hover:text-white">{text.nav.workflow}</a>
@@ -923,9 +945,13 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                 </option>
               ))}
             </select>
-            <span className="hidden rounded-lg border border-[#2bb8dc]/40 bg-[#123038] px-3 py-2 text-xs font-semibold text-[#b7f3ff] sm:block">
-              Testing mode
-            </span>
+            <button
+              type="button"
+              onClick={() => setBetaOpen(true)}
+              className="hidden rounded-lg border border-[#2bb8dc]/45 bg-[#102b33] px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#b7f3ff] shadow-[0_0_18px_rgba(43,184,220,0.14)] hover:border-[#69d9f5] hover:text-white sm:block"
+            >
+              EARLY ACCESS BETA
+            </button>
             <button
               onClick={onStartBuilding}
               className="h-9 rounded-lg bg-[#e8e8e8] px-4 text-sm font-semibold text-[#151515] hover:bg-white"
@@ -935,6 +961,51 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
           </div>
         </div>
       </header>
+      <button
+        type="button"
+        onClick={() => setBetaOpen(true)}
+        className="fixed right-4 top-20 z-30 rounded-lg border border-[#2bb8dc]/45 bg-[#102b33]/95 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#b7f3ff] shadow-xl backdrop-blur sm:hidden"
+      >
+        EARLY ACCESS BETA
+      </button>
+
+      {betaOpen && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-[#343436] bg-[#1f1f20] p-5 text-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">🚀 Early Access Beta</h2>
+                <p className="mt-3 text-sm leading-6 text-[#c9c9cc]">
+                  Cadio is currently in active development.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBetaOpen(false)}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#2b2b2d] text-sm text-[#bdbdbd] hover:text-white"
+                aria-label="Close beta information"
+              >
+                x
+              </button>
+            </div>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-[#d9d9db]">
+              <p>
+                All users can generate and download 1 model for free while we improve the platform.
+              </p>
+              <p>
+                Paid plans and additional features are coming soon.
+              </p>
+              <p>
+                We welcome feedback at{" "}
+                <a className="font-semibold text-[#69d9f5] hover:text-white" href="mailto:support@cadio.net">
+                  support@cadio.net
+                </a>
+                .
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main>
         <section className="relative min-h-[760px] overflow-hidden pt-16">
@@ -983,6 +1054,30 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                 <article key={title} className="rounded-xl border border-white/10 bg-[#202020] p-5">
                   <div className="mb-4 h-1.5 w-10 rounded-full bg-[#2bb8dc]" />
                   <h3 className="text-base font-semibold text-white">{title}</h3>
+                  <p className="mt-3 text-xs leading-6 text-[#a9a9ac]">{body}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="border-y border-white/10 bg-[#181818]">
+          <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#2bb8dc]">
+                Practical CAD flow
+              </p>
+              <h2 className="mt-4 max-w-xl text-3xl font-semibold text-white">
+                {details.title}
+              </h2>
+              <p className="mt-4 max-w-xl text-sm leading-7 text-[#b8b8bb]">
+                {details.body}
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {details.items.map(([title, body]) => (
+                <article key={title} className="rounded-xl border border-white/10 bg-[#222] p-5">
+                  <h3 className="text-sm font-semibold text-white">{title}</h3>
                   <p className="mt-3 text-xs leading-6 text-[#a9a9ac]">{body}</p>
                 </article>
               ))}

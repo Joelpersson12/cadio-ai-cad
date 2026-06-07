@@ -32,6 +32,63 @@ function visibleBodyColor(obj: CadObject, selected: boolean, hovered: boolean) {
   return obj.color && obj.color !== "#a9aaad" ? obj.color : VIEW_COLORS.neutralBody;
 }
 
+function holeTargetsFromParams(params: Record<string, number>) {
+  const holes: Array<{ x: number; y: number; radius: number }> = [];
+  const customCount = Math.max(0, Math.floor(params.custom_hole_count ?? 0));
+  for (let index = 0; index < customCount; index += 1) {
+    const x = params[`custom_hole_${index}_x`];
+    const y = params[`custom_hole_${index}_y`];
+    const diameter = params[`custom_hole_${index}_diameter`] ?? params.hole_diameter ?? 5;
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      holes.push({ x, y, radius: Math.max(0.25, diameter / 2) });
+    }
+  }
+  const generatedCount = Math.max(0, Math.round(params.hole_count ?? 0) - holes.length);
+  if (generatedCount > 0) {
+    const width = Math.max(1, params.width ?? 80);
+    const depth = Math.max(1, params.depth ?? 70);
+    const diameter = Math.max(1, params.hole_diameter ?? 5);
+    const spacing = width / (generatedCount + 1);
+    for (let index = 0; index < generatedCount; index += 1) {
+      holes.push({
+        x: -width / 2 + spacing * (index + 1),
+        y: depth * 0.15,
+        radius: diameter / 2,
+      });
+    }
+  }
+  return holes;
+}
+
+function inferEdgeTarget(obj: CadObject, geometry: THREE.BufferGeometry, localPoint: THREE.Vector3) {
+  const params = obj.parameters || {};
+  const horizontalX = localPoint.x;
+  const horizontalY = localPoint.z;
+  for (const hole of holeTargetsFromParams(params)) {
+    const distance = Math.hypot(horizontalX - hole.x, horizontalY - hole.y);
+    if (Math.abs(distance - hole.radius) <= Math.max(2.5, hole.radius * 0.35)) {
+      return "edge:hole";
+    }
+  }
+
+  const bounds = geometry.boundingBox;
+  if (bounds) {
+    const height = Math.max(1, bounds.max.y - bounds.min.y);
+    const edgeBand = Math.max(2, height * 0.08);
+    if (localPoint.y >= bounds.max.y - edgeBand) return "edge:top";
+    if (localPoint.y <= bounds.min.y + edgeBand) return "edge:bottom";
+  }
+  return "edge:side";
+}
+
+function edgeTargetLabel(target: string) {
+  if (target.includes("hole")) return "hole edge";
+  if (target.includes("top")) return "top edge";
+  if (target.includes("bottom")) return "bottom edge";
+  if (target.includes("side")) return "side edge";
+  return "selected edge";
+}
+
 type MeasurementSpec = {
   id: string;
   name: string;
@@ -273,6 +330,7 @@ function ScaledMesh({
   printerVolume,
   selectionMode,
   expertMode,
+  expertTool,
   edgeOperation,
   onEdgeAmount,
   onTransformDrag,
@@ -295,8 +353,9 @@ function ScaledMesh({
   printerVolume: [number, number, number];
   selectionMode: SelectionMode;
   expertMode: boolean;
+  expertTool: ExpertTool;
   edgeOperation: string;
-  onEdgeAmount: (x: number, y: number, operation: string, objectId: string) => void;
+  onEdgeAmount: (x: number, y: number, operation: string, objectId: string, target: string) => void;
   onTransformDrag: (dragging: boolean) => void;
   mobileMode: boolean;
 }) {
@@ -342,6 +401,7 @@ function ScaledMesh({
   if (!geometry) return null;
  
   const t = obj.transform;
+  const sketchToolActive = expertMode && expertTool !== "select";
  
   const meshPosition: [number, number, number] = [
     (t?.position?.[0] ?? 0) * scaleFactor,
@@ -369,8 +429,10 @@ function ScaledMesh({
     >
     <mesh
       geometry={geometry}
+      raycast={sketchToolActive ? () => null : undefined}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
+        if (sketchToolActive) return;
         if (suppressSelection) return;
         const pointerType = (e.nativeEvent as PointerEvent).pointerType;
         if (pointerType !== "touch") {
@@ -378,7 +440,16 @@ function ScaledMesh({
         }
         onSelect();
         if (expertMode && selectionMode === "edge") {
-          onEdgeAmount(e.nativeEvent.clientX, e.nativeEvent.clientY, edgeOperation, obj.id);
+          const localPoint = groupRef.current
+            ? groupRef.current.worldToLocal(e.point.clone())
+            : e.point.clone();
+          onEdgeAmount(
+            e.nativeEvent.clientX,
+            e.nativeEvent.clientY,
+            edgeOperation,
+            obj.id,
+            inferEdgeTarget(obj, geometry, localPoint),
+          );
         }
       }}
       onPointerOver={() => setHovered(true)}
@@ -568,7 +639,12 @@ interface CadViewportProps {
   onSetSelectionMode?: (mode: SelectionMode) => void;
   onSetSketchHeight?: (height: number) => void;
   onSetOperationAmount?: (amount: number) => void;
-  onApplyExpertOperation?: (operation: string, amountOverride?: number, objectIdOverride?: string) => void;
+  onApplyExpertOperation?: (
+    operation: string,
+    amountOverride?: number,
+    objectIdOverride?: string,
+    targetOverride?: string,
+  ) => void;
   mobileMode?: boolean;
   showMeasurements?: boolean;
 }
@@ -716,6 +792,7 @@ export default function CadViewport({
     y: number;
     operation: string;
     objectId: string;
+    target: string;
     value: string;
   } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
@@ -734,7 +811,7 @@ export default function CadViewport({
       style={{ touchAction: "none" }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-3 top-14 z-10 w-44 flex-col gap-1.5 rounded-lg border border-[#454548] bg-[#242424]/92 p-2 shadow-xl backdrop-blur`}>
+      <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-3 top-14 z-10 w-56 flex-col gap-1.5 rounded-lg border border-[#454548] bg-[#242424]/92 p-2 shadow-xl backdrop-blur`}>
         <div className="px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cadio-muted">
           Expert tools
         </div>
@@ -769,7 +846,10 @@ export default function CadViewport({
         ))}
         <div className="my-1 h-px bg-cadio-border" />
         <label className="flex items-center justify-between gap-2 px-1 text-xs text-cadio-muted">
-          H
+          <span>
+            New height
+            <span className="block text-[10px] text-[#858585]">next sketch</span>
+          </span>
           <input
             type="number"
             min={0.5}
@@ -780,7 +860,10 @@ export default function CadViewport({
           />
         </label>
         <label className="flex items-center justify-between gap-2 px-1 text-xs text-cadio-muted">
-          A
+          <span>
+            Op size
+            <span className="block text-[10px] text-[#858585]">mm amount</span>
+          </span>
           <input
             type="number"
             min={0}
@@ -811,7 +894,7 @@ export default function CadViewport({
       </div>
       <Canvas
         shadows
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
         camera={{ position: [300, 220, 300], fov: 42, near: 0.1, far: 10000 }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl }) => {
@@ -830,8 +913,8 @@ export default function CadViewport({
         position={[220, 280, 180]}
         intensity={2.15}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
         shadow-camera-near={1}
         shadow-camera-far={2000}
         shadow-camera-left={-400}
@@ -883,9 +966,10 @@ export default function CadViewport({
           printerVolume={printerVolume}
           selectionMode={selectionMode}
           expertMode={expertMode}
+          expertTool={expertTool}
           edgeOperation={edgeOperation}
-          onEdgeAmount={(x, y, operation, objectId) => {
-            setEdgeInput({ x, y, operation, objectId, value: String(operationAmount || 3) });
+          onEdgeAmount={(x, y, operation, objectId, target) => {
+            setEdgeInput({ x, y, operation, objectId, target, value: String(operationAmount || 3) });
           }}
           onTransformDrag={setTransformDragging}
           mobileMode={mobileMode}
@@ -944,14 +1028,16 @@ export default function CadViewport({
             const amount = Number(edgeInput.value.replace("mm", "").trim());
             if (Number.isFinite(amount) && amount >= 0) {
               onSetOperationAmount?.(amount);
-              onApplyExpertOperation?.(edgeInput.operation, amount, edgeInput.objectId);
+              onApplyExpertOperation?.(edgeInput.operation, amount, edgeInput.objectId, edgeInput.target);
             }
             setEdgeInput(null);
           }}
           className="absolute z-20 flex items-center gap-1 rounded-md border border-cadio-border bg-[#2b2b2e] p-1 shadow-xl"
           style={{ left: edgeInput.x + 10, top: edgeInput.y + 10 }}
         >
-          <span className="px-1 text-[11px] capitalize text-cadio-muted">{edgeInput.operation}</span>
+          <span className="px-1 text-[11px] capitalize text-cadio-muted">
+            {edgeInput.operation} {edgeTargetLabel(edgeInput.target)}
+          </span>
           <input
             autoFocus
             value={edgeInput.value}

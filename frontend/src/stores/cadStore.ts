@@ -108,7 +108,12 @@ interface CadState {
     size: [number, number];
     radius?: number;
   }) => Promise<void>;
-  applyExpertOperation: (operation: string, amountOverride?: number, objectIdOverride?: string) => Promise<void>;
+  applyExpertOperation: (
+    operation: string,
+    amountOverride?: number,
+    objectIdOverride?: string,
+    targetOverride?: string,
+  ) => Promise<void>;
   setPrinter: (printer: string) => Promise<void>;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
@@ -314,6 +319,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   onSelectObject: async (objectId: string) => {
     const { sessionId } = get();
     if (!sessionId) return;
+    set({ selectedObjectId: objectId, selectedObjectIds: [objectId] });
     try {
       const data = await apiSelectObject({
         session_id: sessionId,
@@ -454,8 +460,7 @@ export const useCadStore = create<CadState>((set, get) => ({
 
   createPrimitive: async ({ primitive, center, size, radius }) => {
     const { sessionId, sketchHeight, objects } = get();
-    const startedAt = Date.now();
-    set({ status: `Sketching ${primitive}...`, isBusy: true });
+    set({ status: `Sketching ${primitive}...` });
     try {
       const data = await apiCreatePrimitive({
         session_id: sessionId || undefined,
@@ -468,33 +473,28 @@ export const useCadStore = create<CadState>((set, get) => ({
         replace_scene: objects.length === 0,
       });
       get().applyScenePayload(data);
-      await waitForMinimumBusy(startedAt);
       set({ status: `Created ${primitive}`, isBusy: false });
     } catch (err) {
-      await waitForMinimumBusy(startedAt);
       set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
     }
   },
 
-  applyExpertOperation: async (operation, amountOverride, objectIdOverride) => {
+  applyExpertOperation: async (operation, amountOverride, objectIdOverride, targetOverride) => {
     const { sessionId, selectedObjectId, selectionMode, operationAmount } = get();
     const objectId = objectIdOverride || selectedObjectId;
     if (!sessionId || !objectId) return;
-    const startedAt = Date.now();
-    set({ status: `Applying ${operation}...`, isBusy: true });
+    set({ status: `Applying ${operation}...` });
     try {
       const data = await apiApplyExpertOperation({
         session_id: sessionId,
         object_id: objectId,
         operation,
         amount: amountOverride ?? operationAmount,
-        target: selectionMode,
+        target: targetOverride || selectionMode,
       });
       get().applyScenePayload(data);
-      await waitForMinimumBusy(startedAt);
       set({ status: `${operation} applied`, isBusy: false });
     } catch (err) {
-      await waitForMinimumBusy(startedAt);
       set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
     }
   },

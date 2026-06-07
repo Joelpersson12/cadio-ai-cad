@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCadStore } from "../stores/cadStore";
 import type { MaterialProfile, PrinterProfile } from "../utils/types";
-import { exportUrl } from "../utils/api";
+import { downloadExport, getAccountProfile, type AccountProfile } from "../utils/api";
+import { getCadioAccount, getCadioAuthToken, updateCadioAccount } from "../utils/auth";
 import ScalePercentInput from "./ScalePercentInput";
 
 type ParamMeta = {
@@ -175,6 +176,10 @@ function ParameterRow({
 
 export default function ObjectInspector() {
   const [exportFormat, setExportFormat] = useState("stl");
+  const [account, setAccount] = useState<AccountProfile | null>(() => getCadioAccount());
+  const [authToken, setAuthToken] = useState(() => getCadioAuthToken());
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [exportError, setExportError] = useState("");
   const {
     objects,
     selectedObjectId,
@@ -216,6 +221,54 @@ export default function ObjectInspector() {
   const materialEntries: Array<[string, MaterialProfile]> = Object.entries(materials).length
     ? Object.entries(materials)
     : FALLBACK_MATERIAL_ENTRIES;
+
+  const refreshAccount = async (token = authToken) => {
+    if (!token) return;
+    const result = await getAccountProfile(token);
+    updateCadioAccount(result.account);
+    setAccount(result.account);
+    setAuthToken(token);
+  };
+
+  useEffect(() => {
+    const syncAuth = () => {
+      const token = getCadioAuthToken();
+      setAuthToken(token);
+      setAccount(getCadioAccount());
+      if (token) {
+        void refreshAccount(token).catch(() => undefined);
+      }
+    };
+    syncAuth();
+    window.addEventListener("cadio-auth-changed", syncAuth);
+    return () => window.removeEventListener("cadio-auth-changed", syncAuth);
+  }, []);
+
+  const handleDownload = async () => {
+    if (!sessionId || downloadBusy) return;
+    const token = authToken || getCadioAuthToken();
+    if (!token) {
+      setExportError("Log in from Export to download your free file.");
+      window.dispatchEvent(new Event("cadio-open-export"));
+      return;
+    }
+    if (account && account.canDownload === false) {
+      setExportError("Your free download has already been used.");
+      window.dispatchEvent(new Event("cadio-open-export"));
+      return;
+    }
+    setDownloadBusy(true);
+    setExportError("");
+    try {
+      await downloadExport(sessionId, exportFormat, token);
+      await refreshAccount(token);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Download failed.");
+      await refreshAccount(token).catch(() => undefined);
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
 
   return (
     <div className="flex h-full flex-col bg-[#1d1d1e] text-white">
@@ -467,18 +520,21 @@ export default function ObjectInspector() {
             ))}
           </select>
         </label>
-        <a
-          href={sessionId ? exportUrl(sessionId, exportFormat) : "#"}
-          download={sessionId ? `cadio-${sessionId}.${exportFormat}` : undefined}
-          className={`flex h-12 items-center justify-center rounded-lg text-sm font-semibold ${
+        {exportError && (
+          <p className="mb-3 rounded-lg border border-[#6b2d2d] bg-[#2a1717] px-3 py-2 text-xs text-[#ffb3b3]">
+            {exportError}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => void handleDownload()}
+          disabled={!sessionId || downloadBusy}
+          className={`flex h-12 w-full items-center justify-center rounded-lg text-sm font-semibold ${
             sessionId ? "bg-[#e8e8e8] text-[#171717] hover:bg-white" : "bg-[#333] text-[#777]"
           }`}
         >
-          <span>Download {exportFormat.toUpperCase()}</span>
-          <span className="hidden">
-          ⇩ STL
-          </span>
-        </a>
+          <span>{downloadBusy ? "Preparing..." : `Download ${exportFormat.toUpperCase()}`}</span>
+        </button>
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import ExportFlowDialog, { ExportFlowContent } from "./components/ExportFlow";
 import SavedModelsPanel from "./components/SavedModelsPanel";
 import ShareProjectDialog from "./components/ShareProjectDialog";
 import SiteFooter from "./components/SiteFooter";
+import CadioLogo from "./components/CadioLogo";
 import type { ExampleObject } from "./components/ExampleBrowser";
 import type { ExpertTool, MaterialProfile, SelectionMode, TransformMode } from "./utils/types";
 import { readProjectShareFromHash } from "./utils/projectShare";
@@ -455,7 +456,7 @@ function ModelLoadingOverlay({ status }: { status: string }) {
   );
 }
 
-function WorkspaceApp() {
+function WorkspaceApp({ onHome }: { onHome: () => void }) {
   const {
     sessionId,
     objects,
@@ -514,6 +515,12 @@ function WorkspaceApp() {
   useEffect(() => {
     void loadPrinters();
   }, [loadPrinters]);
+
+  useEffect(() => {
+    const openExport = () => setExportOpen(true);
+    window.addEventListener("cadio-open-export", openExport);
+    return () => window.removeEventListener("cadio-open-export", openExport);
+  }, []);
 
   useEffect(() => {
     const shared = readProjectShareFromHash();
@@ -597,13 +604,7 @@ function WorkspaceApp() {
             <>
           <div className="mb-5 rounded-xl border border-[#2d2d2f] bg-[#202020] p-4">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#28c7df] text-base font-black text-[#101010]">C</span>
-                <div className="min-w-0">
-                  <div className="text-sm font-black uppercase tracking-[0.22em] text-white">Cadio</div>
-                  <div className="text-[11px] text-[#9a9a9a]">AI CAD workspace</div>
-                </div>
-              </div>
+              <CadioLogo onClick={onHome} />
               <button
                 onClick={() => setWorkspacePanelOpen(false)}
                 className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-[#333] bg-[#171717] text-xs font-semibold text-[#bdbdbd] hover:border-[#555] hover:text-white"
@@ -746,7 +747,7 @@ function WorkspaceApp() {
                 </summary>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <label className="text-[11px] uppercase tracking-[0.16em] text-[#858585]">
-                    Height
+                    New part height
                     <input
                       type="number"
                       min={0.5}
@@ -757,7 +758,7 @@ function WorkspaceApp() {
                     />
                   </label>
                   <label className="text-[11px] uppercase tracking-[0.16em] text-[#858585]">
-                    Amount
+                    Operation size
                     <input
                       type="number"
                       min={0}
@@ -827,9 +828,9 @@ function WorkspaceApp() {
           ) : (
             <div className="flex h-full flex-col items-center gap-3">
               <button
-                onClick={() => setWorkspacePanelOpen(true)}
+                onClick={onHome}
                 className="grid h-9 w-9 place-items-center rounded-lg bg-[#28c7df] text-sm font-black text-[#101010] shadow-[0_0_18px_rgba(40,199,223,0.18)]"
-                title="Open workspace panel"
+                title="Go to Cadio home"
               >
                 C
               </button>
@@ -928,7 +929,7 @@ function WorkspaceApp() {
             onSetSelectionMode={setSelectionMode}
             onSetSketchHeight={setSketchHeight}
             onSetOperationAmount={setOperationAmount}
-            onApplyExpertOperation={(op, amount, objectId) => void applyExpertOperation(op, amount, objectId)}
+            onApplyExpertOperation={(op, amount, objectId, target) => void applyExpertOperation(op, amount, objectId, target)}
             onCreatePrimitive={(payload) => void createPrimitive(payload)}
             showMeasurements={showMeasurements}
           />
@@ -970,10 +971,10 @@ function WorkspaceApp() {
       <div className="md:hidden flex h-[100dvh] w-full flex-col bg-[#202022]">
         {/* Top bar */}
         <div className="flex items-center justify-between border-b border-cadio-border bg-cadio-panel/95 px-4 py-2 backdrop-blur-sm">
-          <div className="min-w-0">
+          <button type="button" onClick={onHome} className="min-w-0 text-left">
             <span className="block text-sm font-bold tracking-widest text-cadio-text">CADIO</span>
             <span className="block truncate text-[11px] text-cadio-muted">{projectTitle}</span>
-          </div>
+          </button>
           <div className="flex shrink-0 gap-1.5">
             <button
               onClick={() => setMobileExamplesOpen(true)}
@@ -1253,6 +1254,14 @@ export default function App() {
     setShowBuilder(true);
   };
 
+  const goHome = () => {
+    if (window.location.pathname !== "/" || window.location.hash) {
+      window.history.pushState(null, "", "/");
+    }
+    setPathname("/");
+    setShowBuilder(false);
+  };
+
   const staticPage = staticPageFromPath(pathname);
   if (staticPage && !showBuilder) {
     return <LegalPage page={staticPage} onStartBuilding={startBuilding} />;
@@ -1260,7 +1269,7 @@ export default function App() {
 
   return (
     <>
-      {showBuilder ? <WorkspaceApp /> : <LandingPage onStartBuilding={startBuilding} />}
+      {showBuilder ? <WorkspaceApp onHome={goHome} /> : <LandingPage onStartBuilding={startBuilding} />}
     </>
   );
 }

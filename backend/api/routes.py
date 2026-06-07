@@ -48,6 +48,8 @@ from backend.services.object_manager import (
 )
 from backend.services.print_profiles import material_profiles_response, normalize_material
 from backend.services.account_store import (
+    consume_download,
+    get_account_profile,
     load_saved_library,
     login_or_create_account,
     save_saved_library,
@@ -159,6 +161,21 @@ def auth_login(data: AuthRequest) -> dict[str, Any] | JSONResponse:
         return {"status": "ok", **result}
     except ValueError as exc:
         return _error(400, str(exc))
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.get("/api/account/me", response_model=None)
+def get_account_me(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any] | JSONResponse:
+    try:
+        token = _bearer_token(authorization)
+        account = get_account_profile(token)
+        return {"status": "ok", "account": account}
+    except PermissionError as exc:
+        return _error(401, str(exc))
     except Exception as exc:
         traceback.print_exc()
         return _error(500, str(exc))
@@ -796,8 +813,21 @@ def get_session_mesh(session_id: str) -> ScenePayload | JSONResponse:
 
 
 @router.get("/api/export/{session_id}/{fmt}", response_model=None)
-def export_model(session_id: str, fmt: str) -> FileResponse | JSONResponse:
+def export_model(
+    session_id: str,
+    fmt: str,
+    authorization: str | None = Header(default=None),
+) -> FileResponse | JSONResponse:
     try:
+        token = _bearer_token(authorization)
+        if not token:
+            return _error(401, "Log in to download your free generated file")
+        account_before_export = get_account_profile(token)
+        if not account_before_export["canDownload"]:
+            return _error(
+                402,
+                "The free download for this account has already been used. Upgrade a plan to download more files.",
+            )
         fmt_key = fmt.strip().lower()
         if fmt_key not in SUPPORTED_FORMATS:
             return _error(400, f"Unsupported format. Supported: {SUPPORTED_FORMATS}")
@@ -808,12 +838,20 @@ def export_model(session_id: str, fmt: str) -> FileResponse | JSONResponse:
             if session is None:
                 return _error(404, "Session not found")
             path = export_assembly(session, fmt_key)
+        account = consume_download(token)
 
-        return FileResponse(
+        response = FileResponse(
             path,
             media_type=media_type_for(fmt_key),
             filename=f"cadio-{session_id}.{fmt_key}",
         )
+        response.headers["X-Cadio-Downloads-Used"] = str(account["downloadsUsed"])
+        response.headers["X-Cadio-Downloads-Remaining"] = str(account["downloadsRemaining"])
+        return response
+    except PermissionError as exc:
+        return _error(401, str(exc))
+    except ValueError as exc:
+        return _error(402, str(exc))
     except Exception as exc:
         traceback.print_exc()
         return _error(500, str(exc))
