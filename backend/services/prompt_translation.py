@@ -1,8 +1,9 @@
 """Prompt normalization for source-model searches.
 
 Cadio searches public model sites in English, but users can describe models in
-Swedish.  This module keeps that translation deterministic and local so source
-search, file ranking, and simple edit detection all see the same query words.
+Swedish and other common languages.  This module keeps that translation
+deterministic and local so source search, file ranking, and simple edit
+detection all see the same query words.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import unicodedata
 _TOKEN_RE = re.compile(r"[a-z0-9]+(?:\.[0-9]+)?")
 
 _PHRASE_TRANSLATIONS: tuple[tuple[str, str], ...] = (
+    # Swedish
     (r"\b(?:vagg\s*monterad|vaggmonterad|vagg\s*hangd|vagghangd)\b", "wall mounted"),
     (r"\b(?:bord\s*monterad|bordmonterad|skrivbord\s*monterad|skrivbordsmonterad)\b", "desk mount"),
     (r"\b(?:klam\s*faste(?:t)?|klamfaste(?:t)?|klamma\s*faste(?:t)?|klammafaste(?:t)?|clamp\s*faste(?:t)?)\b", "clamp mount"),
@@ -57,6 +59,59 @@ _PHRASE_TRANSLATIONS: tuple[tuple[str, str], ...] = (
     (r"\b(?:starkare\s*modell|gor\s*den\s*starkare|gor\s*det\s*starkare)\b", "make stronger"),
     (r"\b(?:snusdosa\s*hallaren?|snus\s*dosa\s*hallaren?|snusdose\s*hallaren?)\b", "snus can holder"),
     (r"\bblackfisk\b", "octopus"),
+    # Spanish
+    (r"\b(?:soporte\s+(?:de\s+|para\s+)?(?:telefono|movil|celular)|porta\s*(?:telefono|movil|celular))\b", "phone stand"),
+    (r"\b(?:soporte\s+(?:de\s+|para\s+)?(?:auriculares|audifonos|cascos))\b", "headphone stand"),
+    (r"\b(?:porta\s*vasos?|soporte\s+(?:de\s+|para\s+)?(?:vaso|taza|copa))\b", "cup holder"),
+    (r"\b(?:soporte\s+(?:de\s+|para\s+)?cable|organizador\s+de\s+cables?)\b", "cable holder"),
+    (r"\b(?:montaje\s+en\s+pared|soporte\s+de\s+pared|pared\s+montado)\b", "wall mounted"),
+    (r"\b(?:montaje\s+de\s+escritorio|soporte\s+de\s+escritorio|para\s+escritorio)\b", "desk mount"),
+    (r"\b(?:plegable|abatible)\b", "foldable"),
+    (r"\b(?:giratorio|rotatorio)\b", "rotating"),
+    (r"\b(?:agujeros?\s+de\s+tornillos?|orificios?\s+de\s+tornillos?)\b", "screw holes"),
+    # French
+    (r"\b(?:support\s+(?:de\s+|pour\s+)?(?:telephone|portable|mobile))\b", "phone stand"),
+    (r"\b(?:support\s+(?:de\s+|pour\s+)?(?:casque|ecouteurs))\b", "headphone stand"),
+    (r"\b(?:support\s+mural\s+(?:pour\s+|de\s+)?(?:casque|ecouteurs))\b", "wall mounted headphone holder"),
+    (r"\b(?:porte\s*(?:gobelet|tasse)|support\s+(?:de\s+|pour\s+)?(?:gobelet|tasse))\b", "cup holder"),
+    (r"\b(?:support\s+(?:de\s+|pour\s+)?cable|range\s*cable)\b", "cable holder"),
+    (r"\b(?:support\s+mural|fixation\s+murale|montage\s+mural)\b", "wall mounted"),
+    (r"\b(?:support\s+de\s+bureau|fixation\s+de\s+bureau)\b", "desk mount"),
+    (r"\b(?:pliable|rabattable)\b", "foldable"),
+    (r"\b(?:rotatif|pivotant)\b", "rotating"),
+    (r"\b(?:trous?\s+de\s+vis)\b", "screw holes"),
+    # Italian
+    (r"\b(?:supporto\s+(?:per\s+|da\s+)?telefono|porta\s*telefono|supporto\s+(?:per\s+)?cellulare)\b", "phone stand"),
+    (r"\b(?:supporto\s+(?:per\s+)?cuffie|porta\s*cuffie)\b", "headphone stand"),
+    (r"\b(?:porta\s*(?:tazza|bicchiere)|supporto\s+(?:per\s+)?(?:tazza|bicchiere))\b", "cup holder"),
+    (r"\b(?:supporto\s+da\s+parete\s+(?:per\s+)?cavo)\b", "wall mounted cable holder"),
+    (r"\b(?:porta\s*cavo|supporto\s+(?:per\s+)?cavo|organizzatore\s+cavi)\b", "cable holder"),
+    (r"\b(?:supporto\s+da\s+parete|montaggio\s+a\s+parete|fissaggio\s+a\s+parete)\b", "wall mounted"),
+    (r"\b(?:supporto\s+da\s+scrivania|montaggio\s+scrivania)\b", "desk mount"),
+    (r"\b(?:pieghevole|richiudibile)\b", "foldable"),
+    (r"\b(?:girevole|rotante)\b", "rotating"),
+    (r"\b(?:fori\s+(?:per\s+)?viti)\b", "screw holes"),
+    # German
+    (r"\b(?:handy\s*halter|handyhalter|telefon\s*halter|telefonhalter)\b", "phone stand"),
+    (r"\b(?:kopfhorer\s*stander|kopfhorerstander|kopfhorer\s*halter|kopfhorerhalter)\b", "headphone stand"),
+    (r"\b(?:becher\s*halter|becherhalter|tassen\s*halter|tassenhalter)\b", "cup holder"),
+    (r"\b(?:kabel\s*halter|kabelhalter|kabel\s*clip|kabelclip)\b", "cable holder"),
+    (r"\b(?:wand\s*halterung|wandhalterung|wand\s*montage|wandmontage)\b", "wall mounted"),
+    (r"\b(?:tisch\s*halterung|tischhalterung|schreibtisch\s*halterung|schreibtischhalterung)\b", "desk mount"),
+    (r"\b(?:klappbar|faltbar)\b", "foldable"),
+    (r"\b(?:drehbar|rotierend)\b", "rotating"),
+    (r"\b(?:schrauben\s*locher|schraubenlocher)\b", "screw holes"),
+    # Portuguese
+    (r"\b(?:suporte\s+(?:de\s+|para\s+)?(?:telefone|celular|telemovel)|porta\s*(?:telefone|celular))\b", "phone stand"),
+    (r"\b(?:suporte\s+(?:de\s+|para\s+)?(?:fone|fones|auscultadores|headset))\b", "headphone stand"),
+    (r"\b(?:suporte\s+de\s+parede\s+(?:para\s+|de\s+)?(?:copo|caneca|xicara))\b", "wall mounted cup holder"),
+    (r"\b(?:porta\s*copos?|suporte\s+(?:de\s+|para\s+)?(?:copo|caneca|xicara))\b", "cup holder"),
+    (r"\b(?:suporte\s+(?:de\s+|para\s+)?cabo|organizador\s+de\s+cabos?)\b", "cable holder"),
+    (r"\b(?:suporte\s+de\s+parede|montagem\s+na\s+parede|parede\s+montado)\b", "wall mounted"),
+    (r"\b(?:suporte\s+de\s+mesa|montagem\s+de\s+mesa)\b", "desk mount"),
+    (r"\b(?:dobravel|articulado)\b", "foldable"),
+    (r"\b(?:giratorio|rotativo)\b", "rotating"),
+    (r"\b(?:furos?\s+(?:de\s+|para\s+)?parafusos?)\b", "screw holes"),
 )
 
 _WORD_TRANSLATIONS: dict[str, str] = {
@@ -207,6 +262,83 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "ovansida": "top",
     "distans": "standoff",
     "distanser": "standoffs",
+    # Spanish
+    "agujero": "hole",
+    "agujeros": "holes",
+    "auriculares": "headphones",
+    "cable": "cable",
+    "cables": "cables",
+    "caja": "box",
+    "celular": "phone",
+    "escritorio": "desk",
+    "giratorio": "rotating",
+    "movil": "phone",
+    "pared": "wall",
+    "plegable": "foldable",
+    "soporte": "holder",
+    "taza": "mug",
+    "telefono": "phone",
+    "tornillo": "screw",
+    "tornillos": "screws",
+    "vaso": "cup",
+    # French
+    "bureau": "desk",
+    "casque": "headphone",
+    "ecouteurs": "headphones",
+    "gobelet": "cup",
+    "mural": "wall",
+    "murale": "wall",
+    "pivotant": "rotating",
+    "pliable": "foldable",
+    "support": "holder",
+    "tasse": "mug",
+    "telephone": "phone",
+    "trou": "hole",
+    "trous": "holes",
+    "vis": "screws",
+    # Italian
+    "bicchiere": "cup",
+    "cellulare": "phone",
+    "cavo": "cable",
+    "cavi": "cables",
+    "cuffie": "headphones",
+    "girevole": "rotating",
+    "parete": "wall",
+    "pieghevole": "foldable",
+    "scrivania": "desk",
+    "supporto": "holder",
+    "viti": "screws",
+    # German
+    "becher": "cup",
+    "drehbar": "rotating",
+    "faltbar": "foldable",
+    "handy": "phone",
+    "halter": "holder",
+    "halterung": "holder",
+    "klappbar": "foldable",
+    "kopfhorer": "headphone",
+    "schrauben": "screws",
+    "schreibtisch": "desk",
+    "tisch": "desk",
+    "wand": "wall",
+    # Portuguese
+    "cabo": "cable",
+    "cabos": "cables",
+    "caneca": "mug",
+    "celular": "phone",
+    "copo": "cup",
+    "dobravel": "foldable",
+    "fone": "headphone",
+    "fones": "headphones",
+    "furos": "holes",
+    "mesa": "desk",
+    "parede": "wall",
+    "parafuso": "screw",
+    "parafusos": "screws",
+    "rotativo": "rotating",
+    "suporte": "holder",
+    "telemovel": "phone",
+    "xicara": "mug",
 }
 
 _COMPOUND_SUFFIX_TRANSLATIONS: tuple[tuple[str, str], ...] = (
@@ -277,6 +409,25 @@ _STOP_WORDS = {
     "to",
     "ut",
     "with",
+    "con",
+    "de",
+    "del",
+    "des",
+    "el",
+    "la",
+    "le",
+    "les",
+    "los",
+    "para",
+    "par",
+    "per",
+    "pour",
+    "por",
+    "und",
+    "von",
+    "zu",
+    "da",
+    "di",
 }
 
 _SWEDISH_HINTS = {

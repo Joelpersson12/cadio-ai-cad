@@ -425,6 +425,7 @@ function WorkspaceApp() {
     setSelectionMode,
     setSketchHeight,
     setOperationAmount,
+    startBlankCreation,
     createPrimitive,
     applyExpertOperation,
     selectAllObjects,
@@ -555,11 +556,12 @@ function WorkspaceApp() {
             </div>
           </div>
           <button
-            onClick={() => void runPrompt("new part")}
-            className="mb-5 flex h-10 items-center justify-center gap-2 rounded-lg border border-[#2aa8c4] bg-[#123038] px-4 text-sm font-semibold text-white hover:bg-[#173a43]"
+            onClick={startBlankCreation}
+            className="mb-5 flex h-10 items-center justify-center gap-2 rounded-lg border border-[#303033] bg-[#222] px-4 text-sm font-semibold text-[#e6e6e6] hover:border-[#28c7df] hover:text-white"
+            title="Start with an empty build plate"
           >
-            <span className="text-xl leading-none">+</span>
-            New Creation
+            <span className="grid h-5 w-5 place-items-center rounded border border-[#555] text-[10px]">□</span>
+            Blank workspace
           </button>
           <button
             onClick={() => setShowMeasurements((value) => !value)}

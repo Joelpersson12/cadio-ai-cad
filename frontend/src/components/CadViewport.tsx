@@ -159,8 +159,8 @@ function DimensionLine({
           <meshBasicMaterial color={color} depthTest={false} />
         </mesh>
       ))}
-      <Html position={midpoint} center distanceFactor={12} style={{ pointerEvents: "none" }}>
-        <div className="whitespace-nowrap rounded-md border border-white/20 bg-[#111]/90 px-2 py-1 text-[11px] font-semibold text-white shadow-lg">
+      <Html position={midpoint} center distanceFactor={28} style={{ pointerEvents: "none" }}>
+        <div className="whitespace-nowrap rounded-lg border border-white/25 bg-[#111]/94 px-3 py-1.5 text-sm font-semibold text-white shadow-2xl">
           {label}
         </div>
       </Html>
@@ -205,12 +205,12 @@ function MeasurementOverlay({ specs }: { specs: MeasurementSpec[] }) {
               end={[sideX, max.y, frontZ]}
               label={`Height ${formatMm(spec.heightMm)}`}
             />
-            <Html position={[(min.x + max.x) / 2, max.y + offset, (min.z + max.z) / 2]} center distanceFactor={14} style={{ pointerEvents: "none" }}>
-              <div className="min-w-44 rounded-lg border border-[#facc15]/50 bg-[#111]/92 px-3 py-2 text-[11px] text-white shadow-xl">
-                <div className="mb-1 truncate font-semibold text-[#facc15]">{spec.name}</div>
-                <div>Long side: {formatMm(spec.longSideMm)}</div>
-                <div>Short side: {formatMm(spec.shortSideMm)}</div>
-                <div>Height: {formatMm(spec.heightMm)}</div>
+            <Html position={[(min.x + max.x) / 2, max.y + offset, (min.z + max.z) / 2]} center distanceFactor={32} style={{ pointerEvents: "none" }}>
+              <div className="min-w-64 rounded-xl border border-[#facc15]/55 bg-[#111]/95 px-4 py-3 text-sm leading-6 text-white shadow-2xl">
+                <div className="mb-1 max-w-72 truncate text-base font-semibold text-[#facc15]">{spec.name}</div>
+                <div>Long side: <span className="font-semibold">{formatMm(spec.longSideMm)}</span></div>
+                <div>Short side: <span className="font-semibold">{formatMm(spec.shortSideMm)}</span></div>
+                <div>Height: <span className="font-semibold">{formatMm(spec.heightMm)}</span></div>
               </div>
             </Html>
           </group>
@@ -927,8 +927,8 @@ export default function CadViewport({
       </GizmoHelper>
       </Canvas>
       {showMeasurements && (
-        <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[min(340px,calc(100%-1.5rem))] rounded-lg border border-[#facc15]/40 bg-[#151515]/88 px-3 py-2 text-xs text-white shadow-xl backdrop-blur">
-          <div className="font-semibold text-[#facc15]">Real measurements</div>
+        <div className="pointer-events-none absolute bottom-4 left-4 z-10 max-w-[min(460px,calc(100%-2rem))] rounded-xl border border-[#facc15]/45 bg-[#151515]/92 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur">
+          <div className="text-base font-semibold text-[#facc15]">Real measurements</div>
           <div className="mt-1 text-[#d7d7d8]">
             {measurementSpecs.length
               ? `${measurementSpecs.length} ${measurementSpecs.length === 1 ? "part" : "parts"} measured in mm`

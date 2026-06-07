@@ -81,6 +81,7 @@ interface CadState {
   setSketchHeight: (height: number) => void;
   setOperationAmount: (amount: number) => void;
   applyScenePayload: (payload: ScenePayload) => void;
+  startBlankCreation: () => void;
   loadPrinters: () => Promise<void>;
   syncMesh: (sid?: string) => Promise<void>;
   runPrompt: (prompt: string) => Promise<void>;
@@ -153,6 +154,32 @@ export const useCadStore = create<CadState>((set, get) => ({
   setSelectionMode: (mode) => set({ selectionMode: mode }),
   setSketchHeight: (height) => set({ sketchHeight: Math.max(0.5, height) }),
   setOperationAmount: (amount) => set({ operationAmount: Math.max(0, amount) }),
+  startBlankCreation: () => {
+    localStorage.removeItem(SESSION_KEY);
+    set({
+      sessionId: "",
+      version: 0,
+      sceneToken: "",
+      objects: [],
+      objectOrder: [],
+      selectedObjectId: "",
+      selectedObjectIds: [],
+      bounds: { x: 0, y: 0, z: 0 },
+      printAssistant: {
+        warnings: [],
+        checks: [],
+        hints: [],
+        printability_score: 0,
+      },
+      printSettings: null,
+      status: "Blank workspace",
+      isBusy: false,
+      transformMode: "off",
+      expertTool: "select",
+      selectionMode: "body",
+      editHistory: [],
+    });
+  },
   setPrinter: async (printer) => {
     const { sessionId } = get();
     set({ printer });

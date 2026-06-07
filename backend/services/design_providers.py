@@ -367,6 +367,8 @@ def _popularity(likes: int, downloads: int, rating: float) -> int:
 
 _SOURCE_WEIGHTS = {
     "printables": 22,
+    "cults3d": 15,
+    "myminifactory": 14,
     "thingiverse": 16,
     "stlfinder": 10,
     "yeggi": 9,
@@ -440,6 +442,10 @@ def _looks_like_model_url(source: str, url: str, title: str) -> bool:
         return "/thing:" in lower_url or "/thing/" in lower_url
     if source == "printables":
         return "/model/" in lower_url
+    if source == "cults3d":
+        return "/3d-model/" in lower_url or "/en/model/" in lower_url
+    if source == "myminifactory":
+        return "/object/3d-print-" in lower_url or "/objects/3d-print-" in lower_url
     if source == "stlfinder":
         return any(fragment in lower_url for fragment in ("/3dmodels/", "/model/", "/thing:", "/thing/"))
     if source == "yeggi":
@@ -466,8 +472,14 @@ def _query_words(query: str) -> list[str]:
         "holder": ["mount", "bracket", "rack"],
         "mount": ["holder", "bracket"],
         "desk": ["clamp"],
+        "table": ["desk"],
         "wall": ["mount"],
         "dewalt": ["power", "tool"],
+        "stand": ["holder", "dock"],
+        "clip": ["clamp", "holder"],
+        "organizer": ["holder", "storage"],
+        "case": ["box", "cover"],
+        "box": ["case", "enclosure"],
     }
     words: list[str] = []
     for word in base:
@@ -532,11 +544,11 @@ def _query_variants(query: str) -> list[str]:
     if {"cdi", "ecu", "ecm", "ignition", "module"} & words:
         add("electronics module bracket 3d print")
         add("cdi box holder bracket")
-    if {"holder", "mount", "bracket", "rack"} & words:
+    if {"holder", "mount", "bracket", "rack", "stand", "clip", "organizer", "case", "box", "enclosure"} & words:
         object_words = [
             word
             for word in core_words
-            if word not in {"holder", "mount", "bracket", "rack", "wall", "mounted", "gridfinity", "pegboard", "magnetic"}
+            if word not in {"holder", "mount", "bracket", "rack", "stand", "clip", "organizer", "case", "box", "enclosure", "wall", "mounted", "gridfinity", "pegboard", "magnetic"}
         ]
         object_phrase = " ".join(object_words) or normalized
         if "gridfinity" in words:
@@ -551,13 +563,18 @@ def _query_variants(query: str) -> list[str]:
             add(f"wall mounted {object_phrase} holder")
             add(f"{object_phrase} wall mount")
         add(f"{normalized} 3d print")
+        add(f"{normalized} 3d printable")
         add(f"{normalized} printable")
+        add(f"{normalized} stl")
         add(f"popular {normalized} stl")
     elif normalized:
         add(f"{normalized} 3d print")
+        add(f"{normalized} 3d printable")
+        add(f"{normalized} 3d model")
         add(f"{normalized} stl")
+        add(f"{normalized} printable")
 
-    return variants[:8]
+    return variants[:12]
 
 
 def _design_score(query: str, design: ExampleDesign) -> float:
@@ -607,11 +624,17 @@ def _design_score(query: str, design: ExampleDesign) -> float:
 def _query_token_matches_title(word: str, title: str, tags: list[str]) -> bool:
     haystack = set(re.findall(r"[a-z0-9]+", title.lower()) + tags)
     equivalents = {
+        "phone": {"phone", "mobile", "smartphone", "iphone"},
         "cup": {"cup", "mug", "tumbler"},
         "mug": {"mug", "cup", "tumbler"},
-        "holder": {"holder", "hold", "mount", "stand"},
-        "mount": {"mount", "mounted", "clamp", "clip", "bracket"},
-        "desk": {"desk", "table", "desktop"},
+        "holder": {"holder", "hold", "mount", "stand", "dock", "rack"},
+        "stand": {"stand", "holder", "dock", "mount"},
+        "mount": {"mount", "mounted", "clamp", "clip", "bracket", "holder"},
+        "desk": {"desk", "table", "desktop", "clamp"},
+        "case": {"case", "box", "enclosure", "cover"},
+        "box": {"box", "case", "enclosure"},
+        "organizer": {"organizer", "holder", "storage", "rack"},
+        "clip": {"clip", "clamp", "holder"},
     }
     return bool((equivalents.get(word, {word}) & haystack) or any(term in title for term in equivalents.get(word, {word})))
 
@@ -1017,6 +1040,60 @@ class ThingiverseProvider(DesignProvider):
         return "Thingiverse"
 
 
+class Cults3DProvider(DesignProvider):
+    """Cults3D broad search provider for additional model matches."""
+
+    def search(self, query: str, limit: int = 5) -> list[ExampleDesign]:
+        cache_key = ("cults3d", query.strip().lower(), limit)
+        cached = _SEARCH_CACHE.get(cache_key)
+        if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+            return list(cached[1])
+        try:
+            page = _fetch_text(f"https://cults3d.com/en/search?q={quote_plus(query)}")
+        except Exception:
+            return []
+        results = _generic_link_results(page, "cults3d", "https://cults3d.com", limit)
+        _SEARCH_CACHE[cache_key] = (time.time(), results)
+        return list(results)
+
+    def get_popular(self, category: str, limit: int = 5) -> list[ExampleDesign]:
+        return self.search(category, limit)
+
+    def is_available(self) -> bool:
+        return True
+
+    @property
+    def provider_name(self) -> str:
+        return "Cults3D"
+
+
+class MyMiniFactoryProvider(DesignProvider):
+    """MyMiniFactory search provider for additional real model signals."""
+
+    def search(self, query: str, limit: int = 5) -> list[ExampleDesign]:
+        cache_key = ("myminifactory", query.strip().lower(), limit)
+        cached = _SEARCH_CACHE.get(cache_key)
+        if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+            return list(cached[1])
+        try:
+            page = _fetch_text(f"https://www.myminifactory.com/search/?query={quote_plus(query)}")
+        except Exception:
+            return []
+        results = _generic_link_results(page, "myminifactory", "https://www.myminifactory.com", limit)
+        _SEARCH_CACHE[cache_key] = (time.time(), results)
+        return list(results)
+
+    def get_popular(self, category: str, limit: int = 5) -> list[ExampleDesign]:
+        return self.search(category, limit)
+
+    def is_available(self) -> bool:
+        return True
+
+    @property
+    def provider_name(self) -> str:
+        return "MyMiniFactory"
+
+
 class ThangsProvider(DesignProvider):
     """Thangs design provider."""
     
@@ -1104,6 +1181,8 @@ class ProviderRegistry:
         self.providers: dict[str, DesignProvider] = {
             "makerworld": MakerworldProvider(),
             "printables": PrintablesProvider(),
+            "cults3d": Cults3DProvider(),
+            "myminifactory": MyMiniFactoryProvider(),
             "thingiverse": ThingiverseProvider(),
             "thangs": ThangsProvider(),
             "stlfinder": StlFinderProvider(),
@@ -1115,7 +1194,7 @@ class ProviderRegistry:
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
         search_query = normalize_source_query(query) or query
         variants = _query_variants(search_query) or [search_query]
-        per_query_limit = max(limit, 6)
+        per_query_limit = max(limit * 2, 10)
         for provider in self.providers.values():
             if not provider.is_available():
                 continue

@@ -125,7 +125,7 @@ export default function AiPanel() {
     <div className="flex h-full flex-col gap-4">
       <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] px-3 py-3 shadow-xl">
         <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#777]">Current model</div>
-        <div className="mt-1 truncate text-sm font-semibold text-white">{creationTitle(latestPrompt || "New Creation")}</div>
+        <div className="mt-1 truncate text-sm font-semibold text-white">{creationTitle(latestPrompt || "Untitled workspace")}</div>
       </div>
 
       <div className="hidden">
@@ -142,7 +142,7 @@ export default function AiPanel() {
         <div className="border-t border-[#303033] px-3 py-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="grid h-5 w-5 place-items-center rounded border border-[#555] text-[11px]">◇</span>
-            <span className="truncate">{creationTitle(latestPrompt || "New Creation")}</span>
+            <span className="truncate">{creationTitle(latestPrompt || "Untitled workspace")}</span>
           </div>
         </div>
       </div>
