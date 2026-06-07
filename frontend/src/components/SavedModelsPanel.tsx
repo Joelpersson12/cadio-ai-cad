@@ -225,14 +225,14 @@ export default function SavedModelsPanel({
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-[#6f6f72]">
           {!accountId
-            ? "Log in with email or phone to save private models."
+            ? "Log in with email to save private models."
             : syncState === "loading"
               ? "Loading this account's saved models..."
               : syncState === "syncing"
                 ? "Syncing saved models..."
                 : syncState === "offline"
-                  ? `Local backup for ${account?.email || account?.phone || "this account"}. Cloud sync is offline.`
-                  : `Cloud saved for ${account?.email || account?.phone || "this account"}.`}
+                  ? `Local backup for ${account?.email || account?.name || "this account"}. Cloud sync is offline.`
+                  : `Cloud saved for ${account?.email || account?.name || "this account"}.`}
         </p>
       </div>
     </details>

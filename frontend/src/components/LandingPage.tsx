@@ -27,7 +27,7 @@ const copy = {
     nav: {
       product: "Product",
       workflow: "Workflow",
-      pricing: "Pricing",
+      pricing: "Beta",
       login: "Log in",
       signup: "Sign up",
       start: "Start building",
@@ -39,7 +39,7 @@ const copy = {
         "Cadio helps you find printable model ideas, turn prompts into editable CAD geometry, and prepare exports with printer-aware settings.",
       prompt: heroPrompt,
       primary: "Start building",
-      secondary: "See pricing",
+      secondary: "Beta access",
     },
     stats: [
       ["Source aware", "Looks for proven printable patterns before it builds"],
@@ -65,44 +65,8 @@ const copy = {
         ["4", "Export", "Download STL, 3MF, OBJ, or AMF with recommended print settings."],
       ],
     },
-    pricingTitle: "Pricing",
-    pricingBody: "Every plan has the same CAD experience. The only difference is monthly downloadable generations.",
-    tiers: [
-      {
-        name: "Free",
-        price: "$0",
-        note: "1 downloadable generation",
-        features: [
-          "1 generation that can be downloaded",
-          "Login required before download",
-          "Same Easy and Expert CAD",
-          "Same model quality as paid plans",
-        ],
-      },
-      {
-        name: "Maker",
-        price: "$10/mo",
-        note: "10 generations per month",
-        features: [
-          "10 downloadable generations/month",
-          "Same CAD tools as every plan",
-          "All printers, materials, and export formats",
-          "Upgrade checkout coming soon",
-        ],
-        featured: true,
-      },
-      {
-        name: "Pro",
-        price: "$49/mo",
-        note: "Unlimited generations",
-        features: [
-          "Unlimited downloadable generations",
-          "Same CAD experience as every plan",
-          "All printers, materials, and export formats",
-          "Upgrade checkout coming soon",
-        ],
-      },
-    ],
+    pricingTitle: "Pricing coming soon",
+    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
     auth: {
       loginTitle: "Log in",
       signupTitle: "Sign up",
@@ -110,7 +74,7 @@ const copy = {
       password: "Password",
       name: "Name",
       continue: "Continue to workspace",
-      hint: "Saved models and download usage are private to the email account you use here.",
+      hint: "Saved models are private to the email account you use here.",
     },
     cta: {
       title: "Ready to build?",
@@ -122,7 +86,7 @@ const copy = {
     nav: {
       product: "Produkt",
       workflow: "Arbetsflode",
-      pricing: "Priser",
+      pricing: "Beta",
       login: "Logga in",
       signup: "Skapa konto",
       start: "Start building",
@@ -134,7 +98,7 @@ const copy = {
         "Cadio hjalper dig hitta printbara modellideer, skapa redigerbar CAD-geometri fran prompts och exportera med skrivarens installningar i tanken.",
       prompt: heroPrompt,
       primary: "Start building",
-      secondary: "Se priser",
+      secondary: "Beta access",
     },
     stats: [
       ["Source aware", "Letar efter beprovade printbara monster innan modellen byggs"],
@@ -160,44 +124,8 @@ const copy = {
         ["4", "Exportera", "Ladda ner STL, 3MF, OBJ eller AMF med rekommenderade printinstallningar."],
       ],
     },
-    pricingTitle: "Priser",
-    pricingBody: "Alla paket har samma CAD-upplevelse. Skillnaden ar antal nedladdningsbara genereringar per manad.",
-    tiers: [
-      {
-        name: "Free",
-        price: "$0",
-        note: "1 nedladdningsbar generering",
-        features: [
-          "1 generering som kan laddas ner",
-          "Login kravs innan nedladdning",
-          "Samma Easy och Expert CAD",
-          "Samma modellkvalitet som betalda paket",
-        ],
-      },
-      {
-        name: "Maker",
-        price: "$10/mo",
-        note: "10 genereringar per manad",
-        features: [
-          "10 nedladdningsbara genereringar/manad",
-          "Samma CAD-verktyg som alla paket",
-          "Alla skrivare, material och exportformat",
-          "Login kravs for nedladdning",
-        ],
-        featured: true,
-      },
-      {
-        name: "Pro",
-        price: "$49/mo",
-        note: "Obegransade genereringar",
-        features: [
-          "Obegransade nedladdningsbara genereringar",
-          "Samma CAD-upplevelse som alla paket",
-          "Alla skrivare, material och exportformat",
-          "Login kravs for nedladdning",
-        ],
-      },
-    ],
+    pricingTitle: "Pricing coming soon",
+    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
     auth: {
       loginTitle: "Logga in",
       signupTitle: "Skapa konto",
@@ -205,7 +133,7 @@ const copy = {
       password: "Losenord",
       name: "Namn",
       continue: "Fortsatt till workspace",
-      hint: "Sparade modeller och nedladdningar ar privata for e-postkontot du anvander har.",
+      hint: "Sparade modeller ar privata for e-postkontot du anvander har.",
     },
     cta: {
       title: "Redo att bygga?",
@@ -217,7 +145,7 @@ const copy = {
     nav: {
       product: "Producto",
       workflow: "Flujo",
-      pricing: "Precios",
+      pricing: "Beta",
       login: "Iniciar sesion",
       signup: "Crear cuenta",
       start: "Start building",
@@ -255,44 +183,8 @@ const copy = {
         ["4", "Exporta", "Descarga STL, 3MF, OBJ o AMF con ajustes de impresion recomendados."],
       ],
     },
-    pricingTitle: "Precios",
-    pricingBody: "Todos los planes tienen la misma experiencia CAD. La diferencia es la cantidad mensual de generaciones descargables.",
-    tiers: [
-      {
-        name: "Free",
-        price: "$0",
-        note: "1 generacion descargable",
-        features: [
-          "1 generacion que se puede descargar",
-          "Inicio de sesion requerido antes de descargar",
-          "Mismo Easy y Expert CAD",
-          "Misma calidad de modelo que los planes de pago",
-        ],
-      },
-      {
-        name: "Maker",
-        price: "$10/mo",
-        note: "10 generaciones al mes",
-        features: [
-          "10 generaciones descargables/mes",
-          "Mismas herramientas CAD que todos los planes",
-          "Todas las impresoras, materiales y formatos de exportacion",
-          "Login requerido para descargar",
-        ],
-        featured: true,
-      },
-      {
-        name: "Pro",
-        price: "$49/mo",
-        note: "Generaciones ilimitadas",
-        features: [
-          "Generaciones descargables ilimitadas",
-          "Misma experiencia CAD que todos los planes",
-          "Todas las impresoras, materiales y formatos de exportacion",
-          "Login requerido para descargar",
-        ],
-      },
-    ],
+    pricingTitle: "Pricing coming soon",
+    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
     auth: {
       loginTitle: "Iniciar sesion",
       signupTitle: "Crear cuenta",
@@ -300,7 +192,7 @@ const copy = {
       password: "Contrasena",
       name: "Nombre",
       continue: "Continuar al workspace",
-      hint: "Los modelos guardados y las descargas son privados para el email que uses aqui.",
+      hint: "Los modelos guardados son privados para el email que uses aqui.",
     },
     cta: {
       title: "Listo para construir?",
@@ -312,7 +204,7 @@ const copy = {
     nav: {
       product: "Produit",
       workflow: "Flux",
-      pricing: "Tarifs",
+      pricing: "Beta",
       login: "Connexion",
       signup: "Creer un compte",
       start: "Start building",
@@ -350,44 +242,8 @@ const copy = {
         ["4", "Exportez", "Telechargez STL, 3MF, OBJ ou AMF avec les reglages d'impression recommandes."],
       ],
     },
-    pricingTitle: "Tarifs",
-    pricingBody: "Tous les forfaits ont la meme experience CAO. Seul le nombre de generations telechargeables par mois change.",
-    tiers: [
-      {
-        name: "Free",
-        price: "$0",
-        note: "1 generation telechargeable",
-        features: [
-          "1 generation telechargeable",
-          "Connexion requise avant telechargement",
-          "Memes modes Easy et Expert CAD",
-          "Meme qualite de modele que les forfaits payants",
-        ],
-      },
-      {
-        name: "Maker",
-        price: "$10/mo",
-        note: "10 generations par mois",
-        features: [
-          "10 generations telechargeables/mois",
-          "Memes outils CAO que tous les forfaits",
-          "Toutes imprimantes, materiaux et formats d'export",
-          "Connexion requise pour telecharger",
-        ],
-        featured: true,
-      },
-      {
-        name: "Pro",
-        price: "$49/mo",
-        note: "Generations illimitees",
-        features: [
-          "Generations telechargeables illimitees",
-          "Meme experience CAO que tous les forfaits",
-          "Toutes imprimantes, materiaux et formats d'export",
-          "Connexion requise pour telecharger",
-        ],
-      },
-    ],
+    pricingTitle: "Pricing coming soon",
+    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
     auth: {
       loginTitle: "Connexion",
       signupTitle: "Creer un compte",
@@ -395,7 +251,7 @@ const copy = {
       password: "Mot de passe",
       name: "Nom",
       continue: "Continuer vers le workspace",
-      hint: "Les modeles enregistres et les telechargements restent prives pour l'email utilise ici.",
+      hint: "Les modeles enregistres restent prives pour l'email utilise ici.",
     },
     cta: {
       title: "Pret a construire?",
@@ -407,7 +263,7 @@ const copy = {
     nav: {
       product: "Prodotto",
       workflow: "Flusso",
-      pricing: "Prezzi",
+      pricing: "Beta",
       login: "Accedi",
       signup: "Registrati",
       start: "Start building",
@@ -445,44 +301,8 @@ const copy = {
         ["4", "Esporta", "Scarica STL, 3MF, OBJ o AMF con impostazioni di stampa consigliate."],
       ],
     },
-    pricingTitle: "Prezzi",
-    pricingBody: "Tutti i piani hanno la stessa esperienza CAD. Cambia solo il numero mensile di generazioni scaricabili.",
-    tiers: [
-      {
-        name: "Free",
-        price: "$0",
-        note: "1 generazione scaricabile",
-        features: [
-          "1 generazione scaricabile",
-          "Login richiesto prima del download",
-          "Stessi Easy e Expert CAD",
-          "Stessa qualita dei modelli dei piani a pagamento",
-        ],
-      },
-      {
-        name: "Maker",
-        price: "$10/mo",
-        note: "10 generazioni al mese",
-        features: [
-          "10 generazioni scaricabili/mese",
-          "Stessi strumenti CAD di ogni piano",
-          "Tutte le stampanti, materiali e formati export",
-          "Login richiesto per il download",
-        ],
-        featured: true,
-      },
-      {
-        name: "Pro",
-        price: "$49/mo",
-        note: "Generazioni illimitate",
-        features: [
-          "Generazioni scaricabili illimitate",
-          "Stessa esperienza CAD di ogni piano",
-          "Tutte le stampanti, materiali e formati export",
-          "Login richiesto per il download",
-        ],
-      },
-    ],
+    pricingTitle: "Pricing coming soon",
+    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
     auth: {
       loginTitle: "Accedi",
       signupTitle: "Registrati",
@@ -490,7 +310,7 @@ const copy = {
       password: "Password",
       name: "Nome",
       continue: "Continua al workspace",
-      hint: "I modelli salvati e i download sono privati per l'email usata qui.",
+      hint: "I modelli salvati sono privati per l'email usata qui.",
     },
     cta: {
       title: "Pronto a costruire?",
@@ -502,7 +322,7 @@ const copy = {
     nav: {
       product: "Produkt",
       workflow: "Ablauf",
-      pricing: "Preise",
+      pricing: "Beta",
       login: "Einloggen",
       signup: "Registrieren",
       start: "Start building",
@@ -514,7 +334,7 @@ const copy = {
         "Cadio kombiniert KI-Suche, parametrische Modelle und einen klaren CAD-Workspace fur Maker, Werkstatten und Produktideen.",
       prompt: heroPrompt,
       primary: "Start building",
-      secondary: "Preise ansehen",
+      secondary: "Beta access",
     },
     stats: [
       ["Source aware", "Nutzt Signale von Printables und beliebten 3D-Modellquellen"],
@@ -540,44 +360,8 @@ const copy = {
         ["4", "Exportieren", "Lade STL, 3MF, OBJ oder AMF mit empfohlenen Druckeinstellungen herunter."],
       ],
     },
-    pricingTitle: "Preise",
-    pricingBody: "Alle Pakete haben dieselbe CAD-Erfahrung. Nur die Anzahl monatlich herunterladbarer Generierungen ist anders.",
-    tiers: [
-      {
-        name: "Free",
-        price: "$0",
-        note: "1 herunterladbare Generierung",
-        features: [
-          "1 Generierung zum Herunterladen",
-          "Login vor Download erforderlich",
-          "Dasselbe Easy und Expert CAD",
-          "Dieselbe Modellqualitat wie bezahlte Pakete",
-        ],
-      },
-      {
-        name: "Maker",
-        price: "$10/mo",
-        note: "10 Generierungen pro Monat",
-        features: [
-          "10 herunterladbare Generierungen/Monat",
-          "Dieselben CAD-Tools wie jedes Paket",
-          "Alle Drucker, Materialien und Exportformate",
-          "Login fur Downloads erforderlich",
-        ],
-        featured: true,
-      },
-      {
-        name: "Pro",
-        price: "$49/mo",
-        note: "Unbegrenzte Generierungen",
-        features: [
-          "Unbegrenzte herunterladbare Generierungen",
-          "Dieselbe CAD-Erfahrung wie jedes Paket",
-          "Alle Drucker, Materialien und Exportformate",
-          "Login fur Downloads erforderlich",
-        ],
-      },
-    ],
+    pricingTitle: "Pricing coming soon",
+    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
     auth: {
       loginTitle: "Einloggen",
       signupTitle: "Registrieren",
@@ -585,7 +369,7 @@ const copy = {
       password: "Passwort",
       name: "Name",
       continue: "Weiter zum Workspace",
-      hint: "Gespeicherte Modelle und Downloads sind privat fur die hier genutzte E-Mail.",
+      hint: "Gespeicherte Modelle sind privat fur die hier genutzte E-Mail.",
     },
     cta: {
       title: "Bereit zu bauen?",
@@ -597,7 +381,7 @@ const copy = {
     nav: {
       product: "Produto",
       workflow: "Fluxo",
-      pricing: "Precos",
+      pricing: "Beta",
       login: "Entrar",
       signup: "Criar conta",
       start: "Start building",
@@ -635,44 +419,8 @@ const copy = {
         ["4", "Exporte", "Baixe STL, 3MF, OBJ ou AMF com configuracoes de impressao recomendadas."],
       ],
     },
-    pricingTitle: "Precos",
-    pricingBody: "Todos os planos tem a mesma experiencia CAD. A diferenca e o numero mensal de geracoes baixaveis.",
-    tiers: [
-      {
-        name: "Free",
-        price: "$0",
-        note: "1 geracao baixavel",
-        features: [
-          "1 geracao que pode ser baixada",
-          "Login obrigatorio antes do download",
-          "Mesmo Easy e Expert CAD",
-          "Mesma qualidade de modelo dos planos pagos",
-        ],
-      },
-      {
-        name: "Maker",
-        price: "$10/mo",
-        note: "10 geracoes por mes",
-        features: [
-          "10 geracoes baixaveis/mes",
-          "Mesmas ferramentas CAD de todos os planos",
-          "Todas as impressoras, materiais e formatos de exportacao",
-          "Login obrigatorio para downloads",
-        ],
-        featured: true,
-      },
-      {
-        name: "Pro",
-        price: "$49/mo",
-        note: "Geracoes ilimitadas",
-        features: [
-          "Geracoes baixaveis ilimitadas",
-          "Mesma experiencia CAD de todos os planos",
-          "Todas as impressoras, materiais e formatos de exportacao",
-          "Login obrigatorio para downloads",
-        ],
-      },
-    ],
+    pricingTitle: "Pricing coming soon",
+    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
     auth: {
       loginTitle: "Entrar",
       signupTitle: "Criar conta",
@@ -680,7 +428,7 @@ const copy = {
       password: "Senha",
       name: "Nome",
       continue: "Continuar para o workspace",
-      hint: "Modelos salvos e downloads ficam privados para o email usado aqui.",
+      hint: "Modelos salvos ficam privados para o email usado aqui.",
     },
     cta: {
       title: "Pronto para construir?",
@@ -791,7 +539,6 @@ function HeroModel() {
     </group>
   );
 }
-
 function HeroScene() {
   return (
     <div className="absolute inset-0">
@@ -974,7 +721,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
           <div className="w-full max-w-md rounded-2xl border border-[#343436] bg-[#1f1f20] p-5 text-white shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-semibold">🚀 Early Access Beta</h2>
+                <h2 className="text-xl font-semibold">{"\u{1F680}"} Early Access Beta</h2>
                 <p className="mt-3 text-sm leading-6 text-[#c9c9cc]">
                   Cadio is currently in active development.
                 </p>
@@ -990,10 +737,10 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
             </div>
             <div className="mt-4 space-y-3 text-sm leading-6 text-[#d9d9db]">
               <p>
-                All users can generate and download 1 model for free while we improve the platform.
+                All downloads currently unlocked.
               </p>
               <p>
-                Paid plans and additional features are coming soon.
+                Pricing launches later.
               </p>
               <p>
                 We welcome feedback at{" "}
@@ -1110,40 +857,26 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               {text.nav.start}
             </button>
           </div>
-          <div className="grid gap-4 lg:grid-cols-3">
-            {text.tiers.map((tier) => (
-              <article
-                key={tier.name}
-                className={`rounded-2xl border p-6 ${
-                  tier.featured ? "border-[#2bb8dc] bg-[#193039]" : "border-white/10 bg-[#202020]"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-xl font-semibold text-white">{tier.name}</h3>
-                    <p className="mt-1 text-xs text-[#a8a8ab]">{tier.note}</p>
-                  </div>
-                  {tier.featured && <span className="rounded-full bg-[#2bb8dc] px-3 py-1 text-[11px] font-bold text-[#101010]">Popular</span>}
+          <div className="rounded-2xl border border-[#2bb8dc]/35 bg-[#102b33] p-6 shadow-[0_0_38px_rgba(43,184,220,0.10)] sm:p-8">
+            <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#b7f3ff]">
+                  Early Access Beta
                 </div>
-                <div className="mt-6 text-3xl font-semibold text-white">{tier.price}</div>
-                <ul className="mt-6 space-y-3 text-sm text-[#d7d7d8]">
-                  {tier.features.map((feature) => (
-                    <li key={feature} className="flex gap-2">
-                      <span className="text-[#2bb8dc]">+</span>
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={onStartBuilding}
-                  className={`mt-7 h-11 w-full rounded-lg text-sm font-semibold ${
-                    tier.featured ? "bg-[#2bb8dc] text-[#101010] hover:bg-[#69d9f5]" : "bg-[#2b2b2d] text-white hover:bg-[#353537]"
-                  }`}
-                >
-                  {text.nav.start}
-                </button>
-              </article>
-            ))}
+                <h3 className="mt-3 text-2xl font-semibold text-white">
+                  All downloads currently unlocked.
+                </h3>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-[#b8d7dc]">
+                  Pricing launches later. During beta you can generate, edit, test export formats, and download models while Cadio improves.
+                </p>
+              </div>
+              <button
+                onClick={onStartBuilding}
+                className="h-11 w-fit rounded-lg bg-[#e8e8e8] px-5 text-sm font-semibold text-[#151515] hover:bg-white"
+              >
+                {text.nav.start}
+              </button>
+            </div>
           </div>
         </section>
 

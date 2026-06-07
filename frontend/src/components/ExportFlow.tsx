@@ -1,16 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useCadStore } from "../stores/cadStore";
-import {
-  downloadExport,
-  getAccountProfile,
-  type AccountProfile,
-} from "../utils/api";
-import {
-  getCadioAccount,
-  getCadioAuthToken,
-  loginCadioAccount,
-  updateCadioAccount,
-} from "../utils/auth";
+import { downloadExport } from "../utils/api";
 import { copyText } from "../utils/projectShare";
 import ScalePercentInput from "./ScalePercentInput";
 
@@ -38,45 +28,12 @@ export function ExportFlowContent({ onClose }: { onClose?: () => void }) {
   } = useCadStore();
   const [format, setFormat] = useState("stl");
   const [copied, setCopied] = useState(false);
-  const [account, setAccount] = useState<AccountProfile | null>(() => getCadioAccount());
-  const [authToken, setAuthToken] = useState(() => getCadioAuthToken());
-  const [authBusy, setAuthBusy] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [exportError, setExportError] = useState("");
   const selectedObject = objects.find((object) => object.id === selectedObjectId) ?? objects[0];
   const scalePercent = (selectedObject?.transform.scale[0] ?? 1) * 100;
   const selectedPrinter = printers[printer];
   const source = printSettings?.source_settings;
-  const downloadsUsed = account?.downloadsUsed ?? 0;
-  const downloadLimit = account?.downloadLimit ?? 1;
-  const downloadsRemaining = account?.downloadsRemaining === null
-    ? null
-    : account?.downloadsRemaining ?? Math.max(0, downloadLimit - downloadsUsed);
-  const canDownload = Boolean(
-    account?.canDownload ?? (account ? downloadsRemaining === null || downloadsRemaining > 0 : false),
-  );
-
-  const refreshAccount = async (token = authToken) => {
-    if (!token) return;
-    const result = await getAccountProfile(token);
-    updateCadioAccount(result.account);
-    setAccount(result.account);
-    setAuthToken(token);
-  };
-
-  useEffect(() => {
-    const syncAuth = () => {
-      const token = getCadioAuthToken();
-      setAuthToken(token);
-      setAccount(getCadioAccount());
-      if (token) {
-        void refreshAccount(token).catch(() => undefined);
-      }
-    };
-    syncAuth();
-    window.addEventListener("cadio-auth-changed", syncAuth);
-    return () => window.removeEventListener("cadio-auth-changed", syncAuth);
-  }, []);
 
   const copySettings = async () => {
     if (!printSettings) return;
@@ -97,45 +54,14 @@ export function ExportFlowContent({ onClose }: { onClose?: () => void }) {
     window.setTimeout(() => setCopied(false), 1600);
   };
 
-  const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setExportError("");
-    setAuthBusy(true);
-    try {
-      const nextAccount = await loginCadioAccount({
-        name: String(form.get("name") || ""),
-        email: String(form.get("email") || ""),
-        password: String(form.get("password") || ""),
-      });
-      setAccount(nextAccount);
-      setAuthToken(getCadioAuthToken());
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : "Could not log in.");
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
   const handleDownload = async () => {
     if (!sessionId || downloadBusy) return;
-    const token = authToken || getCadioAuthToken();
-    if (!token) {
-      setExportError("Log in with email and password to download your free generated file.");
-      return;
-    }
-    if (!canDownload) {
-      setExportError("Your free download has already been used. Upgrade options are coming soon.");
-      return;
-    }
     setExportError("");
     setDownloadBusy(true);
     try {
-      await downloadExport(sessionId, format, token);
-      await refreshAccount(token);
+      await downloadExport(sessionId, format);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Download failed.");
-      await refreshAccount(token).catch(() => undefined);
     } finally {
       setDownloadBusy(false);
     }
@@ -235,71 +161,18 @@ export function ExportFlowContent({ onClose }: { onClose?: () => void }) {
         </section>
       )}
 
-      <section className="rounded-xl border border-[#303033] bg-[#202021] p-3">
+      <section className="rounded-xl border border-[#24464d] bg-[#13272c] p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#858585]">Account</div>
-            {account ? (
-              <p className="mt-1 text-xs text-[#bdbdbd]">
-                Signed in as {account.email || account.name || "Cadio user"}
-              </p>
-            ) : (
-              <p className="mt-1 text-xs text-[#bdbdbd]">
-                Build and edit for free. Log in only when you download.
-              </p>
-            )}
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b7f3ff]">Early Access Beta</div>
+            <p className="mt-1 text-xs leading-5 text-[#a9cbd1]">
+              All downloads are currently unlocked. Pricing launches later.
+            </p>
           </div>
-          {account && (
-            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-              canDownload ? "bg-[#123038] text-[#b7f3ff]" : "bg-[#3a241f] text-[#ffb199]"
-            }`}>
-              {downloadsRemaining === null ? "Unlimited" : `${downloadsRemaining} left`}
-            </span>
-          )}
+          <span className="rounded-full bg-[#0f3b45] px-2.5 py-1 text-[11px] font-semibold text-[#b7f3ff]">
+            Unlocked
+          </span>
         </div>
-        {account ? (
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-lg bg-[#171717] px-3 py-2">
-              <div className="text-[#858585]">Plan</div>
-              <div className="mt-1 font-semibold capitalize">{account.plan || "free"}</div>
-            </div>
-            <div className="rounded-lg bg-[#171717] px-3 py-2">
-              <div className="text-[#858585]">Downloads</div>
-              <div className="mt-1 font-semibold">
-                {downloadsUsed}/{downloadLimit < 0 ? "unlimited" : downloadLimit}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <form className="mt-3 grid gap-2" onSubmit={handleAuthSubmit}>
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder="Email"
-              className="h-10 rounded-lg border border-[#343436] bg-[#111] px-3 text-sm text-white outline-none placeholder:text-[#777] focus:border-[#2bb8dc]"
-            />
-            <input
-              name="password"
-              type="password"
-              minLength={4}
-              required
-              placeholder="Password"
-              className="h-10 rounded-lg border border-[#343436] bg-[#111] px-3 text-sm text-white outline-none placeholder:text-[#777] focus:border-[#2bb8dc]"
-            />
-            <button
-              disabled={authBusy}
-              className="h-10 rounded-lg bg-[#2bb8dc] text-sm font-semibold text-[#101010] disabled:cursor-wait disabled:opacity-60"
-            >
-              {authBusy ? "Signing in..." : "Log in / create account"}
-            </button>
-          </form>
-        )}
-        {account && !canDownload && (
-          <p className="mt-3 rounded-lg border border-[#4b332c] bg-[#211817] px-3 py-2 text-xs leading-5 text-[#ffb199]">
-            Your included download has been used. Paid plan upgrades are coming soon.
-          </p>
-        )}
       </section>
 
       {exportError && (
@@ -312,9 +185,9 @@ export function ExportFlowContent({ onClose }: { onClose?: () => void }) {
         <button
           type="button"
           onClick={() => void handleDownload()}
-          disabled={!sessionId || downloadBusy || (Boolean(account) && !canDownload)}
+          disabled={!sessionId || downloadBusy}
           className={`flex h-12 items-center justify-center rounded-xl text-sm font-semibold ${
-            sessionId && (!account || canDownload)
+            sessionId
               ? "bg-[#e8e8e8] text-[#171717] hover:bg-white"
               : "bg-[#333] text-[#777]"
           }`}

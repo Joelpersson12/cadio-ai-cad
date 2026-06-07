@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCadStore } from "../stores/cadStore";
 import type { MaterialProfile, PrinterProfile } from "../utils/types";
-import { downloadExport, getAccountProfile, type AccountProfile } from "../utils/api";
-import { getCadioAccount, getCadioAuthToken, updateCadioAccount } from "../utils/auth";
+import { downloadExport } from "../utils/api";
 import ScalePercentInput from "./ScalePercentInput";
 
 type ParamMeta = {
@@ -176,8 +175,6 @@ function ParameterRow({
 
 export default function ObjectInspector() {
   const [exportFormat, setExportFormat] = useState("stl");
-  const [account, setAccount] = useState<AccountProfile | null>(() => getCadioAccount());
-  const [authToken, setAuthToken] = useState(() => getCadioAuthToken());
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [exportError, setExportError] = useState("");
   const {
@@ -222,49 +219,14 @@ export default function ObjectInspector() {
     ? Object.entries(materials)
     : FALLBACK_MATERIAL_ENTRIES;
 
-  const refreshAccount = async (token = authToken) => {
-    if (!token) return;
-    const result = await getAccountProfile(token);
-    updateCadioAccount(result.account);
-    setAccount(result.account);
-    setAuthToken(token);
-  };
-
-  useEffect(() => {
-    const syncAuth = () => {
-      const token = getCadioAuthToken();
-      setAuthToken(token);
-      setAccount(getCadioAccount());
-      if (token) {
-        void refreshAccount(token).catch(() => undefined);
-      }
-    };
-    syncAuth();
-    window.addEventListener("cadio-auth-changed", syncAuth);
-    return () => window.removeEventListener("cadio-auth-changed", syncAuth);
-  }, []);
-
   const handleDownload = async () => {
     if (!sessionId || downloadBusy) return;
-    const token = authToken || getCadioAuthToken();
-    if (!token) {
-      setExportError("Log in from Export to download your free file.");
-      window.dispatchEvent(new Event("cadio-open-export"));
-      return;
-    }
-    if (account && account.canDownload === false) {
-      setExportError("Your free download has already been used.");
-      window.dispatchEvent(new Event("cadio-open-export"));
-      return;
-    }
     setDownloadBusy(true);
     setExportError("");
     try {
-      await downloadExport(sessionId, exportFormat, token);
-      await refreshAccount(token);
+      await downloadExport(sessionId, exportFormat);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Download failed.");
-      await refreshAccount(token).catch(() => undefined);
     } finally {
       setDownloadBusy(false);
     }

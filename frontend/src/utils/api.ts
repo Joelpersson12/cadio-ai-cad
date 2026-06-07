@@ -316,10 +316,11 @@ async function downloadFromBase(
   base: string,
   sessionId: string,
   format: string,
-  token: string,
+  token?: string,
 ): Promise<void> {
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
   const res = await fetch(`${base}/api/export/${sessionId}/${format}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers,
   });
   if (!res.ok) {
     const contentType = res.headers.get("content-type") || "";
@@ -346,7 +347,7 @@ async function downloadFromBase(
 export async function downloadExport(
   sessionId: string,
   format: string,
-  token: string,
+  token?: string,
 ): Promise<void> {
   let lastError: unknown = null;
   for (const base of API_FALLBACKS) {
