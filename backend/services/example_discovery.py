@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.services.design_providers import ExampleDesign, get_provider_registry
+from backend.services.design_providers import ExampleDesign
+from backend.services.provider_extensions import get_extended_provider_registry
 from backend.services.prompt_translation import normalize_source_query
 from backend.services.product_templates import PRODUCT_TEMPLATES, ProductTemplate
 
@@ -57,7 +58,7 @@ class ExampleDiscovery:
         
         # Search external providers (optional, slower)
         if include_external:
-            registry = get_provider_registry()
+            registry = get_extended_provider_registry()
             result["provider_status"] = registry.status()
             external = registry.search_all(prompt, limit=4)
             result["external_examples"] = [ex.to_dict() for ex in external]
