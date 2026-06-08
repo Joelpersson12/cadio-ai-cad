@@ -812,8 +812,22 @@ export default function CadViewport({
       onContextMenu={(e) => e.preventDefault()}
     >
       <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-3 top-14 z-10 w-56 flex-col gap-1.5 rounded-lg border border-[#454548] bg-[#242424]/92 p-2 shadow-xl backdrop-blur`}>
-        <div className="px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cadio-muted">
-          Expert tools
+        <div className="flex items-center justify-between gap-2 px-2 py-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cadio-muted">
+            Expert tools
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onSetExpertTool?.("select");
+              onSetExpertMode?.(false);
+            }}
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-[#454548] bg-[#1d1d1f] text-sm font-semibold leading-none text-[#cfcfcf] hover:border-[#28c7df] hover:text-white"
+            title="Close expert tools"
+            aria-label="Close expert tools"
+          >
+            ×
+          </button>
         </div>
         {(["select", "rectangle", "circle", "line", "hole"] as ExpertTool[]).map((tool) => (
           <button
