@@ -77,6 +77,7 @@ def parse_hole_edit(prompt: str) -> dict[str, float]:
         "counterbore_diameter": float(counterbore_match.group(1)) if counterbore_match else 9.0,
     }
 
+
 SYSTEM_PROMPT = """You are a professional CAD assistant that converts natural language into realistic 3D model parameters.
 
 Your role: Create practical, printable objects with appropriate dimensions and structural features.
@@ -113,6 +114,7 @@ IMPORTANT REFERENCE DIMENSIONS (realistic printable objects):
 - Monitor stand: w=300, d=200, h=100, thickness=15, angle=90 (flat base)
 - Shelf bracket: w=150, d=150, h=20, thickness=10, angle=90 (wall mount)
 - Desk organizer: w=150, d=100, h=120, thickness=6, angle=90
+- Tool holder / verktygshållare: w=118, d=58, h=52, thickness=7, 2 mounting holes, wall/pegboard-ready
 - Phone charging dock: w=80, d=60, h=100, thickness=6, angle=45
 - AirPod holder: w=60, d=50, h=40, thickness=4, angle=90
 - Watch stand: w=70, d=70, h=50, thickness=4, angle=75
@@ -172,9 +174,9 @@ def _coerce_feature(feature: Any) -> Feature:
 def _external_design_signals(prompt: str, params: dict[str, float]) -> list[str]:
     """Use ranked external metadata as inspiration signals, never source geometry."""
     try:
-        from backend.services.design_providers import get_provider_registry
+        from backend.services.provider_extensions import get_extended_provider_registry
 
-        examples = get_provider_registry().search_all(prompt, limit=6)
+        examples = get_extended_provider_registry().search_all(prompt, limit=6)
     except Exception:
         return []
 
@@ -309,6 +311,20 @@ def _apply_deterministic_edit(
         _ensure_feature(features, "mount_holes", True)
         actions.append("matched electronics holder proportions")
 
+    if any(word in text for word in ("tool holder", "tool rack", "workshop organizer", "drill holder", "bit holder", "screwdriver holder", "wrench holder", "pliers holder")):
+        params["width"] = max(float(params.get("width", 90.0)), 118.0)
+        params["depth"] = max(float(params.get("depth", 50.0)), 58.0)
+        params["height"] = max(float(params.get("height", 35.0)), 52.0)
+        params["thickness"] = max(float(params.get("thickness", 5.0)), 7.0)
+        params["wall_thickness"] = max(float(params.get("wall_thickness", 3.0)), 4.0)
+        params["hole_count"] = max(float(params.get("hole_count", 0.0)), 2.0)
+        params["hole_diameter"] = max(float(params.get("hole_diameter", 5.0)), 5.0)
+        _ensure_feature(features, "base_extrude", True)
+        _ensure_feature(features, "mount_holes", True)
+        _ensure_feature(features, "fillet_edges", True)
+        _ensure_feature(features, "back_support", False)
+        actions.append("matched workshop tool holder proportions")
+
     return actions
 
 
@@ -321,7 +337,7 @@ def _apply_prompt_shape_inference(
     text = _prompt_match_text(prompt)
     actions: list[str] = []
 
-    if any(word in text for word in ("holder", "mount", "bracket", "clip", "retainer")):
+    if any(word in text for word in ("holder", "mount", "bracket", "clip", "retainer", "rack", "organizer")):
         params["width"] = max(float(params.get("width", 70.0)), 86.0)
         params["depth"] = max(float(params.get("depth", 55.0)), 64.0)
         params["height"] = max(float(params.get("height", 24.0)), 34.0)
