@@ -129,7 +129,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   selectedObjectId: "",
   selectedObjectIds: [],
   bounds: { x: 0, y: 0, z: 0 },
-  printer: "adventurer_3",
+  printer: "choose_printer",
   printers: {},
   materials: {},
   printAssistant: {
@@ -191,7 +191,14 @@ export const useCadStore = create<CadState>((set, get) => ({
     if (!sessionId) return;
     try {
       const data = await apiUpdatePrinter({ session_id: sessionId, printer });
-      get().applyScenePayload(data);
+      set({
+        version: data.version,
+        sceneToken: data.scene_token,
+        printer: data.printer,
+        printAssistant: data.print_assistant,
+        printSettings: data.print_settings,
+        editHistory: data.edit_history,
+      });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });
     }
