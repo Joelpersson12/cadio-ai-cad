@@ -36,6 +36,10 @@ from backend.services.session_manager import (
 # ---------------------------------------------------------------------------
 
 PRINTERS: dict[str, dict[str, Any]] = {
+    "choose_printer": {
+        "name": "+ Choose Printer",
+        "build_volume": (220, 220, 250),
+    },
     "adventurer_3": {
         "name": "Flashforge Adventurer 3",
         "build_volume": (150, 150, 150),
@@ -76,7 +80,7 @@ PRINTERS: dict[str, dict[str, Any]] = {
     "voron_24_350": {"name": "Voron 2.4 350", "build_volume": (350, 350, 330)},
 }
 
-DEFAULT_PRINTER = "adventurer_3"
+DEFAULT_PRINTER = "choose_printer"
 
 
 # ---------------------------------------------------------------------------
