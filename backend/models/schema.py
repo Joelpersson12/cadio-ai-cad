@@ -1,24 +1,21 @@
-"""Pydantic models for the Cadio API request/response contracts."""
+"""Pydantic schemas for API requests/responses."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+
 # ---------------------------------------------------------------------------
-# Printer profiles
+# Core scene schemas
 # ---------------------------------------------------------------------------
 
 
-class PrinterProfile(BaseModel):
-    name: str
-    build_volume: tuple[float, float, float]
-
-
-# ---------------------------------------------------------------------------
-# Transform / Feature / Object
-# ---------------------------------------------------------------------------
+class MeshPayload(BaseModel):
+    positions: list[float]
+    normals: list[float]
+    indices: list[int]
 
 
 class Transform(BaseModel):
@@ -29,53 +26,57 @@ class Transform(BaseModel):
 
 class Feature(BaseModel):
     id: str
+    name: str
     type: str
-    enabled: bool = True
+    enabled: bool
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
 
-class MeshPayload(BaseModel):
-    positions: list[float]
-    indices: list[int]
+class SourceSettings(BaseModel):
+    title: str = ""
+    author: str = ""
+    url: str = ""
+    license: str = ""
+    source: str = ""
+    index: int = 0
+    total: int = 0
+    query: str = ""
+    recommended_material: str = "PLA"
+    estimated_print_time_min: int | None = None
 
 
 class CadObjectOut(BaseModel):
     id: str
     name: str
-    parameters: dict[str, float]
-    feature_tree: list[Feature]
+    primitive: str
+    parameters: dict[str, Any]
     transform: Transform
-    material: str = "PLA"
-    color: str = "#4fc3f7"
+    material: str
+    color: str
+    visible: bool = True
+    locked: bool = False
     mesh: MeshPayload | None = None
-
-
-# ---------------------------------------------------------------------------
-# Print assistant
-# ---------------------------------------------------------------------------
+    features: list[Feature] = Field(default_factory=list)
+    source_settings: SourceSettings | None = None
 
 
 class PrintAssistantResult(BaseModel):
-    warnings: list[str] = Field(default_factory=list)
-    checks: list[str] = Field(default_factory=list)
-    hints: list[str] = Field(default_factory=list)
-    printability_score: int = 100
-
-
-# ---------------------------------------------------------------------------
-# Session payload (full scene state sent to frontend)
-# ---------------------------------------------------------------------------
+    warnings: list[str]
+    checks: list[str]
+    hints: list[str]
+    printability_score: int
 
 
 class ScenePayload(BaseModel):
-    status: str = "ok"
+    status: Literal["ok"] = "ok"
     session_id: str
     version: int
-    selected_object_id: str
+    scene_token: str
     objects: list[CadObjectOut]
     object_order: list[str]
+    selected_object_id: str
     bounds: dict[str, float]
     printer: str
-    scene_token: str
     print_assistant: PrintAssistantResult
     print_settings: dict[str, Any] = Field(default_factory=dict)
     printability_score: int
@@ -92,7 +93,7 @@ class ScenePayload(BaseModel):
 class GenerateRequest(BaseModel):
     session_id: str | None = None
     prompt: str = ""
-    printer: str = "adventurer_3"
+    printer: str = "choose_printer"
     fit: bool = True
 
 
@@ -103,46 +104,55 @@ class AuthRequest(BaseModel):
     password: str | None = None
 
 
-class SavedLibraryRequest(BaseModel):
-    library: dict[str, Any]
+class AccountProfileRequest(BaseModel):
+    token: str | None = None
 
 
-class ParameterUpdateRequest(BaseModel):
+class SaveModelRequest(BaseModel):
+    token: str | None = None
+    session_id: str
+    title: str = "Untitled model"
+    prompt: str = ""
+    tags: list[str] = Field(default_factory=list)
+
+
+class DeleteSavedModelRequest(BaseModel):
+    token: str | None = None
+    model_id: str
+
+
+class DownloadRequest(BaseModel):
+    token: str | None = None
+    session_id: str
+    model_title: str = "Untitled model"
+
+
+class UpdateParamRequest(BaseModel):
     session_id: str
     object_id: str | None = None
     parameters: dict[str, float]
 
 
-class PrinterUpdateRequest(BaseModel):
-    session_id: str
-    printer: str
-
-
-class AppearanceUpdateRequest(BaseModel):
+class UpdateAppearanceRequest(BaseModel):
     session_id: str
     object_id: str | None = None
     material: str | None = None
     color: str | None = None
 
 
-class FeatureToggleRequest(BaseModel):
+class ToggleFeatureRequest(BaseModel):
     session_id: str
-    object_id: str | None = None
+    object_id: str
     feature_id: str
     enabled: bool
 
 
-class ObjectSelectRequest(BaseModel):
+class SelectObjectRequest(BaseModel):
     session_id: str
     object_id: str
 
 
-class ObjectDeleteRequest(BaseModel):
-    session_id: str
-    object_id: str
-
-
-class TransformUpdateRequest(BaseModel):
+class TransformObjectRequest(BaseModel):
     session_id: str
     object_id: str
     position: list[float] | None = None
@@ -151,25 +161,63 @@ class TransformUpdateRequest(BaseModel):
     snap: str | None = None
 
 
-class SourceModelSwitchRequest(BaseModel):
+class DuplicateObjectRequest(BaseModel):
     session_id: str
-    direction: str = "next"
+    object_id: str | None = None
 
 
-class PrimitiveCreateRequest(BaseModel):
+class DeleteObjectRequest(BaseModel):
+    session_id: str
+    object_id: str
+
+
+class PrinterUpdateRequest(BaseModel):
+    session_id: str
+    printer: str
+
+
+class UndoRedoRequest(BaseModel):
+    session_id: str
+
+
+class ExportRequest(BaseModel):
+    session_id: str
+    format: Literal["stl", "obj", "3mf", "amf"] = "stl"
+
+
+class SwitchSourceRequest(BaseModel):
+    session_id: str
+    direction: Literal["next", "previous"]
+
+
+class CreatePrimitiveRequest(BaseModel):
     session_id: str | None = None
-    primitive: str
-    name: str | None = None
+    primitive: Literal["rectangle", "circle", "hole", "line"]
+    name: str = "sketch"
     center: list[float] = Field(default_factory=lambda: [0.0, 0.0])
     size: list[float] = Field(default_factory=lambda: [40.0, 30.0])
-    height: float = 8.0
     radius: float | None = None
+    height: float = 8.0
     replace_scene: bool = False
 
 
 class ExpertOperationRequest(BaseModel):
     session_id: str
     object_id: str
-    operation: str
+    operation: Literal["fillet", "chamfer", "shell", "split"]
     amount: float = 2.0
     target: str = "body"
+
+
+class ShareProjectRequest(BaseModel):
+    session_id: str
+    title: str = "Untitled Project"
+    prompt: str = ""
+    printer: str = ""
+
+
+class ImportStlRequest(BaseModel):
+    session_id: str | None = None
+    name: str = "Imported STL"
+    stl_base64: str
+    replace_scene: bool = False
