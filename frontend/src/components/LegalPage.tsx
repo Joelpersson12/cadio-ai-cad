@@ -9,13 +9,13 @@ const pages: Record<
     title: string;
     eyebrow: string;
     updated: string;
-    sections: Array<{ heading: string; body: string[] }>;
+    sections: Array<{ heading: string; body: string[]; id?: string }>;
   }
 > = {
   terms: {
     title: "Terms of Service",
     eyebrow: "Cadio legal",
-    updated: "Effective June 7, 2026",
+    updated: "Effective June 8, 2026",
     sections: [
       {
         heading: "What Cadio Is",
@@ -54,7 +54,7 @@ const pages: Record<
   privacy: {
     title: "Privacy Policy",
     eyebrow: "Cadio privacy",
-    updated: "Effective June 7, 2026",
+    updated: "Effective June 8, 2026",
     sections: [
       {
         heading: "Data Cadio May Process",
@@ -68,6 +68,14 @@ const pages: Record<
         body: [
           "If analytics are enabled, Cadio may collect basic usage analytics such as page views and product interaction events.",
           "Analytics are optional in the codebase and are only activated when analytics environment variables are configured.",
+        ],
+      },
+      {
+        heading: "Cookies",
+        id: "cookies",
+        body: [
+          "Cadio uses essential browser storage and cookies to keep the workspace working, remember session state, support saved accounts, and preserve preferences such as language and project context.",
+          "Cadio may use analytics cookies or similar technologies only when analytics are configured for the site. You can block non-essential cookies in your browser settings.",
         ],
       },
       {
@@ -136,7 +144,7 @@ export default function LegalPage({
 
         <div className="mt-10 space-y-8">
           {content.sections.map((section) => (
-            <section key={section.heading} className="border-t border-white/10 pt-6">
+            <section id={section.id} key={section.heading} className="scroll-mt-20 border-t border-white/10 pt-6">
               <h2 className="text-xl font-semibold text-white">{section.heading}</h2>
               <div className="mt-3 space-y-3 text-sm leading-7 text-[#c8c8cb]">
                 {section.body.map((paragraph) =>
