@@ -1,7 +1,7 @@
 const legalLinks = [
   { label: "Terms", href: "/terms" },
   { label: "Privacy", href: "/privacy" },
-  { label: "Cookies", href: "/cookies" },
+  { label: "Cookies", href: "/privacy#cookies" },
   { label: "Contact", href: "/contact" },
 ];
 
