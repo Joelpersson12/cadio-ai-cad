@@ -43,11 +43,11 @@ CATEGORY_KEYWORDS: dict[str, set[str]] = {
     "battery_holder": {"battery", "batteries", "batteri", "dewalt", "makita", "milwaukee", "ryobi", "bosch"},
     "device_stand": {"stand", "stall", "dock", "cradle", "phone", "mobil", "tablet", "headset", "headphone"},
     "electronics_holder": {"cdi", "ecu", "ecm", "module", "modul", "ignition", "controller", "electronics"},
-    "holder": {"holder", "hallare", "mount", "wall", "bracket", "clip", "retainer", "hanger"},
+    "holder": {"holder", "hallare", "tool holder", "verktygshallare", "mount", "wall", "bracket", "clip", "retainer", "hanger"},
     "enclosure": {"case", "cover", "enclosure", "box", "housing", "shell", "lid", "cover"},
     "organizer": {"organizer", "organiser", "tray", "bin", "rack", "divider", "storage"},
     "organic": {"octopus", "blackfisk", "figurine", "statue", "miniature", "toy", "animal", "sculpture"},
-    "tool": {"jig", "fixture", "adapter", "spacer", "shim", "washer", "tool", "knife", "nozzle"},
+    "tool": {"jig", "fixture", "adapter", "spacer", "shim", "washer", "tool", "tools", "drill", "screwdriver", "wrench", "pliers", "bit", "knife", "nozzle"},
 }
 
 
@@ -133,13 +133,13 @@ DEFAULTS: dict[str, dict[str, float]] = {
         "wall_thickness": 3.0,
     },
     "tool": {
-        "width": 70.0,
-        "depth": 50.0,
-        "height": 12.0,
-        "thickness": 8.0,
+        "width": 118.0,
+        "depth": 58.0,
+        "height": 52.0,
+        "thickness": 7.0,
         "fillet_radius": 1.5,
         "chamfer_size": 0.0,
-        "hole_count": 1.0,
+        "hole_count": 2.0,
         "hole_diameter": 6.0,
         "wall_thickness": 3.0,
     },
@@ -165,7 +165,7 @@ FEATURES: dict[str, list[str]] = {
     "enclosure": ["base", "walls", "corner_posts", "lid_register", "rounded_edges"],
     "organizer": ["base", "walls", "dividers", "rounded_edges"],
     "organic": ["rounded_body", "appendages", "soft_edges"],
-    "tool": ["flat_base", "center_cutout", "mounting_holes", "chamfered_edges"],
+    "tool": ["base", "side_walls", "front_lip", "mounting_holes", "rounded_edges"],
     "generic": ["base", "rounded_edges"],
 }
 
@@ -209,9 +209,9 @@ def build_design_brief(prompt: str, limit: int = 6) -> dict[str, Any]:
 
 def _search_sources(prompt: str, limit: int) -> list[ExampleDesign]:
     try:
-        from backend.services.design_providers import get_provider_registry
+        from backend.services.provider_extensions import get_extended_provider_registry
 
-        return get_provider_registry().search_all(prompt, limit=limit)
+        return get_extended_provider_registry().search_all(prompt, limit=limit)
     except Exception:
         return []
 
