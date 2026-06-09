@@ -558,11 +558,19 @@ def _query_words(query: str) -> list[str]:
         "headphone": ["headset", "headphones"],
         "battery": ["batteries", "pack"],
         "batteries": ["battery", "pack"],
-        "holder": ["mount", "bracket", "rack"],
+        "holder": ["mount", "bracket", "rack", "hanger", "hook"],
+        "hanger": ["holder", "hook", "rack"],
+        "hook": ["hanger", "holder", "mount"],
         "mount": ["holder", "bracket"],
         "desk": ["clamp"],
         "table": ["desk"],
         "wall": ["mount"],
+        "garage": ["workshop", "wall"],
+        "workshop": ["garage", "wall"],
+        "wardrobe": ["closet", "organizer"],
+        "closet": ["wardrobe", "organizer"],
+        "bicycle": ["bike", "handlebar"],
+        "bike": ["bicycle", "handlebar"],
         "dewalt": ["power", "tool"],
         "stand": ["holder", "dock"],
         "clip": ["clamp", "holder"],
@@ -582,6 +590,11 @@ def _query_words(query: str) -> list[str]:
         "accessories": ["adapter", "nozzle", "holders"],
         "tool": ["jig", "fixture", "wrench"],
         "tools": ["jig", "fixture", "wrench"],
+        "clothes": ["coat", "jacket", "hanger"],
+        "helmet": ["helmets"],
+        "belt": ["belts", "strap"],
+        "snus": ["can", "tin"],
+        "can": ["tin", "container"],
     }
     words: list[str] = []
     for word in base:
@@ -624,7 +637,7 @@ def _query_variants(query: str) -> list[str]:
         add(f"{brand} battery holder wall mount")
         add(f"{brand} battery holder slide rail")
         add("power tool battery holder printable")
-    if {"dirtbike", "motocross", "motorcycle", "bike"} & words or brand_words or model_words:
+    if {"dirtbike", "motocross", "motorcycle"} & words or brand_words or model_words:
         seed = product_phrase or vehicle_phrase or cleaned or "dirtbike tool"
         add(f"{seed} 3d print")
         add(f"{seed} stl")
@@ -655,6 +668,53 @@ def _query_variants(query: str) -> list[str]:
         add("pressure washer adapter 3d print")
         add("power washer hose holder printable")
         add("pressure washer wand holder wall mount")
+    if {"holder", "hanger", "hook", "mount", "bracket", "rack", "stand", "clip", "organizer"} & words:
+        utility_words = {
+            "holder",
+            "hanger",
+            "hook",
+            "mount",
+            "mounted",
+            "bracket",
+            "rack",
+            "stand",
+            "clip",
+            "organizer",
+            "wall",
+            "garage",
+            "workshop",
+            "wardrobe",
+            "closet",
+            "bicycle",
+            "bike",
+            "handlebar",
+            "pegboard",
+            "skadis",
+            "gridfinity",
+            "magnetic",
+            "desk",
+            "table",
+            "clamp",
+        }
+        object_words = [word for word in core_words if word not in utility_words]
+        object_phrase = " ".join(object_words) or cleaned or normalized
+        if "garage" in words or "workshop" in words:
+            add(f"garage {object_phrase} holder")
+            add(f"workshop {object_phrase} holder")
+            add(f"wall mounted {object_phrase} holder")
+            add(f"{object_phrase} garage wall mount")
+        if "wardrobe" in words or "closet" in words:
+            add(f"closet {object_phrase} holder")
+            add(f"wardrobe {object_phrase} hanger")
+            add(f"{object_phrase} closet organizer")
+        if "bicycle" in words or "bike" in words or "handlebar" in words:
+            add(f"bicycle {object_phrase} holder")
+            add(f"bike mounted {object_phrase} holder")
+            add(f"handlebar {object_phrase} holder")
+        if "pegboard" in words or "skadis" in words:
+            add(f"pegboard {object_phrase} holder")
+            add(f"skadis {object_phrase} holder")
+            add(f"{object_phrase} pegboard mount")
     if "desk" in words and {"holder", "mount", "bracket", "rack", "clamp"} & words:
         object_words = [
             word
@@ -686,11 +746,11 @@ def _query_variants(query: str) -> list[str]:
     if {"cdi", "ecu", "ecm", "ignition", "module"} & words:
         add("electronics module bracket 3d print")
         add("cdi box holder bracket")
-    if {"holder", "mount", "bracket", "rack", "stand", "clip", "organizer", "case", "box", "enclosure"} & words:
+    if {"holder", "hanger", "hook", "mount", "bracket", "rack", "stand", "clip", "organizer", "case", "box", "enclosure"} & words:
         object_words = [
             word
             for word in core_words
-            if word not in {"holder", "mount", "bracket", "rack", "stand", "clip", "organizer", "case", "box", "enclosure", "wall", "mounted", "gridfinity", "pegboard", "magnetic"}
+            if word not in {"holder", "hanger", "hook", "mount", "bracket", "rack", "stand", "clip", "organizer", "case", "box", "enclosure", "wall", "mounted", "gridfinity", "pegboard", "skadis", "magnetic", "garage", "workshop", "wardrobe", "closet", "bicycle", "bike", "handlebar"}
         ]
         object_phrase = " ".join(object_words) or normalized
         if "gridfinity" in words:
@@ -716,7 +776,7 @@ def _query_variants(query: str) -> list[str]:
         add(f"{normalized} stl")
         add(f"{normalized} printable")
 
-    return variants[:18]
+    return variants[:24]
 
 
 def _design_score(query: str, design: ExampleDesign) -> float:
@@ -769,10 +829,19 @@ def _query_token_matches_title(word: str, title: str, tags: list[str]) -> bool:
         "phone": {"phone", "mobile", "smartphone", "iphone"},
         "cup": {"cup", "mug", "tumbler"},
         "mug": {"mug", "cup", "tumbler"},
-        "holder": {"holder", "hold", "mount", "stand", "dock", "rack"},
+        "holder": {"holder", "hold", "mount", "stand", "dock", "rack", "hanger", "hook"},
+        "hanger": {"hanger", "hook", "holder", "rack"},
+        "hook": {"hook", "hanger", "holder", "mount"},
         "stand": {"stand", "holder", "dock", "mount"},
-        "mount": {"mount", "mounted", "clamp", "clip", "bracket", "holder"},
+        "mount": {"mount", "mounted", "clamp", "clip", "bracket", "holder", "hook"},
         "desk": {"desk", "table", "desktop", "clamp"},
+        "garage": {"garage", "workshop", "wall", "mounted"},
+        "workshop": {"workshop", "garage", "wall", "mounted"},
+        "wardrobe": {"wardrobe", "closet", "organizer", "hanger"},
+        "closet": {"closet", "wardrobe", "organizer", "hanger"},
+        "bicycle": {"bicycle", "bike", "handlebar", "cycle"},
+        "bike": {"bicycle", "bike", "handlebar", "cycle"},
+        "handlebar": {"handlebar", "bike", "bicycle"},
         "case": {"case", "box", "enclosure", "cover"},
         "box": {"box", "case", "enclosure"},
         "organizer": {"organizer", "holder", "storage", "rack"},
@@ -790,6 +859,11 @@ def _query_token_matches_title(word: str, title: str, tags: list[str]) -> bool:
         "powerwasher": {"pressure", "powerwasher", "washer", "wash"},
         "accessory": {"accessory", "accessories", "adapter", "mount", "holder", "nozzle"},
         "accessories": {"accessory", "accessories", "adapter", "mount", "holder", "nozzle"},
+        "clothes": {"clothes", "coat", "jacket", "hanger"},
+        "helmet": {"helmet", "helmets", "motorcycle", "bike"},
+        "belt": {"belt", "belts", "strap"},
+        "snus": {"snus", "can", "tin"},
+        "can": {"can", "tin", "container"},
     }
     return bool((equivalents.get(word, {word}) & haystack) or any(term in title for term in equivalents.get(word, {word})))
 

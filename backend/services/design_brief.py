@@ -43,7 +43,31 @@ CATEGORY_KEYWORDS: dict[str, set[str]] = {
     "battery_holder": {"battery", "batteries", "batteri", "dewalt", "makita", "milwaukee", "ryobi", "bosch"},
     "device_stand": {"stand", "stall", "dock", "cradle", "phone", "mobil", "tablet", "headset", "headphone"},
     "electronics_holder": {"cdi", "ecu", "ecm", "module", "modul", "ignition", "controller", "electronics"},
-    "holder": {"holder", "hallare", "tool holder", "verktygshallare", "mount", "wall", "bracket", "clip", "retainer", "hanger"},
+    "holder": {
+        "holder",
+        "hallare",
+        "tool holder",
+        "verktygshallare",
+        "mount",
+        "wall",
+        "bracket",
+        "clip",
+        "retainer",
+        "hanger",
+        "hook",
+        "helmet",
+        "belt",
+        "clothes",
+        "wardrobe",
+        "closet",
+        "garage",
+        "workshop",
+        "snus",
+        "can",
+        "bicycle",
+        "bike",
+        "pegboard",
+    },
     "vehicle_part": {"dirtbike", "motocross", "motorcycle", "honda", "yamaha", "kawasaki", "suzuki", "ktm", "husqvarna", "gasgas", "cr250", "cr250r", "chain", "fork", "swingarm", "guard"},
     "accessory": {"accessory", "accessories", "adapter", "nozzle", "wand", "pressure", "powerwasher", "washer", "hose"},
     "enclosure": {"case", "cover", "enclosure", "box", "housing", "shell", "lid", "cover"},
@@ -374,9 +398,34 @@ def _apply_product_family_hints(text: str, dimensions: dict[str, float], notes: 
     if any(word in text for word in ("headset", "headphone", "headphones")):
         dimensions.update({"width": max(dimensions["width"], 120.0), "depth": max(dimensions["depth"], 120.0)})
         dimensions["height"] = max(dimensions["height"], 190.0)
+        notes.append("used headset stand proportions")
     if "phone" in text:
         dimensions.update({"width": max(dimensions["width"], 86.0), "depth": max(dimensions["depth"], 82.0)})
         dimensions["height"] = max(dimensions["height"], 118.0)
+    if any(word in text for word in ("helmet", "helmets")):
+        dimensions.update({"width": max(dimensions["width"], 150.0), "depth": max(dimensions["depth"], 95.0)})
+        dimensions["height"] = max(dimensions["height"], 95.0)
+        dimensions["thickness"] = max(dimensions.get("thickness", 5.0), 7.0)
+        dimensions["hole_count"] = max(dimensions.get("hole_count", 0.0), 2.0)
+        notes.append("used helmet holder proportions")
+    if any(word in text for word in ("belt", "belts", "wardrobe", "closet", "clothes", "coat", "jacket", "hanger")):
+        dimensions.update({"width": max(dimensions["width"], 96.0), "depth": max(dimensions["depth"], 42.0)})
+        dimensions["height"] = max(dimensions["height"], 34.0)
+        dimensions["thickness"] = max(dimensions.get("thickness", 5.0), 5.0)
+        notes.append("used closet/wardrobe hanger proportions")
+    if any(word in text for word in ("garage", "workshop", "pegboard")):
+        dimensions["thickness"] = max(dimensions.get("thickness", 5.0), 6.0)
+        dimensions["hole_count"] = max(dimensions.get("hole_count", 0.0), 2.0)
+        notes.append("used workshop mounting proportions")
+    if "snus" in text or "snus can" in text:
+        dimensions.update({"width": max(dimensions["width"], 78.0), "depth": max(dimensions["depth"], 78.0)})
+        dimensions["height"] = max(dimensions["height"], 30.0)
+        dimensions["wall_thickness"] = max(dimensions.get("wall_thickness", 3.0), 3.0)
+        notes.append("used round can holder proportions")
+    if any(word in text for word in ("bicycle", "bike", "handlebar")):
+        dimensions["thickness"] = max(dimensions.get("thickness", 5.0), 6.0)
+        dimensions["hole_count"] = max(dimensions.get("hole_count", 0.0), 2.0)
+        notes.append("used bike-mounted holder proportions")
 
 
 def _clamp_dimensions(dimensions: dict[str, float]) -> None:
