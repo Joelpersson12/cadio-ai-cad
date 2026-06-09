@@ -186,9 +186,9 @@ export const useCadStore = create<CadState>((set, get) => ({
     });
   },
   setPrinter: async (printer) => {
-    const { sessionId } = get();
+    const { sessionId, objects } = get();
     set({ printer });
-    if (!sessionId) return;
+    if (!sessionId || objects.length === 0) return;
     try {
       const data = await apiUpdatePrinter({ session_id: sessionId, printer });
       set({
@@ -200,6 +200,24 @@ export const useCadStore = create<CadState>((set, get) => ({
         editHistory: data.edit_history,
       });
     } catch (err) {
+      if (err instanceof Error && /session not found/i.test(err.message)) {
+        localStorage.removeItem(SESSION_KEY);
+        set({
+          sessionId: "",
+          version: 0,
+          sceneToken: "",
+          objects: [],
+          objectOrder: [],
+          selectedObjectId: "",
+          selectedObjectIds: [],
+          bounds: { x: 0, y: 0, z: 0 },
+          printSettings: null,
+          printAssistant: { warnings: [], checks: [], hints: [], printability_score: 0 },
+          editHistory: [],
+          status: printer && printer !== "choose_printer" ? "Printer selected" : "Choose printer",
+        });
+        return;
+      }
       set({ status: err instanceof Error ? err.message : "Error" });
     }
   },
@@ -268,7 +286,7 @@ export const useCadStore = create<CadState>((set, get) => ({
       const data = await apiGenerate({
         session_id: sessionId || undefined,
         prompt,
-        printer,
+        printer: printer || "choose_printer",
         fit: true,
       });
       get().applyScenePayload(data);

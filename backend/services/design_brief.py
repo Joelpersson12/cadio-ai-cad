@@ -44,6 +44,8 @@ CATEGORY_KEYWORDS: dict[str, set[str]] = {
     "device_stand": {"stand", "stall", "dock", "cradle", "phone", "mobil", "tablet", "headset", "headphone"},
     "electronics_holder": {"cdi", "ecu", "ecm", "module", "modul", "ignition", "controller", "electronics"},
     "holder": {"holder", "hallare", "tool holder", "verktygshallare", "mount", "wall", "bracket", "clip", "retainer", "hanger"},
+    "vehicle_part": {"dirtbike", "motocross", "motorcycle", "honda", "yamaha", "kawasaki", "suzuki", "ktm", "husqvarna", "gasgas", "cr250", "cr250r", "chain", "fork", "swingarm", "guard"},
+    "accessory": {"accessory", "accessories", "adapter", "nozzle", "wand", "pressure", "powerwasher", "washer", "hose"},
     "enclosure": {"case", "cover", "enclosure", "box", "housing", "shell", "lid", "cover"},
     "organizer": {"organizer", "organiser", "tray", "bin", "rack", "divider", "storage"},
     "organic": {"octopus", "blackfisk", "figurine", "statue", "miniature", "toy", "animal", "sculpture"},
@@ -94,6 +96,28 @@ DEFAULTS: dict[str, dict[str, float]] = {
         "thickness": 5.0,
         "fillet_radius": 2.0,
         "chamfer_size": 0.0,
+        "hole_count": 2.0,
+        "hole_diameter": 5.0,
+        "wall_thickness": 3.0,
+    },
+    "vehicle_part": {
+        "width": 110.0,
+        "depth": 72.0,
+        "height": 38.0,
+        "thickness": 6.0,
+        "fillet_radius": 2.0,
+        "chamfer_size": 0.5,
+        "hole_count": 2.0,
+        "hole_diameter": 6.0,
+        "wall_thickness": 4.0,
+    },
+    "accessory": {
+        "width": 86.0,
+        "depth": 58.0,
+        "height": 34.0,
+        "thickness": 5.0,
+        "fillet_radius": 2.0,
+        "chamfer_size": 0.5,
         "hole_count": 2.0,
         "hole_diameter": 5.0,
         "wall_thickness": 3.0,
@@ -161,6 +185,8 @@ FEATURES: dict[str, list[str]] = {
     "battery_holder": ["base", "slide_rails", "front_stop", "rear_register", "mounting_holes", "rounded_edges"],
     "device_stand": ["base", "front_lip", "back_support", "side_rails", "rounded_edges"],
     "electronics_holder": ["base", "tray_walls", "strap_bridge", "mounting_holes", "rounded_edges"],
+    "vehicle_part": ["mounting_base", "guide_channel", "reinforcing_ribs", "mounting_holes", "chamfered_edges"],
+    "accessory": ["mounting_base", "adapter_body", "retaining_lip", "mounting_holes", "rounded_edges"],
     "holder": ["base", "side_walls", "front_lip", "mounting_holes", "rounded_edges"],
     "enclosure": ["base", "walls", "corner_posts", "lid_register", "rounded_edges"],
     "organizer": ["base", "walls", "dividers", "rounded_edges"],
@@ -231,7 +257,7 @@ def _infer_category(prompt: str, examples: list[ExampleDesign]) -> tuple[str, fl
     translated_prompt = normalize_source_query(prompt)
     prompt_words = set(re.findall(r"[a-z0-9]+", f"{prompt} {translated_prompt}".lower()))
 
-    for priority_category in ("battery_holder", "electronics_holder", "organic"):
+    for priority_category in ("battery_holder", "electronics_holder", "vehicle_part", "accessory", "organic"):
         if prompt_words & CATEGORY_KEYWORDS[priority_category]:
             confidence = min(0.94, 0.72 + min(len(examples), 4) * 0.04)
             return priority_category, confidence
@@ -335,6 +361,16 @@ def _apply_product_family_hints(text: str, dimensions: dict[str, float], notes: 
         dimensions["height"] = max(dimensions["height"], 38.0)
         dimensions["hole_count"] = max(dimensions.get("hole_count", 0.0), 2.0)
         notes.append("used electronics-module holder proportions")
+    if any(word in text for word in ("dirtbike", "motocross", "motorcycle", "honda", "yamaha", "kawasaki", "suzuki", "ktm", "chain guide", "fork tool")):
+        dimensions.update({"width": max(dimensions["width"], 110.0), "depth": max(dimensions["depth"], 72.0)})
+        dimensions["height"] = max(dimensions["height"], 38.0)
+        dimensions["thickness"] = max(dimensions.get("thickness", 5.0), 6.0)
+        dimensions["hole_count"] = max(dimensions.get("hole_count", 0.0), 2.0)
+        notes.append("used motorcycle/dirtbike part proportions")
+    if any(word in text for word in ("pressure washer", "powerwasher", "nozzle", "wand", "hose", "accessories")):
+        dimensions.update({"width": max(dimensions["width"], 86.0), "depth": max(dimensions["depth"], 58.0)})
+        dimensions["hole_count"] = max(dimensions.get("hole_count", 0.0), 2.0)
+        notes.append("used accessory mount proportions")
     if any(word in text for word in ("headset", "headphone", "headphones")):
         dimensions.update({"width": max(dimensions["width"], 120.0), "depth": max(dimensions["depth"], 120.0)})
         dimensions["height"] = max(dimensions["height"], 190.0)

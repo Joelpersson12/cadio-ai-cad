@@ -262,6 +262,7 @@ export default function ObjectInspector() {
             onChange={(e) => void setPrinter(e.target.value)}
             className="w-full rounded-lg border border-[#333] bg-[#252526] px-3 py-2 text-sm text-white outline-none"
           >
+            <option value="choose_printer">Choose printer</option>
             {Object.entries(printers).map(([key, p]) => (
               <option value={key} key={key}>
                 {(p as PrinterProfile).name}

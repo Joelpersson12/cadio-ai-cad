@@ -105,9 +105,13 @@ router = APIRouter()
 
 def normalize_printer(value: str) -> str:
     """Normalize a printer name string to a known printer key."""
+    if not (value or "").strip():
+        return "choose_printer"
     key = re.sub(
         r"_+", "_", re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower())
     ).strip("_")
+    if key in {"choose_printer", "choose", "set", "printer", "select_printer"}:
+        return "choose_printer"
     if key in PRINTERS:
         return key
     lookup: list[tuple[str, str]] = [
@@ -122,7 +126,7 @@ def normalize_printer(value: str) -> str:
     for fragment, printer_key in lookup:
         if fragment in key:
             return printer_key
-    return DEFAULT_PRINTER
+    return "choose_printer"
 
 
 def _error(status: int, message: str) -> JSONResponse:
@@ -217,7 +221,7 @@ def put_account_saved_models(
 def list_printers() -> dict[str, Any]:
     return {
         "status": "ok",
-        "default": DEFAULT_PRINTER,
+        "default": "choose_printer",
         "printers": PRINTERS,
         "materials": material_profiles_response(),
     }
@@ -233,7 +237,9 @@ async def update_printer(data: PrinterUpdateRequest) -> ScenePayload | JSONRespo
     try:
         lock = acquire_lock()
         with lock:
-            session = get_or_create_session(data.session_id)
+            session = get_session(data.session_id)
+            if session is None:
+                return _error(404, "Session not found")
             save_undo_snapshot(session)
             session["printer"] = normalize_printer(data.printer)
             bump_version(session)

@@ -260,8 +260,15 @@ def _source_field_number(fields: dict[str, Any], key: str) -> float | None:
 def recommended_print_settings(session: Session) -> dict[str, Any]:
     from backend.services.object_manager import DEFAULT_PRINTER, PRINTERS, scene_bounds
 
-    printer_key = str(session.get("printer") or DEFAULT_PRINTER)
-    printer = PRINTERS.get(printer_key, PRINTERS[DEFAULT_PRINTER])
+    selected_printer_key = str(session.get("printer") or "").strip()
+    if selected_printer_key == "choose_printer":
+        selected_printer_key = ""
+    if selected_printer_key:
+        printer_key = selected_printer_key
+        printer = PRINTERS.get(printer_key, PRINTERS[DEFAULT_PRINTER])
+    else:
+        printer_key = ""
+        printer = {"name": "Choose printer", "build_volume": (220, 220, 250)}
     printer_name = str(printer["name"])
     px, py, pz = [float(v) for v in printer["build_volume"]]
     tuning = _printer_tuning(printer_key, printer_name)

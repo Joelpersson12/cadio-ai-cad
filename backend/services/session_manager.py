@@ -1880,6 +1880,32 @@ def replace_object_with_research_assembly(
                 _create_box_component("stand_left_rail", max(thickness * 0.65, 4.5), depth * 0.55, thickness * 1.2, [-width * 0.42, -depth * 0.02, thickness], params, color=color),
                 _create_box_component("stand_right_rail", max(thickness * 0.65, 4.5), depth * 0.55, thickness * 1.2, [width * 0.42, -depth * 0.02, thickness], params, color=color),
             ]
+    elif category == "vehicle_part":
+        guide_h = max(height, thickness * 4.0)
+        channel_w = max(width * 0.42, wall * 5.0)
+        rail_w = max(wall, thickness * 0.7)
+        parts = [
+            _create_box_component("vehicle_mount_base", width, depth, thickness, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
+            _create_box_component("vehicle_left_guide_rail", rail_w, depth * 0.78, guide_h, [-channel_w / 2.0, 0.0, thickness], params, color=color),
+            _create_box_component("vehicle_right_guide_rail", rail_w, depth * 0.78, guide_h, [channel_w / 2.0, 0.0, thickness], params, color=color),
+            _create_box_component("vehicle_front_guard_lip", channel_w + rail_w * 2.0, wall, guide_h * 0.72, [0.0, -depth / 2.0 + wall / 2.0, thickness], params, color=color),
+            _create_box_component("vehicle_rear_register", channel_w + rail_w, wall, guide_h * 0.55, [0.0, depth / 2.0 - wall / 2.0, thickness], params, color=color),
+            _create_box_component("vehicle_center_wear_pad", channel_w * 0.62, depth * 0.52, max(wall, thickness * 0.6), [0.0, 0.0, thickness], params, color=color),
+        ]
+        for idx, x in enumerate((-width * 0.34, width * 0.34), start=1):
+            parts.append(
+                _create_box_component(f"vehicle_reinforcing_rib_{idx}", wall, depth * 0.62, guide_h * 0.78, [x, 0.0, thickness], params, color=color)
+            )
+    elif category == "accessory":
+        saddle_h = max(height, thickness * 3.4)
+        parts = [
+            _create_box_component("accessory_mount_plate", width, depth, thickness, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
+            _create_box_component("accessory_back_register", width * 0.78, wall, saddle_h * 0.78, [0.0, depth / 2.0 - wall / 2.0, thickness], params, color=color),
+            _create_box_component("accessory_front_lip", width * 0.70, wall, saddle_h * 0.42, [0.0, -depth / 2.0 + wall / 2.0, thickness], params, color=color),
+            _create_box_component("accessory_left_socket_wall", wall, depth * 0.62, saddle_h, [-width * 0.28, 0.0, thickness], params, color=color),
+            _create_box_component("accessory_right_socket_wall", wall, depth * 0.62, saddle_h, [width * 0.28, 0.0, thickness], params, color=color),
+            _create_box_component("accessory_center_adapter_pad", width * 0.32, depth * 0.42, max(wall, thickness * 0.7), [0.0, -depth * 0.06, thickness], params, color=color),
+        ]
     elif category in {"electronics_holder", "holder"}:
         tray_h = max(height, thickness * 4.0)
         parts = [
@@ -3634,18 +3660,17 @@ def split_object_by_line(session: Session, obj: CadObject, center: list[float], 
 
 
 def create_session(session_id: str | None = None) -> str:
-    """Create a new session with one default object.  Returns session id."""
+    """Create a new blank session. Returns session id."""
     sid = (session_id or "").strip() or str(uuid.uuid4())
-    base = create_object("part_1")
     with _lock:
         _sessions[sid] = {
             "session_id": sid,
-            "objects": {base["id"]: base},
-            "object_order": [base["id"]],
+            "objects": {},
+            "object_order": [],
             "selected_object_id": "",
             "edit_history": [],
             "version": 0,
-            "printer": "adventurer_3",
+            "printer": "choose_printer",
             "fit": True,
             "created_at": _now_iso(),
             "updated_at": _now_iso(),

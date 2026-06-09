@@ -898,10 +898,12 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
         <main className="relative min-h-0 overflow-hidden bg-[#3a3a3a]">
           <div className="absolute right-4 top-3 z-10 flex items-center gap-2 text-xs text-white/90">
-            <span>{printerProfile?.name ?? "Printer"}</span>
-            <span className="rounded bg-[#2c2c2d] px-2 py-1">
-              {printerVolume[0]} x {printerVolume[1]} x {printerVolume[2]} mm
-            </span>
+            <span>{printerProfile?.name ?? "Choose printer"}</span>
+            {printerProfile && (
+              <span className="rounded bg-[#2c2c2d] px-2 py-1">
+                {printerVolume[0]} x {printerVolume[1]} x {printerVolume[2]} mm
+              </span>
+            )}
             <span className="rounded bg-[#2c2c2d] px-2 py-1 text-[#67d6f5]">{status || "Ready"}</span>
           </div>
           <div className="absolute left-4 top-3 z-10 rounded-lg border border-[#4b4b4d] bg-[#252525]/90 px-3 py-2 text-xs shadow-xl backdrop-blur">

@@ -423,6 +423,95 @@ _QUERY_STOP_WORDS = {
     "den",
 }
 
+_VEHICLE_BRANDS = {
+    "honda",
+    "yamaha",
+    "kawasaki",
+    "suzuki",
+    "ktm",
+    "husqvarna",
+    "gasgas",
+    "beta",
+    "sherco",
+    "bmw",
+    "toyota",
+    "volvo",
+    "ford",
+    "tesla",
+    "audi",
+    "vw",
+    "volkswagen",
+}
+
+_POWER_TOOL_BRANDS = {
+    "dewalt",
+    "makita",
+    "milwaukee",
+    "ryobi",
+    "bosch",
+    "metabo",
+    "festool",
+    "hilti",
+    "ridgid",
+}
+
+_VEHICLE_WORDS = {
+    "dirtbike",
+    "motocross",
+    "motorcycle",
+    "bike",
+    "atv",
+    "quad",
+    "scooter",
+    "moped",
+    "car",
+    "truck",
+}
+
+_PART_WORDS = {
+    "chain",
+    "guide",
+    "fork",
+    "seal",
+    "swingarm",
+    "brake",
+    "caliper",
+    "axle",
+    "wheel",
+    "bearing",
+    "spacer",
+    "bushing",
+    "guard",
+    "cover",
+    "bracket",
+    "mount",
+    "adapter",
+    "holder",
+    "clip",
+    "tool",
+    "tools",
+    "jig",
+    "fixture",
+    "accessory",
+    "accessories",
+}
+
+_MODEL_TOKEN_RE = re.compile(r"^[a-z]{1,5}\d{2,4}[a-z0-9]*$")
+
+
+def _vehicle_context_words(core_words: list[str]) -> list[str]:
+    contextual: list[str] = []
+    for word in core_words:
+        if (
+            word in _VEHICLE_BRANDS
+            or word in _VEHICLE_WORDS
+            or word in _PART_WORDS
+            or _MODEL_TOKEN_RE.match(word)
+            or re.fullmatch(r"(?:19|20)\d{2}", word)
+        ):
+            contextual.append(word)
+    return contextual
+
 
 def _clean_title(text: str) -> str:
     title = re.sub(r"<[^>]+>", " ", html.unescape(text))
@@ -480,6 +569,19 @@ def _query_words(query: str) -> list[str]:
         "organizer": ["holder", "storage"],
         "case": ["box", "cover"],
         "box": ["case", "enclosure"],
+        "dirtbike": ["motocross", "motorcycle"],
+        "motocross": ["dirtbike", "motorcycle"],
+        "motorcycle": ["dirtbike", "motocross"],
+        "fork": ["suspension"],
+        "chain": ["chainguide", "guide"],
+        "guide": ["guard", "slider"],
+        "powerwasher": ["pressure", "washer"],
+        "pressure": ["powerwasher"],
+        "washer": ["powerwasher"],
+        "accessory": ["adapter", "nozzle", "holder"],
+        "accessories": ["adapter", "nozzle", "holders"],
+        "tool": ["jig", "fixture", "wrench"],
+        "tools": ["jig", "fixture", "wrench"],
     }
     words: list[str] = []
     for word in base:
@@ -508,11 +610,51 @@ def _query_variants(query: str) -> list[str]:
             variants.append(value)
 
     add(cleaned)
-    if {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch"} & words:
-        brand = next((word for word in ("dewalt", "makita", "milwaukee", "ryobi", "bosch") if word in words), "power tool")
+    vehicle_context = _vehicle_context_words(core_words)
+    vehicle_phrase = " ".join(vehicle_context)
+    brand_words = [word for word in core_words if word in _VEHICLE_BRANDS]
+    model_words = [word for word in core_words if _MODEL_TOKEN_RE.match(word)]
+    year_words = [word for word in core_words if re.fullmatch(r"(?:19|20)\d{2}", word)]
+    part_words = [word for word in core_words if word in _PART_WORDS]
+    identity_words = brand_words + model_words + year_words
+    product_phrase = " ".join(identity_words + part_words).strip() if identity_words else ""
+
+    if _POWER_TOOL_BRANDS & words or {"battery", "batteries"} & words:
+        brand = next((word for word in core_words if word in _POWER_TOOL_BRANDS), "power tool")
         add(f"{brand} battery holder wall mount")
         add(f"{brand} battery holder slide rail")
         add("power tool battery holder printable")
+    if {"dirtbike", "motocross", "motorcycle", "bike"} & words or brand_words or model_words:
+        seed = product_phrase or vehicle_phrase or cleaned or "dirtbike tool"
+        add(f"{seed} 3d print")
+        add(f"{seed} stl")
+        add(f"{seed} printable")
+        add(f"{seed} holder")
+        add(f"{seed} bracket")
+        if {"tool", "tools", "jig", "fixture"} & words:
+            tool_seed = seed if re.search(r"\btools?\b", seed) else f"{seed} tool"
+            add(tool_seed)
+            if not re.search(r"\b(?:dirtbike|dirt bike|motocross|motorcycle)\b", tool_seed):
+                add(f"dirt bike {tool_seed}")
+                add(f"motorcycle {tool_seed} 3d print")
+            else:
+                add(f"{tool_seed} 3d print")
+        if "fork" in words:
+            add(seed if "fork" in seed and "tool" in seed else f"{seed} fork tool")
+            add("dirt bike fork seal driver")
+            add("motorcycle fork cap tool 3d print")
+            add("fork seal bullet tool stl")
+        if "chain" in words or "guide" in words or "guard" in words:
+            model_seed = " ".join(brand_words + model_words + year_words).strip()
+            add(f"{model_seed} chain guide" if model_seed else "dirt bike chain guide")
+            add(f"{model_seed} chain guide stl" if model_seed else "motocross chain guide stl")
+            add("dirt bike chain slider guide 3d print")
+    if {"pressure", "powerwasher", "washer"} & words and {"accessory", "accessories", "adapter", "nozzle", "holder", "mount"} & words:
+        add("pressure washer accessories 3d print")
+        add("pressure washer nozzle holder stl")
+        add("pressure washer adapter 3d print")
+        add("power washer hose holder printable")
+        add("pressure washer wand holder wall mount")
     if "desk" in words and {"holder", "mount", "bracket", "rack", "clamp"} & words:
         object_words = [
             word
@@ -574,7 +716,7 @@ def _query_variants(query: str) -> list[str]:
         add(f"{normalized} stl")
         add(f"{normalized} printable")
 
-    return variants[:12]
+    return variants[:18]
 
 
 def _design_score(query: str, design: ExampleDesign) -> float:
@@ -635,6 +777,19 @@ def _query_token_matches_title(word: str, title: str, tags: list[str]) -> bool:
         "box": {"box", "case", "enclosure"},
         "organizer": {"organizer", "holder", "storage", "rack"},
         "clip": {"clip", "clamp", "holder"},
+        "dirtbike": {"dirtbike", "dirt", "bike", "motorcycle", "motocross", "mx"},
+        "motocross": {"dirtbike", "dirt", "bike", "motorcycle", "motocross", "mx"},
+        "motorcycle": {"dirtbike", "dirt", "bike", "motorcycle", "motocross", "mx"},
+        "fork": {"fork", "suspension", "seal", "driver", "cap"},
+        "chain": {"chain", "chainguide", "guide", "slider"},
+        "guide": {"guide", "guard", "slider", "chainguide"},
+        "tool": {"tool", "tools", "jig", "fixture", "wrench", "driver"},
+        "tools": {"tool", "tools", "jig", "fixture", "wrench", "driver"},
+        "pressure": {"pressure", "powerwasher", "washer", "wash", "nozzle", "wand"},
+        "washer": {"pressure", "powerwasher", "washer", "wash"},
+        "powerwasher": {"pressure", "powerwasher", "washer", "wash"},
+        "accessory": {"accessory", "accessories", "adapter", "mount", "holder", "nozzle"},
+        "accessories": {"accessory", "accessories", "adapter", "mount", "holder", "nozzle"},
     }
     return bool((equivalents.get(word, {word}) & haystack) or any(term in title for term in equivalents.get(word, {word})))
 
