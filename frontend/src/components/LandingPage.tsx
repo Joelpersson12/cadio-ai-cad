@@ -315,7 +315,7 @@ function HeroScene() {
         <pointLight position={[3.5, -2.4, 4]} intensity={0.65} color="#f3c34d" />
         <HeroModel />
       </Canvas>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,255,255,0.08),rgba(20,20,21,0)_48%),linear-gradient(90deg,rgba(14,14,15,0.42)_0%,rgba(18,18,19,0.08)_42%,rgba(18,18,19,0.18)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_58%_42%,rgba(255,255,255,0.08),rgba(20,20,21,0)_48%),linear-gradient(90deg,rgba(10,10,11,0.90)_0%,rgba(12,12,13,0.72)_34%,rgba(18,18,19,0.18)_70%,rgba(18,18,19,0.34)_100%)]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-[linear-gradient(0deg,#151515_0%,rgba(21,21,21,0)_100%)]" />
     </div>
   );
@@ -388,7 +388,25 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
       <main>
         <section className="relative min-h-[760px] overflow-hidden pt-16">
           <HeroScene />
-          <div className="relative z-10 min-h-[700px]" aria-label={text.hero.title} />
+          <div className="relative z-10 mx-auto flex min-h-[700px] max-w-7xl items-center px-4 py-16 sm:px-6 lg:px-8">
+            <div className="max-w-3xl">
+              <p className="mb-5 text-xs font-semibold uppercase tracking-[0.24em] text-[#2bb8dc]">{text.hero.eyebrow}</p>
+              <h1 className="max-w-4xl text-5xl font-semibold leading-[1.02] tracking-normal text-white sm:text-6xl lg:text-7xl">{text.hero.title}</h1>
+              <p className="mt-6 max-w-2xl text-base leading-7 text-[#c9c9cc] sm:text-lg">{text.hero.body}</p>
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <button onClick={onStartBuilding} className="rounded-xl bg-[#2bb8dc] px-5 py-3 text-sm font-bold text-[#101010] shadow-[0_0_26px_rgba(43,184,220,0.22)] hover:bg-[#69d9f5]">
+                  {text.hero.primary}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBetaOpen(true)}
+                  className="rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-[#e6e6e8] backdrop-blur hover:border-[#2bb8dc]/55 hover:text-white"
+                >
+                  {text.hero.secondary}
+                </button>
+              </div>
+            </div>
+          </div>
           <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 gap-px border-y border-white/10 bg-white/10 sm:grid-cols-3">
             {text.stats.map(([title, body]) => (
               <div key={title} className="bg-[#151515]/94 px-6 py-5">
