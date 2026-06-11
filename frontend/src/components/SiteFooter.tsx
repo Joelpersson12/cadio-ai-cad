@@ -1,8 +1,8 @@
 const legalLinks = [
-  { label: "Terms", href: "/terms" },
-  { label: "Privacy", href: "/privacy" },
-  { label: "Cookies", href: "/privacy#cookies" },
-  { label: "Contact", href: "/contact" },
+  { label: "Terms", href: "/#/terms" },
+  { label: "Privacy", href: "/#/privacy" },
+  { label: "Cookies", href: "/#/privacy/cookies" },
+  { label: "Contact", href: "/#/contact" },
 ];
 
 export default function SiteFooter({ compact = false }: { compact?: boolean }) {

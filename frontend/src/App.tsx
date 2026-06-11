@@ -87,12 +87,35 @@ const CANONICAL_DOMAIN = "https://cadio.net";
 
 type StaticPage = "terms" | "privacy" | "contact";
 
-function staticPageFromPath(pathname: string): StaticPage | null {
+type StaticRoute = {
+  page: StaticPage;
+  canonicalPath: string;
+  section?: string;
+};
+
+function staticPageFromPath(pathname: string): StaticRoute | null {
   const path = pathname.replace(/\/+$/, "") || "/";
-  if (path === "/terms") return "terms";
-  if (path === "/privacy") return "privacy";
-  if (path === "/contact") return "contact";
+  if (path === "/terms") return { page: "terms", canonicalPath: "/terms" };
+  if (path === "/privacy") return { page: "privacy", canonicalPath: "/privacy" };
+  if (path === "/cookies") return { page: "privacy", canonicalPath: "/privacy", section: "cookies" };
+  if (path === "/contact") return { page: "contact", canonicalPath: "/contact" };
   return null;
+}
+
+function staticPageFromHash(hash: string): StaticRoute | null {
+  const rawRoute = hash.startsWith("#/") ? hash.slice(1) : "";
+  const route = rawRoute.replace(/\/+$/, "") || "/";
+  if (route === "/terms") return { page: "terms", canonicalPath: "/terms" };
+  if (route === "/privacy") return { page: "privacy", canonicalPath: "/privacy" };
+  if (route === "/privacy/cookies" || route === "/cookies") {
+    return { page: "privacy", canonicalPath: "/privacy", section: "cookies" };
+  }
+  if (route === "/contact") return { page: "contact", canonicalPath: "/contact" };
+  return null;
+}
+
+function staticPageFromLocation(pathname: string, hash: string): StaticRoute | null {
+  return staticPageFromHash(hash) ?? staticPageFromPath(pathname);
 }
 
 function setOrCreateMeta(selector: string, create: () => HTMLMetaElement | HTMLLinkElement, value: string) {
@@ -108,14 +131,15 @@ function setOrCreateMeta(selector: string, create: () => HTMLMetaElement | HTMLL
   }
 }
 
-function updatePageMetadata(pathname: string, showBuilder: boolean) {
-  const page = staticPageFromPath(pathname);
+function updatePageMetadata(pathname: string, hash: string, showBuilder: boolean) {
+  const route = staticPageFromLocation(pathname, hash);
+  const page = route?.page ?? null;
   const titleByPage: Record<StaticPage, string> = {
     terms: "Terms of Service - Cadio",
     privacy: "Privacy Policy - Cadio",
     contact: "Contact Cadio",
   };
-  const path = page ? pathname.replace(/\/+$/, "") : "/";
+  const path = route?.canonicalPath ?? "/";
   const canonical = `${CANONICAL_DOMAIN}${path === "/" ? "/" : path}`;
   document.title = page ? titleByPage[page] : showBuilder ? "Cadio Workspace - AI CAD for 3D Printing" : DEFAULT_TITLE;
   setOrCreateMeta("meta[name='description']", () => {
@@ -1242,6 +1266,7 @@ function AuthRequiredDialog({
 export default function App() {
   const [showBuilder, setShowBuilder] = useState(() => window.location.hash.startsWith("#builder"));
   const [pathname, setPathname] = useState(() => window.location.pathname);
+  const [hash, setHash] = useState(() => window.location.hash);
 
   useEffect(() => {
     initAnalytics();
@@ -1251,6 +1276,7 @@ export default function App() {
     const syncLocation = () => {
       setShowBuilder(window.location.hash.startsWith("#builder"));
       setPathname(window.location.pathname);
+      setHash(window.location.hash);
     };
     const syncFromHash = syncLocation;
     window.addEventListener("hashchange", syncFromHash);
@@ -1262,15 +1288,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    updatePageMetadata(pathname, showBuilder);
+    updatePageMetadata(pathname, hash, showBuilder);
     trackPageView(window.location.pathname + window.location.hash);
-  }, [pathname, showBuilder]);
+  }, [pathname, hash, showBuilder]);
 
   const startBuilding = () => {
     if (window.location.pathname !== "/" || window.location.hash !== "#builder") {
       window.history.pushState(null, "", "/#builder");
     }
     setPathname("/");
+    setHash("#builder");
     setShowBuilder(true);
   };
 
@@ -1279,12 +1306,13 @@ export default function App() {
       window.history.pushState(null, "", "/");
     }
     setPathname("/");
+    setHash("");
     setShowBuilder(false);
   };
 
-  const staticPage = staticPageFromPath(pathname);
-  if (staticPage && !showBuilder) {
-    return <LegalPage page={staticPage} onStartBuilding={startBuilding} />;
+  const staticRoute = staticPageFromLocation(pathname, hash);
+  if (staticRoute && !showBuilder) {
+    return <LegalPage page={staticRoute.page} initialSection={staticRoute.section} onStartBuilding={startBuilding} />;
   }
 
   return (

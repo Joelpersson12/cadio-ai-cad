@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
 
@@ -114,12 +115,21 @@ const pages: Record<
 
 export default function LegalPage({
   page,
+  initialSection,
   onStartBuilding,
 }: {
   page: LegalPageKind;
+  initialSection?: string;
   onStartBuilding: () => void;
 }) {
   const content = pages[page];
+
+  useEffect(() => {
+    if (!initialSection) return;
+    window.setTimeout(() => {
+      document.getElementById(initialSection)?.scrollIntoView({ block: "start" });
+    }, 0);
+  }, [initialSection, page]);
 
   return (
     <div className="h-full overflow-y-auto bg-[#151515] text-white">
