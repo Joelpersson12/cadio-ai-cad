@@ -1,5 +1,5 @@
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useMemo, useRef, useState } from "react";
+import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
@@ -175,30 +175,71 @@ function PrintedCuboid({
   );
 }
 
+function SkadisSlot({
+  x,
+  y,
+  material,
+  rimMaterial,
+}: {
+  x: number;
+  y: number;
+  material: THREE.Material;
+  rimMaterial: THREE.Material;
+}) {
+  return (
+    <group position={[x, y, 0.094]}>
+      <mesh material={rimMaterial} position={[0, 0, -0.001]} receiveShadow>
+        <boxGeometry args={[0.116, 0.245, 0.012]} />
+      </mesh>
+      <mesh material={rimMaterial} position={[0, 0.122, -0.001]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
+        <cylinderGeometry args={[0.058, 0.058, 0.012, 18]} />
+      </mesh>
+      <mesh material={rimMaterial} position={[0, -0.122, -0.001]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
+        <cylinderGeometry args={[0.058, 0.058, 0.012, 18]} />
+      </mesh>
+      <mesh material={material} receiveShadow>
+        <boxGeometry args={[0.078, 0.198, 0.018]} />
+      </mesh>
+      <mesh material={material} position={[0, 0.099, 0]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
+        <cylinderGeometry args={[0.039, 0.039, 0.018, 18]} />
+      </mesh>
+      <mesh material={material} position={[0, -0.099, 0]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
+        <cylinderGeometry args={[0.039, 0.039, 0.018, 18]} />
+      </mesh>
+    </group>
+  );
+}
+
 function HeroModel() {
   const groupRef = useRef<THREE.Group>(null);
+  const dragRef = useRef({ active: false, x: 0, rotation: 0, suppressContext: false });
+  const [manualRotation, setManualRotation] = useState(0);
   const boardMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#f2f2ee", roughness: 0.62, metalness: 0.02 }),
+    () => new THREE.MeshStandardMaterial({ color: "#0c0d0e", roughness: 0.94, metalness: 0.0 }),
     [],
   );
   const holeMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#232426", roughness: 0.75, metalness: 0.02 }),
+    () => new THREE.MeshStandardMaterial({ color: "#020303", roughness: 0.88, metalness: 0.0 }),
+    [],
+  );
+  const slotRimMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#282b2d", roughness: 0.82, metalness: 0.01 }),
     [],
   );
   const blackPrint = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#151719", roughness: 0.82, metalness: 0.03 }),
+    () => new THREE.MeshStandardMaterial({ color: "#151719", roughness: 0.84, metalness: 0.02 }),
     [],
   );
   const grayPrint = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#9fa4a8", roughness: 0.72, metalness: 0.03 }),
+    () => new THREE.MeshStandardMaterial({ color: "#8f969a", roughness: 0.74, metalness: 0.02 }),
     [],
   );
   const tealPrint = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#20b7ce", roughness: 0.68, metalness: 0.04 }),
+    () => new THREE.MeshStandardMaterial({ color: "#31363a", roughness: 0.78, metalness: 0.02 }),
     [],
   );
   const amberPrint = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#f3c34d", roughness: 0.68, metalness: 0.03 }),
+    () => new THREE.MeshStandardMaterial({ color: "#6f777c", roughness: 0.76, metalness: 0.02 }),
     [],
   );
   const layerLine = useMemo(
@@ -215,22 +256,56 @@ function HeroModel() {
     return items;
   }, []);
 
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!dragRef.current.active) return;
+      const nextRotation = dragRef.current.rotation + (event.clientX - dragRef.current.x) * 0.006;
+      setManualRotation(nextRotation);
+    };
+    const handleUp = () => {
+      dragRef.current.active = false;
+    };
+    const handleContextMenu = (event: MouseEvent) => {
+      if (!dragRef.current.suppressContext) return;
+      event.preventDefault();
+      dragRef.current.suppressContext = false;
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("contextmenu", handleContextMenu);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, []);
+
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
-    groupRef.current.rotation.y = -0.12 + Math.sin(clock.elapsedTime * 0.18) * 0.035;
+    groupRef.current.rotation.y = -0.12 + manualRotation + Math.sin(clock.elapsedTime * 0.18) * 0.035;
     groupRef.current.rotation.x = -0.04 + Math.sin(clock.elapsedTime * 0.15) * 0.012;
   });
 
+  const handleModelPointerDown = (event: ThreeEvent<PointerEvent>) => {
+    if (event.nativeEvent.button !== 2) return;
+    event.stopPropagation();
+    event.nativeEvent.preventDefault();
+    dragRef.current = {
+      active: true,
+      x: event.nativeEvent.clientX,
+      rotation: manualRotation,
+      suppressContext: true,
+    };
+  };
+
   return (
-    <group ref={groupRef} position={[0, -0.1, 0]}>
+    <group ref={groupRef} position={[0, -0.1, 0]} onPointerDown={handleModelPointerDown}>
       <group position={[0, 0.15, 0]} rotation={[0, 0.02, 0]}>
         <mesh material={boardMaterial} castShadow receiveShadow>
           <boxGeometry args={[7.2, 4.6, 0.16]} />
         </mesh>
         {holes.map(([x, y]) => (
-          <mesh key={`${x}-${y}`} material={holeMaterial} position={[x, y, 0.091]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
-            <cylinderGeometry args={[0.055, 0.055, 0.018, 20]} />
-          </mesh>
+          <SkadisSlot key={`${x}-${y}`} x={x} y={y} material={holeMaterial} rimMaterial={slotRimMaterial} />
         ))}
 
         <group position={[-2.35, 0.95, 0.24]}>
