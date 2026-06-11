@@ -258,6 +258,8 @@ def build_design_brief(prompt: str, limit: int = 6) -> dict[str, Any]:
 
 
 def _search_sources(prompt: str, limit: int) -> list[ExampleDesign]:
+    if limit <= 0:
+        return []
     try:
         from backend.services.provider_extensions import get_extended_provider_registry
 

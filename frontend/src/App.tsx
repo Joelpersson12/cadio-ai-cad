@@ -467,6 +467,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     printers,
     printer,
     status,
+    notice,
     isBusy,
     expertMode,
     expertTool,
@@ -492,6 +493,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     snapSelectedObjects,
     setPrinter,
     runPrompt,
+    dismissNotice,
   } = useCadStore();
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
@@ -593,6 +595,22 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
   return (
     <div className="w-full h-full relative bg-cadio-bg text-cadio-text">
+      {notice && (
+        <div className="fixed left-1/2 top-20 z-[90] w-[min(92vw,430px)] -translate-x-1/2 rounded-2xl border border-[#28c7df]/45 bg-[#151515]/96 p-4 text-white shadow-[0_22px_70px_rgba(0,0,0,0.42),0_0_34px_rgba(40,199,223,0.12)] backdrop-blur md:left-auto md:right-6 md:top-6 md:translate-x-0">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#69d9f5]">Search notice</div>
+          <p className="text-sm leading-6 text-[#e8e8e8]">{notice}</p>
+          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[#a7a7aa]">
+            <span>Try more context or use filters.</span>
+            <button
+              type="button"
+              onClick={dismissNotice}
+              className="rounded-lg border border-[#343436] bg-[#242426] px-3 py-2 font-semibold text-white hover:border-[#555]"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
       {/* Desktop layout */}
       <div
         ref={desktopLayoutRef}

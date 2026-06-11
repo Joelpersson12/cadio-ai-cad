@@ -31,7 +31,7 @@ import {
 } from "../utils/api";
 
 const SESSION_KEY = "cadio_session_id";
-const MIN_BUSY_MS = 650;
+const MIN_BUSY_MS = 280;
 
 async function waitForMinimumBusy(startedAt: number) {
   const remaining = MIN_BUSY_MS - (Date.now() - startedAt);
@@ -64,6 +64,7 @@ interface CadState {
 
   // UI
   status: string;
+  notice: string;
   isBusy: boolean;
   transformMode: TransformMode;
   expertMode: boolean;
@@ -80,6 +81,7 @@ interface CadState {
   setSelectionMode: (mode: SelectionMode) => void;
   setSketchHeight: (height: number) => void;
   setOperationAmount: (amount: number) => void;
+  dismissNotice: () => void;
   applyScenePayload: (payload: ScenePayload) => void;
   startBlankCreation: () => void;
   loadPrinters: () => Promise<void>;
@@ -140,6 +142,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
   printSettings: null,
   status: "Ready",
+  notice: "",
   isBusy: false,
   transformMode: "off",
   expertMode: false,
@@ -159,6 +162,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   setSelectionMode: (mode) => set({ selectionMode: mode }),
   setSketchHeight: (height) => set({ sketchHeight: Math.max(0.5, height) }),
   setOperationAmount: (amount) => set({ operationAmount: Math.max(0, amount) }),
+  dismissNotice: () => set({ notice: "" }),
   startBlankCreation: () => {
     localStorage.removeItem(SESSION_KEY);
     set({
@@ -178,6 +182,7 @@ export const useCadStore = create<CadState>((set, get) => ({
       },
       printSettings: null,
       status: "Blank workspace",
+      notice: "",
       isBusy: false,
       transformMode: "off",
       expertTool: "select",
@@ -291,7 +296,15 @@ export const useCadStore = create<CadState>((set, get) => ({
       });
       get().applyScenePayload(data);
       await waitForMinimumBusy(startedAt);
-      set({ status: `Updated v${data.version}`, isBusy: false });
+      const latest = data.edit_history[data.edit_history.length - 1];
+      const actions = Array.isArray(latest?.actions) ? latest.actions.map(String) : [];
+      const notFound = actions.find((action) => action.toLowerCase().startsWith("model-not-found:"));
+      if (notFound) {
+        const message = notFound.replace(/^model-not-found:\s*/i, "").trim() || "Cadio could not find that model yet.";
+        set({ status: "Model not found", notice: message, isBusy: false });
+      } else {
+        set({ status: `Updated v${data.version}`, notice: "", isBusy: false });
+      }
     } catch (err) {
       await waitForMinimumBusy(startedAt);
       set({ status: err instanceof Error ? err.message : "Error", isBusy: false });

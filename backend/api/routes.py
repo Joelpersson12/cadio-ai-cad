@@ -284,6 +284,7 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
             save_undo_snapshot(session)
             session["printer"] = normalize_printer(data.printer)
             session["fit"] = bool(data.fit)
+            model_updated = True
 
             prompt = (data.prompt or "").strip().lower()
             command_prompt = f"{prompt} {normalize_source_query(data.prompt)}".strip().lower()
@@ -337,48 +338,68 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                     actions = source_actions
                 else:
                     parsed = parse_ai_command(data.prompt, session, obj)
-                    previous_parameters = dict(obj.get("parameters", {}))
-                    obj["parameters"] = parsed["parameters"]
-                    obj["feature_tree"] = parsed["feature_tree"]
-                    obj["transform"] = parsed["transform"]
-                    changed_keys = {
-                        key
-                        for key, value in parsed["parameters"].items()
-                        if previous_parameters.get(key) != value
-                    }
-                    if not update_imported_source_dimensions(obj, changed_keys):
-                        rebuild_object(obj)
-
-                    assembly_actions = replace_object_with_template_assembly(
-                        session,
-                        obj,
-                        None if edit_only else parsed.get("template"),
-                        parsed["parameters"],
+                    research_brief = parsed.get("research_brief") if isinstance(parsed.get("research_brief"), dict) else {}
+                    source_examples = research_brief.get("source_examples") if isinstance(research_brief, dict) else []
+                    no_reliable_source = (
+                        not edit_only
+                        and not parsed.get("template")
+                        and isinstance(research_brief, dict)
+                        and str(research_brief.get("category") or "").lower() == "generic"
+                        and not source_examples
                     )
-                    research_actions = []
-                    if not assembly_actions and not edit_only:
-                        research_actions = replace_object_with_research_assembly(
+                    if no_reliable_source:
+                        remove_object(session, obj["id"])
+                        session["selected_object_id"] = ""
+                        translated = normalize_source_query(data.prompt)
+                        actions = [
+                            "model-not-found: Cadio could not find a reliable printable source model for that prompt yet.",
+                            f"searched-query: {translated}" if translated else "searched public model sources",
+                            "tip: Try adding object type, mount style, brand, dimensions, or filters like wall mounted, pegboard, bike mounted, foldable, or popular.",
+                        ]
+                        model_updated = False
+                    else:
+                        previous_parameters = dict(obj.get("parameters", {}))
+                        obj["parameters"] = parsed["parameters"]
+                        obj["feature_tree"] = parsed["feature_tree"]
+                        obj["transform"] = parsed["transform"]
+                        changed_keys = {
+                            key
+                            for key, value in parsed["parameters"].items()
+                            if previous_parameters.get(key) != value
+                        }
+                        if not update_imported_source_dimensions(obj, changed_keys):
+                            rebuild_object(obj)
+
+                        assembly_actions = replace_object_with_template_assembly(
                             session,
                             obj,
-                            parsed.get("research_brief"),
+                            None if edit_only else parsed.get("template"),
                             parsed["parameters"],
                         )
-                    if assembly_actions or research_actions:
-                        actions = parsed["actions"] + assembly_actions + research_actions
-                    else:
-                        # Validate generated geometry
-                        validation = GeometryValidator.validate(obj["shape"])
-                        if not validation.is_valid:
-                            logger.warning(f"Generated model failed validation: {validation.issues}")
-                            # Add validation info to actions
-                            actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
+                        research_actions = []
+                        if not assembly_actions and not edit_only:
+                            research_actions = replace_object_with_research_assembly(
+                                session,
+                                obj,
+                                parsed.get("research_brief"),
+                                parsed["parameters"],
+                            )
+                        if assembly_actions or research_actions:
+                            actions = parsed["actions"] + assembly_actions + research_actions
                         else:
-                            actions = parsed["actions"]
-                            if validation.warnings:
-                                actions += [f"Note: {w}" for w in validation.warnings]
+                            # Validate generated geometry
+                            validation = GeometryValidator.validate(obj["shape"])
+                            if not validation.is_valid:
+                                logger.warning(f"Generated model failed validation: {validation.issues}")
+                                # Add validation info to actions
+                                actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
+                            else:
+                                actions = parsed["actions"]
+                                if validation.warnings:
+                                    actions += [f"Note: {w}" for w in validation.warnings]
 
-                        # Store validation metrics
-                        obj["validation"] = validation.to_dict()
+                            # Store validation metrics
+                            obj["validation"] = validation.to_dict()
 
                 if not edit_only and obj.get("id") in session["objects"]:
                     session["selected_object_id"] = ""
@@ -389,7 +410,7 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
             bump_version(session)
             add_history(session, data.prompt, actions)
             payload = build_scene_payload(
-                session, include_mesh=True, model_updated=True
+                session, include_mesh=True, model_updated=model_updated
             )
 
         # Broadcast outside lock

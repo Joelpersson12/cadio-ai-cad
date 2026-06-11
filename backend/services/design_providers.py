@@ -130,7 +130,7 @@ _MODEL_META_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _CACHE_TTL_SECONDS = 600.0
 
 
-def _fetch_text(url: str, timeout: float = 8.0) -> str:
+def _fetch_text(url: str, timeout: float = 5.0) -> str:
     req = Request(
         url,
         headers={
@@ -561,7 +561,10 @@ def _query_words(query: str) -> list[str]:
         "holder": ["mount", "bracket", "rack", "hanger", "hook"],
         "hanger": ["holder", "hook", "rack"],
         "hook": ["hanger", "holder", "mount"],
-        "mount": ["holder", "bracket"],
+        "mount": ["holder", "bracket", "adapter"],
+        "bracket": ["mount", "holder", "adapter"],
+        "rack": ["holder", "organizer", "shelf"],
+        "shelf": ["rack", "holder"],
         "desk": ["clamp"],
         "table": ["desk"],
         "wall": ["mount"],
@@ -595,6 +598,9 @@ def _query_words(query: str) -> list[str]:
         "belt": ["belts", "strap"],
         "snus": ["can", "tin"],
         "can": ["tin", "container"],
+        "replacement": ["spare", "part"],
+        "spare": ["replacement", "part"],
+        "part": ["replacement", "spare"],
     }
     words: list[str] = []
     for word in base:
@@ -1423,7 +1429,8 @@ class ProviderRegistry:
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
         search_query = normalize_source_query(query) or query
         variants = _query_variants(search_query) or [search_query]
-        per_query_limit = max(limit * 2, 10)
+        variants = variants[:10]
+        per_query_limit = max(6, min(limit * 2, 12))
         for provider in self.providers.values():
             if not provider.is_available():
                 continue

@@ -24,31 +24,31 @@ const enCopy = {
     start: "Start building",
   },
   hero: {
-    eyebrow: "AI CAD for real 3D printing",
-    title: "Describe the model. Edit like CAD. Print with the right profile.",
-    body: "Cadio helps you find printable model ideas, turn prompts into editable CAD geometry, and prepare exports with printer-aware settings.",
-    prompt: "Gridfinity Storage Box",
+    eyebrow: "AI CAD search for real 3D printing",
+    title: "Find the model. Remix the details. Export it for your printer.",
+    body: "Cadio searches public printable model sources, turns strong matches into an editable workspace, and keeps dimensions, variants, materials, and export settings in one clean flow.",
+    prompt: "tool holder for pegboard, bike mounted snus can holder, foldable phone stand...",
     primary: "Start building",
     secondary: "Beta access",
   },
   stats: [
-    ["Source aware", "Looks for proven printable patterns before it builds"],
-    ["Easy + Expert", "AI-guided edits for quick work, manual CAD tools when you need control"],
-    ["Print ready", "Printer, material, scaling, and export formats in one flow"],
+    ["Source-first", "Searches for proven printable models before falling back to CAD logic"],
+    ["Prompt + CAD", "Use plain language first, then edit parts, dimensions, edges, and transforms"],
+    ["Print aware", "Printer, material, scaling, creator settings, and export format stay together"],
   ],
   product: {
     title: "A CAD builder for every level",
     body: "Easy mode helps you describe what you want. Expert mode gives you control over sketches, parts, transforms, edges, and CAD operations.",
   },
   cards: [
-    ["AI model search", "Type what you want to build. Cadio searches for source signals and creates a printable starting point."],
+    ["Broad model search", "Write in English, Swedish, Spanish, French, Italian, German, or Portuguese. Cadio normalizes the prompt before searching."],
+    ["Variant control", "Move to the next or previous popular match when the first result is close but not right."],
     ["Manual CAD", "Draw, select parts, move, rotate, measure, and refine the model when you want direct control."],
-    ["Printer profiles", "Choose printer, material, scaling, and export format before the model reaches your slicer."],
   ],
   details: {
     label: "Practical CAD flow",
-    title: "Made for the messy middle between idea and slicer",
-    body: "Most print projects need more than a generated shape. Cadio keeps model variants, measurements, print settings, and manual edits close together so you can make a part feel usable before exporting it.",
+    title: "Built for the moment between search and slicer",
+    body: "Most prints start as a half-clear idea: a holder for a specific place, a bracket for a specific tool, or a remix of a known model. Cadio keeps search, variants, measurements, print settings, and CAD edits close together.",
     items: [
       ["Variant control", "Move between model options when the first result is not the right one."],
       ["Real dimensions", "Check bounds and scale before the file reaches your printer profile."],
@@ -147,19 +147,19 @@ const copy: Record<Language, typeof enCopy> = {
 function HeroModel() {
   const groupRef = useRef<THREE.Group>(null);
   const bodyMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#1a1d20", roughness: 0.52, metalness: 0.12 }),
+    () => new THREE.MeshStandardMaterial({ color: "#d7d9dc", roughness: 0.46, metalness: 0.06 }),
     [],
   );
   const wallMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#252a2e", roughness: 0.58, metalness: 0.08 }),
+    () => new THREE.MeshStandardMaterial({ color: "#f3f4f6", roughness: 0.5, metalness: 0.04 }),
     [],
   );
   const accentMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#26bddc",
-        emissive: "#0f5f70",
-        emissiveIntensity: 0.1,
+        color: "#28c7df",
+        emissive: "#0c5664",
+        emissiveIntensity: 0.14,
         roughness: 0.34,
         metalness: 0.12,
       }),
@@ -213,7 +213,7 @@ function HeroModel() {
           <boxGeometry args={[3.3, 0.12, 0.1]} />
         </mesh>
       </group>
-      <gridHelper args={[8, 18, "#45484b", "#323436"]} position={[0, -0.02, 0]} />
+      <gridHelper args={[8, 18, "#7d8388", "#4d5257"]} position={[0, -0.02, 0]} />
     </group>
   );
 }
@@ -222,14 +222,14 @@ function HeroScene() {
   return (
     <div className="absolute inset-0">
       <Canvas dpr={[1, 1.75]} shadows camera={{ position: [4.8, 5.2, 6.4], fov: 38 }} gl={{ antialias: true, alpha: true }}>
-        <color attach="background" args={["#343435"]} />
-        <fog attach="fog" args={["#343435", 7, 15]} />
+        <color attach="background" args={["#2b2d30"]} />
+        <fog attach="fog" args={["#2b2d30", 7, 15]} />
         <ambientLight intensity={1.2} />
         <directionalLight position={[5, 8, 4]} intensity={2.2} castShadow />
         <pointLight position={[-4, 3, -4]} intensity={0.8} color="#2bb8dc" />
         <HeroModel />
       </Canvas>
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(12,12,13,0.92)_0%,rgba(18,18,19,0.78)_38%,rgba(18,18,19,0.18)_72%,rgba(18,18,19,0.46)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(12,12,13,0.92)_0%,rgba(18,18,19,0.72)_38%,rgba(18,18,19,0.10)_72%,rgba(18,18,19,0.34)_100%)]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-[linear-gradient(0deg,#151515_0%,rgba(21,21,21,0)_100%)]" />
     </div>
   );

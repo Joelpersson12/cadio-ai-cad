@@ -466,7 +466,7 @@ def parse_ai_command(
                 params[key] = obj["parameters"][key]
         
         features = _feature_tree_for_template(template.default_features)
-        external_actions = _external_design_signals(prompt, params)
+        external_actions = []
         
         obj["template_hint"] = template.name
         research_brief = None
@@ -474,14 +474,14 @@ def parse_ai_command(
     else:
         params = dict(obj["parameters"])
         features = [_coerce_feature(f) for f in obj["feature_tree"]]
-        external_actions = [] if edit_only else _external_design_signals(prompt, params)
+        external_actions = []
         if edit_only:
             research_brief = None
             brief_actions = []
         else:
             from backend.services.design_brief import build_design_brief
 
-            research_brief = build_design_brief(prompt)
+            research_brief = build_design_brief(prompt, limit=4)
             brief_actions = _apply_research_brief(research_brief, params, features)
             obj["template_hint"] = None
     

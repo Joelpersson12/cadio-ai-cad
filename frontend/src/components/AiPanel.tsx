@@ -24,16 +24,24 @@ const QUICK_COMMANDS = [
 
 const SEARCH_FILTER_GROUPS = [
   {
+    label: "Object",
+    filters: ["holder", "mount", "bracket", "hook", "hanger", "rack", "organizer", "replacement part"],
+  },
+  {
     label: "Device",
-    filters: ["rotating", "vertical", "horizontal", "foldable", "minimal", "magsafe", "charging dock"],
+    filters: ["rotating", "vertical", "horizontal", "foldable", "minimal", "magsafe", "charging dock", "adjustable"],
   },
   {
     label: "Mounting",
-    filters: ["wall mounted", "desk mount", "clamp mount", "Gridfinity", "Pegboard", "Magnetic"],
+    filters: ["wall mounted", "desk mount", "clamp mount", "bike mounted", "handlebar", "garage", "wardrobe", "Gridfinity", "Pegboard", "Magnetic"],
+  },
+  {
+    label: "Workshop",
+    filters: ["tool board", "Skadis", "screw holes", "counterbore", "heavy duty", "no supports"],
   },
   {
     label: "Print",
-    filters: ["popular", "flat print", "no supports", "screw holes", "counterbore", "strong"],
+    filters: ["popular", "flat print", "strong", "fast print", "FDM", "STL"],
   },
 ];
 
