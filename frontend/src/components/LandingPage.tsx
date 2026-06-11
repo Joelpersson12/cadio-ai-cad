@@ -144,76 +144,161 @@ const copy: Record<Language, typeof enCopy> = {
   pt: enCopy,
 };
 
+function PrintedCuboid({
+  size,
+  position,
+  material,
+  lineMaterial,
+  lineCount = 4,
+}: {
+  size: [number, number, number];
+  position: [number, number, number];
+  material: THREE.Material;
+  lineMaterial: THREE.Material;
+  lineCount?: number;
+}) {
+  const [width, height, depth] = size;
+  return (
+    <group position={position}>
+      <mesh material={material} castShadow receiveShadow>
+        <boxGeometry args={[width, height, depth]} />
+      </mesh>
+      {Array.from({ length: lineCount }).map((_, index) => {
+        const y = -height / 2 + ((index + 1) * height) / (lineCount + 1);
+        return (
+          <mesh key={index} material={lineMaterial} position={[0, y, depth / 2 + 0.006]} receiveShadow>
+            <boxGeometry args={[width * 0.92, 0.012, 0.012]} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
 function HeroModel() {
   const groupRef = useRef<THREE.Group>(null);
-  const bodyMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#d7d9dc", roughness: 0.46, metalness: 0.06 }),
+  const boardMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#f2f2ee", roughness: 0.62, metalness: 0.02 }),
     [],
   );
-  const wallMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#f3f4f6", roughness: 0.5, metalness: 0.04 }),
+  const holeMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#232426", roughness: 0.75, metalness: 0.02 }),
     [],
   );
-  const accentMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#28c7df",
-        emissive: "#0c5664",
-        emissiveIntensity: 0.14,
-        roughness: 0.34,
-        metalness: 0.12,
-      }),
+  const blackPrint = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#151719", roughness: 0.82, metalness: 0.03 }),
     [],
   );
-  const dividerPositions = [-0.68, 0.68];
-  const magnetPositions = [-1.35, 1.35];
+  const grayPrint = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#9fa4a8", roughness: 0.72, metalness: 0.03 }),
+    [],
+  );
+  const tealPrint = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#20b7ce", roughness: 0.68, metalness: 0.04 }),
+    [],
+  );
+  const amberPrint = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#f3c34d", roughness: 0.68, metalness: 0.03 }),
+    [],
+  );
+  const layerLine = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#0c0f10", roughness: 0.85, metalness: 0.02 }),
+    [],
+  );
+  const holes = useMemo(() => {
+    const items: Array<[number, number]> = [];
+    for (let row = 0; row < 10; row += 1) {
+      for (let col = 0; col < 16; col += 1) {
+        items.push([(col - 7.5) * 0.42, (row - 4.5) * 0.38]);
+      }
+    }
+    return items;
+  }, []);
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
-    groupRef.current.rotation.y = -0.5 + Math.sin(clock.elapsedTime * 0.24) * 0.065;
-    groupRef.current.rotation.x = 0.36 + Math.sin(clock.elapsedTime * 0.18) * 0.024;
+    groupRef.current.rotation.y = -0.12 + Math.sin(clock.elapsedTime * 0.18) * 0.035;
+    groupRef.current.rotation.x = -0.04 + Math.sin(clock.elapsedTime * 0.15) * 0.012;
   });
 
   return (
-    <group ref={groupRef} position={[0.15, -0.35, 0]}>
-      <group position={[0, 0.72, 0]} rotation={[0, 0.08, 0]}>
-        <mesh material={bodyMaterial} position={[0, -0.44, 0]} castShadow receiveShadow>
-          <boxGeometry args={[3.8, 0.28, 3.2]} />
+    <group ref={groupRef} position={[0, -0.1, 0]}>
+      <group position={[0, 0.15, 0]} rotation={[0, 0.02, 0]}>
+        <mesh material={boardMaterial} castShadow receiveShadow>
+          <boxGeometry args={[7.2, 4.6, 0.16]} />
         </mesh>
-        <mesh material={wallMaterial} position={[0, 0.1, -1.48]} castShadow receiveShadow>
-          <boxGeometry args={[3.8, 1.18, 0.24]} />
-        </mesh>
-        <mesh material={wallMaterial} position={[0, 0.1, 1.48]} castShadow receiveShadow>
-          <boxGeometry args={[3.8, 1.18, 0.24]} />
-        </mesh>
-        <mesh material={wallMaterial} position={[-1.78, 0.1, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.24, 1.18, 3.2]} />
-        </mesh>
-        <mesh material={wallMaterial} position={[1.78, 0.1, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.24, 1.18, 3.2]} />
-        </mesh>
-        {dividerPositions.map((x) => (
-          <mesh key={`x-${x}`} material={wallMaterial} position={[x, 0.1, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.14, 1.02, 2.72]} />
+        {holes.map(([x, y]) => (
+          <mesh key={`${x}-${y}`} material={holeMaterial} position={[x, y, 0.091]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
+            <cylinderGeometry args={[0.055, 0.055, 0.018, 20]} />
           </mesh>
         ))}
-        {dividerPositions.map((z) => (
-          <mesh key={`z-${z}`} material={wallMaterial} position={[0, 0.1, z]} castShadow receiveShadow>
-            <boxGeometry args={[3.34, 1.02, 0.14]} />
+
+        <group position={[-2.35, 0.95, 0.24]}>
+          {[-0.34, 0, 0.34].map((x) => (
+            <group key={x} position={[x, 0, 0]}>
+              <mesh material={blackPrint} position={[0, 0.18, 0]} castShadow>
+                <boxGeometry args={[0.09, 0.48, 0.18]} />
+              </mesh>
+              <mesh material={blackPrint} position={[0, -0.12, 0.14]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+                <torusGeometry args={[0.16, 0.028, 10, 26, Math.PI * 1.35]} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+
+        <group position={[1.65, 1.1, 0.33]}>
+          <PrintedCuboid size={[1.6, 0.16, 0.72]} position={[0, -0.22, 0]} material={blackPrint} lineMaterial={layerLine} lineCount={2} />
+          <PrintedCuboid size={[0.18, 0.72, 0.64]} position={[-0.55, -0.6, -0.02]} material={blackPrint} lineMaterial={layerLine} lineCount={3} />
+          <PrintedCuboid size={[0.18, 0.72, 0.64]} position={[0.55, -0.6, -0.02]} material={blackPrint} lineMaterial={layerLine} lineCount={3} />
+          <mesh material={tealPrint} position={[0, -0.09, 0.43]} castShadow>
+            <boxGeometry args={[1.25, 0.08, 0.08]} />
           </mesh>
-        ))}
-        {magnetPositions.flatMap((x) =>
-          magnetPositions.map((z) => (
-            <mesh key={`${x}-${z}`} material={accentMaterial} position={[x, -0.26, z]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
-              <cylinderGeometry args={[0.16, 0.16, 0.08, 40]} />
+        </group>
+
+        <group position={[-1.35, -0.7, 0.36]}>
+          <PrintedCuboid size={[1.55, 0.78, 0.54]} position={[0, -0.08, 0.03]} material={tealPrint} lineMaterial={layerLine} lineCount={5} />
+          <PrintedCuboid size={[1.35, 0.18, 0.18]} position={[0, 0.38, 0.25]} material={tealPrint} lineMaterial={layerLine} lineCount={1} />
+          <PrintedCuboid size={[0.14, 0.66, 0.26]} position={[-0.69, 0, 0.23]} material={tealPrint} lineMaterial={layerLine} lineCount={3} />
+          <PrintedCuboid size={[0.14, 0.66, 0.26]} position={[0.69, 0, 0.23]} material={tealPrint} lineMaterial={layerLine} lineCount={3} />
+        </group>
+
+        <group position={[1.28, -0.72, 0.54]}>
+          <mesh material={amberPrint} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.42, 0.44, 0.72, 42]} />
+          </mesh>
+          <mesh material={holeMaterial} position={[0, 0, 0.38]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.31, 0.31, 0.018, 42]} />
+          </mesh>
+          {[-0.22, 0.02, 0.26].map((z, index) => (
+            <mesh key={index} material={layerLine} position={[0, 0, z]} rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[0.445, 0.008, 6, 44]} />
             </mesh>
-          )),
-        )}
-        <mesh material={accentMaterial} position={[0, 0.74, -1.62]} castShadow receiveShadow>
-          <boxGeometry args={[3.3, 0.12, 0.1]} />
-        </mesh>
+          ))}
+        </group>
+
+        <group position={[-2.0, -1.55, 0.25]}>
+          <PrintedCuboid size={[2.2, 0.18, 0.36]} position={[0, 0, 0]} material={grayPrint} lineMaterial={layerLine} lineCount={2} />
+          {[-0.78, -0.39, 0, 0.39, 0.78].map((x) => (
+            <mesh key={x} material={grayPrint} position={[x, 0.3, 0.04]} castShadow>
+              <boxGeometry args={[0.12, 0.52, 0.18]} />
+            </mesh>
+          ))}
+        </group>
+
+        <group position={[2.65, -1.35, 0.28]}>
+          {[-0.3, 0, 0.3].map((y, index) => (
+            <mesh key={index} material={blackPrint} position={[0, y, 0]} castShadow>
+              <boxGeometry args={[0.95, 0.08, 0.22]} />
+            </mesh>
+          ))}
+          <mesh material={blackPrint} position={[-0.48, 0, 0]} castShadow>
+            <boxGeometry args={[0.08, 0.72, 0.22]} />
+          </mesh>
+          <mesh material={blackPrint} position={[0.48, 0, 0]} castShadow>
+            <boxGeometry args={[0.08, 0.72, 0.22]} />
+          </mesh>
+        </group>
       </group>
-      <gridHelper args={[8, 18, "#7d8388", "#4d5257"]} position={[0, -0.02, 0]} />
     </group>
   );
 }
@@ -221,15 +306,16 @@ function HeroModel() {
 function HeroScene() {
   return (
     <div className="absolute inset-0">
-      <Canvas dpr={[1, 1.75]} shadows camera={{ position: [4.8, 5.2, 6.4], fov: 38 }} gl={{ antialias: true, alpha: true }}>
-        <color attach="background" args={["#2b2d30"]} />
-        <fog attach="fog" args={["#2b2d30", 7, 15]} />
-        <ambientLight intensity={1.2} />
-        <directionalLight position={[5, 8, 4]} intensity={2.2} castShadow />
-        <pointLight position={[-4, 3, -4]} intensity={0.8} color="#2bb8dc" />
+      <Canvas dpr={[1, 1.75]} shadows camera={{ position: [0.35, 0.15, 8.2], fov: 42 }} gl={{ antialias: true, alpha: true }}>
+        <color attach="background" args={["#2a2b2d"]} />
+        <fog attach="fog" args={["#2a2b2d", 8, 17]} />
+        <ambientLight intensity={1.45} />
+        <directionalLight position={[3.8, 5.4, 5.8]} intensity={2.4} castShadow />
+        <pointLight position={[-4, 2.6, 4]} intensity={1.2} color="#28c7df" />
+        <pointLight position={[3.5, -2.4, 4]} intensity={0.65} color="#f3c34d" />
         <HeroModel />
       </Canvas>
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(12,12,13,0.92)_0%,rgba(18,18,19,0.72)_38%,rgba(18,18,19,0.10)_72%,rgba(18,18,19,0.34)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,255,255,0.08),rgba(20,20,21,0)_48%),linear-gradient(90deg,rgba(14,14,15,0.42)_0%,rgba(18,18,19,0.08)_42%,rgba(18,18,19,0.18)_100%)]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-[linear-gradient(0deg,#151515_0%,rgba(21,21,21,0)_100%)]" />
     </div>
   );
@@ -239,10 +325,6 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
   const [language, setLanguage] = useState<Language>("en");
   const [betaOpen, setBetaOpen] = useState(false);
   const text = copy[language];
-
-  const openPricing = () => {
-    document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   return (
     <div className="h-full overflow-y-auto bg-[#151515] text-white">
@@ -306,22 +388,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
       <main>
         <section className="relative min-h-[760px] overflow-hidden pt-16">
           <HeroScene />
-          <div className="relative z-10 mx-auto flex min-h-[700px] max-w-7xl items-center px-4 py-16 sm:px-6 lg:px-8">
-            <div className="max-w-3xl">
-              <p className="mb-5 text-xs font-semibold uppercase tracking-[0.24em] text-[#2bb8dc]">{text.hero.eyebrow}</p>
-              <h1 className="max-w-4xl text-5xl font-semibold leading-[1.02] tracking-normal text-white sm:text-6xl lg:text-7xl">{text.hero.title}</h1>
-              <p className="mt-6 max-w-2xl text-base leading-7 text-[#c9c9cc] sm:text-lg">{text.hero.body}</p>
-              <div className="mt-8 flex max-w-xl items-center gap-3 rounded-2xl border border-white/15 bg-[#202020]/86 p-2 shadow-2xl backdrop-blur">
-                <div className="min-w-0 flex-1 px-3 text-sm text-[#c8c8cb]">{text.hero.prompt}</div>
-                <button onClick={onStartBuilding} className="shrink-0 rounded-xl bg-[#2bb8dc] px-4 py-3 text-sm font-bold text-[#101010] hover:bg-[#69d9f5]">
-                  {text.hero.primary}
-                </button>
-              </div>
-              <button onClick={openPricing} className="mt-4 rounded-lg px-4 py-3 text-sm font-semibold text-[#d8d8d9] hover:bg-white/10">
-                {text.hero.secondary}
-              </button>
-            </div>
-          </div>
+          <div className="relative z-10 min-h-[700px]" aria-label={text.hero.title} />
           <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 gap-px border-y border-white/10 bg-white/10 sm:grid-cols-3">
             {text.stats.map(([title, body]) => (
               <div key={title} className="bg-[#151515]/94 px-6 py-5">
