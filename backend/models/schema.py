@@ -48,7 +48,7 @@ class SourceSettings(BaseModel):
 class CadObjectOut(BaseModel):
     id: str
     name: str
-    primitive: str
+    primitive: str = ""
     parameters: dict[str, Any]
     transform: Transform
     material: str
@@ -56,6 +56,7 @@ class CadObjectOut(BaseModel):
     visible: bool = True
     locked: bool = False
     mesh: MeshPayload | None = None
+    feature_tree: list[Feature] = Field(default_factory=list)
     features: list[Feature] = Field(default_factory=list)
     source_settings: SourceSettings | None = None
 

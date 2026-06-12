@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCadStore } from "../stores/cadStore";
+import type { CadObject } from "../utils/types";
 
 const AI_MODELS = [
   "Gemini 3.1 Pro",
@@ -11,16 +12,27 @@ const AI_MODELS = [
   "Gemini 3.5 Flash",
 ];
 
-const QUICK_COMMANDS = [
-  "Create wall mount",
-  "Add hanging hook",
-  "Adjust slot spacing",
-  "Make 3 slots",
-  "Add screw bosses",
-  "Add cable cutout",
-  "Add snap clip",
-  "Make it stronger",
-];
+type ToolCommand = {
+  label: string;
+  prompt: string;
+  hint: string;
+};
+
+type ModelContext = {
+  hasModel: boolean;
+  text: string;
+  isBattery: boolean;
+  isPhone: boolean;
+  isHeadphone: boolean;
+  isCable: boolean;
+  isCup: boolean;
+  isTool: boolean;
+  isBoardMounted: boolean;
+  isStorage: boolean;
+  isHolder: boolean;
+  hasSlots: boolean;
+  hasFlatBase: boolean;
+};
 
 const STARTER_PROMPTS = [
   "Gridfinity storage bin with labels",
@@ -66,6 +78,212 @@ function isTechnicalAction(action: string) {
   return /^(source-|translated-query:|searched-query:|tip:|model-not-found:|generative-recipe:|generated clean|source-search:|source-match:|source-files:)/i.test(action.trim());
 }
 
+function includesAny(text: string, words: string[]) {
+  return words.some((word) => text.includes(word));
+}
+
+function inferModelContext(objects: CadObject[], latestPrompt: string): ModelContext {
+  const text = [
+    latestPrompt,
+    ...objects.map((object) =>
+      [
+        object.name,
+        object.primitive,
+        object.source_settings?.title,
+        object.source_settings?.source,
+        object.source_settings?.query,
+        Object.keys(object.parameters || {}).join(" "),
+      ].filter(Boolean).join(" "),
+    ),
+  ].join(" ").toLowerCase();
+  const parameterKeys = new Set(objects.flatMap((object) => Object.keys(object.parameters || {})));
+  const isBattery = includesAny(text, ["battery", "batteri", "akku", "dewalt", "makita", "milwaukee", "ryobi", "bosch"]);
+  const isPhone = includesAny(text, ["phone", "iphone", "magsafe", "tablet", "mobil", "telefon", "charger", "charging"]);
+  const isHeadphone = includesAny(text, ["headphone", "headset", "helmet", "hörlur", "horlur", "hjalm", "hjälm"]);
+  const isCable = includesAny(text, ["cable", "cord", "wire", "kabel", "sladd"]);
+  const isCup = includesAny(text, ["cup", "mug", "bottle", "can holder", "mugg", "kopp", "flaska"]);
+  const isTool = includesAny(text, ["tool", "wrench", "screwdriver", "bit holder", "verktyg", "mejsel", "nyckel"]);
+  const isBoardMounted = includesAny(text, ["skadis", "skådis", "pegboard", "gridfinity", "tool board", "verktygstavla"]);
+  const isStorage = includesAny(text, ["bin", "box", "tray", "organizer", "drawer", "storage", "låda", "lada", "förvaring", "forvaring"]);
+  const isHolder = includesAny(text, ["holder", "mount", "stand", "bracket", "rack", "hook", "hållare", "hallare", "ställ", "stall", "fäste", "faste"]);
+  const hasSlots = isBattery || ["num_batteries", "battery_slots", "battery_spacing", "slots", "slot_spacing"].some((key) => parameterKeys.has(key));
+  const hasFlatBase = objects.some((object) => {
+    const params = object.parameters || {};
+    const width = Number(params.width || 0);
+    const depth = Number(params.depth || 0);
+    const height = Number(params.height || params.thickness || 0);
+    return width >= 20 && depth >= 20 && height <= Math.max(22, Math.min(width, depth) * 0.45);
+  });
+
+  return {
+    hasModel: objects.length > 0,
+    text,
+    isBattery,
+    isPhone,
+    isHeadphone,
+    isCable,
+    isCup,
+    isTool,
+    isBoardMounted,
+    isStorage,
+    isHolder,
+    hasSlots,
+    hasFlatBase,
+  };
+}
+
+function command(label: string, prompt: string, hint: string): ToolCommand {
+  return { label, prompt, hint };
+}
+
+function contextualQuickCommands(objects: CadObject[], latestPrompt: string): ToolCommand[] {
+  const ctx = inferModelContext(objects, latestPrompt);
+  if (!ctx.hasModel) return [];
+
+  const commands: ToolCommand[] = [];
+
+  if (ctx.isBattery || ctx.hasSlots) {
+    commands.push(
+      command(
+        "Adjust slot spacing",
+        "Adjust slot spacing on the current battery holder only; keep the rails, stops, screw holes, and base aligned on the build plate.",
+        "Battery rails only",
+      ),
+      command(
+        "Make 3 slots",
+        "Set the current battery holder to 3 slots; resize only the existing slots and rail pattern, keep the base on the plate.",
+        "Battery holder only",
+      ),
+      command(
+        "Add screw bosses",
+        "Add screw bosses to the current battery holder base only; place them on the base surface and preserve the rail geometry.",
+        "Base-mounted bosses",
+      ),
+      command(
+        "Add cable cutout",
+        "Add one front cable cutout to the current battery holder base only; preserve existing slots, screw holes, and rails.",
+        "Front cable relief",
+      ),
+    );
+  }
+
+  if (ctx.isPhone) {
+    commands.push(
+      command(
+        "Add cable channel",
+        "Add a centered cable cutout/channel to the current phone stand only; keep the support angle and front lip unchanged.",
+        "Charging cable path",
+      ),
+      command(
+        "Make stand stronger",
+        "Add support ribs to the current phone stand only; attach them between the base and back support.",
+        "Support ribs",
+      ),
+    );
+  }
+
+  if (ctx.isHeadphone) {
+    commands.push(
+      command(
+        "Add wall screw holes",
+        "Add two countersunk wall mounting screw holes to the flat back plate or base of the current headphone holder.",
+        "Wall mounting",
+      ),
+      command(
+        "Add hanging hook",
+        "Add a printable hanging hook/tab to the current headphone holder, attached to the main body and resting on the model surface.",
+        "Attached hook",
+      ),
+      command(
+        "Strengthen arm",
+        "Add support ribs to the current headphone holder arm only; keep the hook usable and on the build plate.",
+        "Arm ribs",
+      ),
+    );
+  }
+
+  if (ctx.isCable || ctx.isBoardMounted) {
+    commands.push(
+      command(
+        "Add cable cutout",
+        "Add a clean cable cutout to the current organizer only; place it through the nearest usable wall or front edge.",
+        "Cut through wall",
+      ),
+      command(
+        "Add snap clip",
+        "Add a small snap clip attached to the current organizer body; keep it printable and aligned to the existing model.",
+        "Attached clip",
+      ),
+    );
+  }
+
+  if (ctx.isCup) {
+    commands.push(
+      command(
+        "Add drain hole",
+        "Add one centered drain hole to the bottom of the current cup holder; keep the outer walls unchanged.",
+        "Bottom hole",
+      ),
+      command(
+        "Make rim stronger",
+        "Make the rim and side wall of the current cup holder stronger; preserve the cup opening.",
+        "Reinforced rim",
+      ),
+    );
+  }
+
+  if (ctx.isTool || ctx.isBoardMounted) {
+    commands.push(
+      command(
+        "Add mounting holes",
+        "Add two countersunk mounting holes to the largest flat base or back plate of the current tool holder only.",
+        "Screw holes",
+      ),
+    );
+  }
+
+  if (ctx.isStorage) {
+    commands.push(
+      command(
+        "Add finger scoop",
+        "Add a shallow front finger scoop cutout to the current storage bin/tray; preserve the bottom and side walls.",
+        "Access cutout",
+      ),
+    );
+  }
+
+  if (ctx.hasFlatBase || ctx.isHolder) {
+    commands.push(
+      command(
+        "Add mounting holes",
+        "Add two countersunk mounting holes to the largest flat base of the current model only; do not create new loose parts.",
+        "Flat-base holes",
+      ),
+      command(
+        "Make it stronger",
+        "Add support ribs to the current model only; attach them to existing faces and keep everything on the build plate.",
+        "Attached ribs",
+      ),
+    );
+  }
+
+  commands.push(
+    command(
+      "Round exposed edges",
+      "Fillet exposed outside edges of the current model by 2mm; preserve existing holes, slots, and cutouts.",
+      "2mm edge softening",
+    ),
+  );
+
+  const seen = new Set<string>();
+  return commands.filter((item) => {
+    const key = item.label.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 8);
+}
+
 export default function AiPanel() {
   const [prompt, setPrompt] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
@@ -87,6 +305,11 @@ export default function AiPanel() {
       ? actions.map(String).filter((action) => !isTechnicalAction(action)).slice(0, 2)
       : [];
   }, [editHistory]);
+
+  const modelTools = useMemo(
+    () => contextualQuickCommands(objects, latestPrompt),
+    [objects, latestPrompt],
+  );
 
   const filteredPrompt = (text: string) => {
     const cleaned = text.trim();
@@ -228,24 +451,31 @@ export default function AiPanel() {
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
           <span>Tools</span>
           <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f] group-open:hidden">
-            {QUICK_COMMANDS.length}
+            {objects.length ? modelTools.length : "Select model"}
           </span>
           <span className="hidden rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f] group-open:inline">
             Close
           </span>
         </summary>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {QUICK_COMMANDS.map((cmd) => (
-            <button
-              key={cmd}
-              onClick={() => void run(cmd, false)}
-              disabled={isLoading}
-              className="rounded-lg border border-[#38383a] bg-[#242424] px-3 py-2 text-left text-xs font-semibold text-white hover:border-[#555] hover:bg-[#2d2d2f] disabled:opacity-40"
-            >
-              {cmd}
-            </button>
-          ))}
-        </div>
+        {objects.length ? (
+          <div className="mt-3 grid grid-cols-1 gap-2">
+            {modelTools.map((cmd) => (
+              <button
+                key={cmd.label}
+                onClick={() => void run(cmd.prompt, false)}
+                disabled={isLoading}
+                className="rounded-lg border border-[#38383a] bg-[#242424] px-3 py-2 text-left text-xs font-semibold text-white hover:border-[#28c7df] hover:bg-[#2d2d2f] disabled:opacity-40"
+              >
+                <span className="block">{cmd.label}</span>
+                <span className="mt-0.5 block text-[10px] font-medium text-[#8f8f8f]">{cmd.hint}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 rounded-lg border border-[#2d2d2f] bg-[#101010] px-3 py-2 text-xs leading-5 text-[#9f9f9f]">
+            Generate, import, or draw a model first. Cadio will then show tools that fit that specific model.
+          </p>
+        )}
       </details>
 
       <details className="group rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">

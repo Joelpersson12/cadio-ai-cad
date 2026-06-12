@@ -311,12 +311,13 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                 actions = add_text_label_from_prompt(session, data.prompt)
             elif is_structural_ai_edit_prompt(data.prompt):
                 if not session["object_order"]:
-                    obj = create_object("part_1")
-                    add_object(session, obj)
-                    session["selected_object_id"] = obj["id"]
-                actions = apply_structural_ai_edit_from_prompt(session, data.prompt)
-                if not actions:
-                    actions = ["edit skipped: command was not specific enough"]
+                    actions = ["edit skipped: create or select a model before using model tools"]
+                    model_updated = False
+                else:
+                    actions = apply_structural_ai_edit_from_prompt(session, data.prompt)
+                    if not actions:
+                        actions = ["edit skipped: current model does not support that tool"]
+                        model_updated = False
             else:
                 edit_only = is_edit_only_prompt(data.prompt)
                 if edit_only:
