@@ -107,6 +107,7 @@ CATEGORY_PHRASES: dict[str, tuple[str, ...]] = {
     "round_can_holder": ("snus can holder", "snusdosa holder", "snus holder", "round can holder"),
     "vehicle_part": ("chain guide", "fork tool", "dirtbike tool", "motorcycle tool", "swingarm guard"),
     "accessory": ("pressure washer", "power washer", "hose holder", "nozzle holder", "wand holder"),
+    "organizer": ("storage bin", "storage box", "gridfinity bin", "gridfinity box", "gridfinity storage", "cable organizer"),
 }
 
 
@@ -379,22 +380,25 @@ def _infer_category(prompt: str, examples: list[ExampleDesign]) -> tuple[str, fl
     text = _combined_text(prompt, examples)
     words = set(re.findall(r"[a-z0-9]+", text.lower()))
     translated_prompt = normalize_source_query(prompt)
-    prompt_words = set(re.findall(r"[a-z0-9]+", f"{prompt} {translated_prompt}".lower()))
+    prompt_text = f"{prompt} {translated_prompt}".lower()
+    prompt_words = set(re.findall(r"[a-z0-9]+", prompt_text))
 
     for priority_category in (
         "battery_holder",
         "electronics_holder",
         "vehicle_part",
+        "device_stand",
         "cup_holder",
         "helmet_holder",
-        "tool_holder",
         "wardrobe_holder",
         "round_can_holder",
+        "organizer",
+        "tool_holder",
         "accessory",
         "organic",
     ):
         if prompt_words & CATEGORY_KEYWORDS[priority_category] or any(
-            phrase in text for phrase in CATEGORY_PHRASES.get(priority_category, ())
+            phrase in prompt_text for phrase in CATEGORY_PHRASES.get(priority_category, ())
         ):
             confidence = min(0.94, 0.72 + min(len(examples), 4) * 0.04)
             return priority_category, confidence

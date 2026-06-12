@@ -131,8 +131,9 @@ _MODEL_META_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _NEGATIVE_SEARCH_CACHE: dict[tuple[str, str], float] = {}
 _CACHE_TTL_SECONDS = 600.0
 _NEGATIVE_CACHE_TTL_SECONDS = 120.0
-_SEARCH_TOTAL_BUDGET_SECONDS = 5.5
+_SEARCH_TOTAL_BUDGET_SECONDS = 4.2
 _SEARCH_WORKERS = 10
+_SEARCH_EARLY_RETURN_SECONDS = 1.6
 
 
 def _fetch_text(url: str, timeout: float = 2.8) -> str:
@@ -1518,6 +1519,8 @@ class ProviderRegistry:
                 return name, variant, []
 
         if tasks:
+            started = time.time()
+            enough_results = max(4, min(limit, 5))
             max_workers = min(_SEARCH_WORKERS, len(tasks))
             executor = ThreadPoolExecutor(max_workers=max_workers)
             futures = {executor.submit(run_task, task): task for task in tasks}
@@ -1534,6 +1537,13 @@ class ProviderRegistry:
                         existing = ranked.get(design.url)
                         if existing is None or score > existing[0]:
                             ranked[design.url] = (score, design)
+                    if len(ranked) >= enough_results and time.time() - started >= _SEARCH_EARLY_RETURN_SECONDS:
+                        has_primary_source = any(
+                            design.source in {"printables", "makerworld", "cults3d"}
+                            for _score, design in ranked.values()
+                        )
+                        if has_primary_source:
+                            break
             except FuturesTimeoutError:
                 for future in futures:
                     future.cancel()

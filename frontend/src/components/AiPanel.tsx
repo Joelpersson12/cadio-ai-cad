@@ -23,9 +23,9 @@ const QUICK_COMMANDS = [
 ];
 
 const STARTER_PROMPTS = [
-  "Mug holder for desk mount",
-  "Helmet holder for garage wall",
+  "Gridfinity storage bin with labels",
   "IKEA Skadis cable organizer",
+  "Wall mounted headphone holder",
   "Foldable phone stand with MagSafe",
 ];
 
@@ -72,6 +72,7 @@ export default function AiPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState(AI_MODELS[0]);
   const { status, runPrompt, editHistory, objects, switchSourceModel } = useCadStore();
+  const blankWorkspace = status === "Blank workspace" && objects.length === 0;
 
   const latestPrompt = useMemo(() => {
     const latest = editHistory[editHistory.length - 1];
@@ -140,12 +141,12 @@ export default function AiPanel() {
     <div className="flex h-full flex-col gap-4">
       <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] px-3 py-3 shadow-xl">
         <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#777]">
-          {objects.length ? "Current model" : "Start here"}
+          {objects.length ? "Current model" : blankWorkspace ? "Blank workspace" : "Start here"}
         </div>
         <div className="mt-1 truncate text-sm font-semibold text-white">
-          {objects.length ? creationTitle(latestPrompt || "Untitled workspace") : "Describe anything printable"}
+          {objects.length ? creationTitle(latestPrompt || "Untitled workspace") : blankWorkspace ? "Manual CAD plate ready" : "Describe anything printable"}
         </div>
-        {!objects.length && (
+        {!objects.length && !blankWorkspace && (
           <p className="mt-2 text-xs leading-5 text-[#a8a8ab]">
             Cadio searches source models first, then opens the best match in an editable CAD workspace.
           </p>
@@ -205,7 +206,7 @@ export default function AiPanel() {
         </div>
       )}
 
-      {!objects.length && (
+      {!objects.length && !blankWorkspace && (
         <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
           <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#777]">Try a prompt</div>
           <div className="flex flex-wrap gap-2">

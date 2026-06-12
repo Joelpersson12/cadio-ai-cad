@@ -85,9 +85,9 @@ const DEFAULT_TITLE = "Cadio - AI CAD for 3D Printing";
 const DEFAULT_DESCRIPTION = "Search, remix, edit, and generate printable 3D models with AI.";
 const CANONICAL_DOMAIN = "https://cadio.net";
 const BUILDER_STARTER_PROMPTS = [
-  "Cup holder with desk clamp",
+  "Gridfinity storage bin with labels",
+  "IKEA Skadis cable organizer",
   "Wall mounted tool holder for pegboard",
-  "Bike mounted snus can holder",
   "Foldable phone stand with cable cutout",
 ];
 
@@ -991,7 +991,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             onCreatePrimitive={(payload) => void createPrimitive(payload)}
             showMeasurements={showMeasurements}
           />
-          {!objects.length && !modelBusy && (
+          {!objects.length && !modelBusy && status !== "Blank workspace" && (
             <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6">
               <div className="pointer-events-auto w-full max-w-xl rounded-2xl border border-white/10 bg-[#181819]/88 p-5 text-white shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-md">
                 <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#69d9f5]">Start workspace</div>
