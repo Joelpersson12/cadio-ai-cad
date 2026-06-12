@@ -348,25 +348,52 @@ function SkadisSlot({
 }) {
   return (
     <group position={[x, y, 0.094]}>
-      <mesh material={rimMaterial} position={[0, 0, -0.001]} receiveShadow>
-        <boxGeometry args={[0.116, 0.245, 0.012]} />
+      <mesh material={rimMaterial} position={[0, 0, -0.002]} receiveShadow>
+        <boxGeometry args={[0.13, 0.27, 0.016]} />
       </mesh>
-      <mesh material={rimMaterial} position={[0, 0.122, -0.001]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
-        <cylinderGeometry args={[0.058, 0.058, 0.012, 18]} />
+      <mesh material={rimMaterial} position={[0, 0.135, -0.002]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
+        <cylinderGeometry args={[0.065, 0.065, 0.016, 24]} />
       </mesh>
-      <mesh material={rimMaterial} position={[0, -0.122, -0.001]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
-        <cylinderGeometry args={[0.058, 0.058, 0.012, 18]} />
+      <mesh material={rimMaterial} position={[0, -0.135, -0.002]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
+        <cylinderGeometry args={[0.065, 0.065, 0.016, 24]} />
       </mesh>
       <mesh material={material} receiveShadow>
-        <boxGeometry args={[0.078, 0.198, 0.018]} />
+        <boxGeometry args={[0.082, 0.204, 0.026]} />
       </mesh>
       <mesh material={material} position={[0, 0.099, 0]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
-        <cylinderGeometry args={[0.039, 0.039, 0.018, 18]} />
+        <cylinderGeometry args={[0.041, 0.041, 0.026, 24]} />
       </mesh>
       <mesh material={material} position={[0, -0.099, 0]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
-        <cylinderGeometry args={[0.039, 0.039, 0.018, 18]} />
+        <cylinderGeometry args={[0.041, 0.041, 0.026, 24]} />
+      </mesh>
+      <mesh material={rimMaterial} position={[0.058, 0, 0.012]} receiveShadow>
+        <boxGeometry args={[0.012, 0.176, 0.008]} />
       </mesh>
     </group>
+  );
+}
+
+function LayerLines({
+  width,
+  height,
+  z,
+  material,
+  count = 7,
+}: {
+  width: number;
+  height: number;
+  z: number;
+  material: THREE.Material;
+  count?: number;
+}) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, index) => (
+        <mesh key={index} material={material} position={[0, -height * 0.42 + (index * height * 0.78) / Math.max(1, count - 1), z]}>
+          <boxGeometry args={[width, 0.01, 0.012]} />
+        </mesh>
+      ))}
+    </>
   );
 }
 
@@ -390,6 +417,7 @@ function SkadisBin({
   compartments?: number;
 }) {
   const wall = 0.08;
+  const frontZ = depth + wall;
   return (
     <group position={position}>
       <mesh material={material} position={[0, -height / 2, depth / 2]} castShadow receiveShadow>
@@ -404,17 +432,20 @@ function SkadisBin({
       <mesh material={material} position={[width / 2 - wall / 2, -height * 0.1, depth / 2]} castShadow receiveShadow>
         <boxGeometry args={[wall, height * 0.82, depth]} />
       </mesh>
-      <mesh material={rimMaterial} position={[0, height * 0.31, depth + wall]} castShadow>
-        <boxGeometry args={[width * 0.98, wall, wall]} />
+      <mesh material={rimMaterial} position={[0, height * 0.31, frontZ]} castShadow>
+        <boxGeometry args={[width * 1.02, wall, wall]} />
       </mesh>
       <mesh material={rimMaterial} position={[0, height * 0.31, depth * 0.12]} castShadow>
-        <boxGeometry args={[width * 0.98, wall, wall]} />
+        <boxGeometry args={[width * 1.02, wall, wall]} />
       </mesh>
-      {Array.from({ length: 3 }).map((_, index) => (
-        <mesh key={index} material={lineMaterial} position={[0, -height * 0.36 + index * height * 0.2, depth + wall + 0.006]}>
-          <boxGeometry args={[width * 0.86, 0.012, 0.012]} />
-        </mesh>
-      ))}
+      <mesh material={rimMaterial} position={[-width / 2 + wall * 0.42, height * 0.31, depth * 0.55]} castShadow>
+        <boxGeometry args={[wall, wall, depth * 0.84]} />
+      </mesh>
+      <mesh material={rimMaterial} position={[width / 2 - wall * 0.42, height * 0.31, depth * 0.55]} castShadow>
+        <boxGeometry args={[wall, wall, depth * 0.84]} />
+      </mesh>
+      <LayerLines width={width * 0.86} height={height} z={frontZ + 0.012} material={lineMaterial} count={7} />
+      <LayerLines width={width * 0.7} height={height * 0.76} z={0.028} material={lineMaterial} count={5} />
       {Array.from({ length: compartments }).map((_, index) => {
         const x = -width / 2 + ((index + 1) * width) / (compartments + 1);
         return (
@@ -423,6 +454,49 @@ function SkadisBin({
           </mesh>
         );
       })}
+      {[-width * 0.28, width * 0.28].map((x) => (
+        <group key={x} position={[x, height * 0.51, -0.01]}>
+          <mesh material={rimMaterial} castShadow receiveShadow>
+            <boxGeometry args={[0.16, 0.28, 0.08]} />
+          </mesh>
+          <mesh material={lineMaterial} position={[0, 0.02, 0.052]}>
+            <boxGeometry args={[0.09, 0.18, 0.018]} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+function PerforatedTray({
+  position,
+  material,
+  holeMaterial,
+  rimMaterial,
+}: {
+  position: [number, number, number];
+  material: THREE.Material;
+  holeMaterial: THREE.Material;
+  rimMaterial: THREE.Material;
+}) {
+  return (
+    <group position={position}>
+      <mesh material={material} castShadow receiveShadow>
+        <boxGeometry args={[1.18, 0.18, 0.5]} />
+      </mesh>
+      <mesh material={rimMaterial} position={[0, 0.11, 0]} castShadow>
+        <boxGeometry args={[1.22, 0.055, 0.56]} />
+      </mesh>
+      <mesh material={rimMaterial} position={[0, -0.11, 0]} castShadow>
+        <boxGeometry args={[1.22, 0.055, 0.56]} />
+      </mesh>
+      {[-0.36, 0, 0.36].map((x) =>
+        [-0.13, 0.13].map((z) => (
+          <mesh key={`${x}-${z}`} material={holeMaterial} position={[x, 0.102, z]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.045, 0.045, 0.036, 22]} />
+          </mesh>
+        )),
+      )}
     </group>
   );
 }
@@ -445,13 +519,16 @@ function ToolRod({
   return (
     <group position={position} rotation={rotation}>
       <mesh material={material} castShadow>
-        <cylinderGeometry args={[radius, radius, length, 26]} />
+        <cylinderGeometry args={[radius, radius, length, 32]} />
+      </mesh>
+      <mesh material={accentMaterial} position={[0, length * 0.18, 0]} castShadow>
+        <cylinderGeometry args={[radius * 1.26, radius * 1.26, 0.06, 32]} />
       </mesh>
       <mesh material={accentMaterial} position={[0, length / 2 + 0.055, 0]} castShadow>
-        <cylinderGeometry args={[radius * 1.18, radius * 1.18, 0.11, 26]} />
+        <cylinderGeometry args={[radius * 1.18, radius * 1.18, 0.11, 32]} />
       </mesh>
       <mesh material={accentMaterial} position={[0, -length / 2 - 0.04, 0]} castShadow>
-        <cylinderGeometry args={[radius * 1.32, radius * 1.32, 0.08, 26]} />
+        <cylinderGeometry args={[radius * 1.32, radius * 1.32, 0.08, 32]} />
       </mesh>
     </group>
   );
@@ -462,39 +539,39 @@ function HeroModel() {
   const dragRef = useRef({ active: false, x: 0, rotation: 0, suppressContext: false });
   const [manualRotation, setManualRotation] = useState(0);
   const boardMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#0c0d0e", roughness: 0.94, metalness: 0.0 }),
+    () => new THREE.MeshStandardMaterial({ color: "#08090a", roughness: 0.9, metalness: 0.04 }),
     [],
   );
   const holeMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#020303", roughness: 0.88, metalness: 0.0 }),
+    () => new THREE.MeshStandardMaterial({ color: "#010101", roughness: 0.92, metalness: 0.0 }),
     [],
   );
   const slotRimMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#282b2d", roughness: 0.82, metalness: 0.01 }),
+    () => new THREE.MeshStandardMaterial({ color: "#222629", roughness: 0.76, metalness: 0.03 }),
     [],
   );
   const blackPrint = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#151719", roughness: 0.84, metalness: 0.02 }),
+    () => new THREE.MeshStandardMaterial({ color: "#111315", roughness: 0.8, metalness: 0.03 }),
     [],
   );
   const grayPrint = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#8f969a", roughness: 0.74, metalness: 0.02 }),
+    () => new THREE.MeshStandardMaterial({ color: "#9aa1a5", roughness: 0.68, metalness: 0.02 }),
     [],
   );
   const metalTool = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#d7d3ca", roughness: 0.32, metalness: 0.7 }),
+    () => new THREE.MeshStandardMaterial({ color: "#ded9cf", roughness: 0.24, metalness: 0.82 }),
     [],
   );
   const tealPrint = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#31363a", roughness: 0.78, metalness: 0.02 }),
+    () => new THREE.MeshStandardMaterial({ color: "#1b1f22", roughness: 0.78, metalness: 0.03 }),
     [],
   );
   const amberPrint = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#6f777c", roughness: 0.76, metalness: 0.02 }),
+    () => new THREE.MeshStandardMaterial({ color: "#6d7478", roughness: 0.7, metalness: 0.03 }),
     [],
   );
   const layerLine = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#0c0f10", roughness: 0.85, metalness: 0.02 }),
+    () => new THREE.MeshStandardMaterial({ color: "#050607", roughness: 0.88, metalness: 0.0 }),
     [],
   );
   const holes = useMemo(() => {
@@ -550,44 +627,57 @@ function HeroModel() {
   };
 
   return (
-    <group ref={groupRef} position={[0, -0.1, 0]} onPointerDown={handleModelPointerDown}>
+    <group ref={groupRef} position={[0, -0.16, 0]} onPointerDown={handleModelPointerDown}>
       <group position={[0, 0.15, 0]} rotation={[0, 0.02, 0]}>
         <mesh material={boardMaterial} castShadow receiveShadow>
           <boxGeometry args={[7.2, 4.6, 0.16]} />
+        </mesh>
+        <mesh material={slotRimMaterial} position={[0, 2.34, 0.02]} castShadow>
+          <boxGeometry args={[7.38, 0.1, 0.22]} />
+        </mesh>
+        <mesh material={slotRimMaterial} position={[0, -2.34, 0.02]} castShadow>
+          <boxGeometry args={[7.38, 0.1, 0.22]} />
+        </mesh>
+        <mesh material={slotRimMaterial} position={[-3.64, 0, 0.02]} castShadow>
+          <boxGeometry args={[0.1, 4.62, 0.22]} />
+        </mesh>
+        <mesh material={slotRimMaterial} position={[3.64, 0, 0.02]} castShadow>
+          <boxGeometry args={[0.1, 4.62, 0.22]} />
         </mesh>
         {holes.map(([x, y]) => (
           <SkadisSlot key={`${x}-${y}`} x={x} y={y} material={holeMaterial} rimMaterial={slotRimMaterial} />
         ))}
 
-        <group position={[-2.32, -0.74, 0.18]}>
-          <SkadisBin width={1.48} height={1.18} depth={0.7} position={[0, 0, 0]} material={blackPrint} rimMaterial={grayPrint} lineMaterial={layerLine} compartments={4} />
-          <ToolRod position={[-0.34, 0.73, 0.72]} rotation={[0.42, 0.08, -0.18]} length={1.18} radius={0.055} material={metalTool} accentMaterial={grayPrint} />
-          <ToolRod position={[0.22, 0.66, 0.68]} rotation={[0.28, -0.04, 0.22]} length={1.0} radius={0.045} material={metalTool} accentMaterial={blackPrint} />
+        <group position={[-2.36, -0.68, 0.18]}>
+          <SkadisBin width={1.52} height={1.2} depth={0.72} position={[0, 0, 0]} material={blackPrint} rimMaterial={grayPrint} lineMaterial={layerLine} compartments={4} />
+          <ToolRod position={[-0.34, 0.76, 0.72]} rotation={[0.42, 0.08, -0.18]} length={1.22} radius={0.055} material={metalTool} accentMaterial={grayPrint} />
+          <ToolRod position={[0.24, 0.69, 0.69]} rotation={[0.28, -0.04, 0.22]} length={1.02} radius={0.045} material={metalTool} accentMaterial={blackPrint} />
           <mesh material={metalTool} position={[0.02, 0.34, 0.78]} rotation={[Math.PI / 2, 0, 0.1]} castShadow>
-            <torusGeometry args={[0.15, 0.022, 12, 32]} />
+            <torusGeometry args={[0.15, 0.022, 14, 36]} />
           </mesh>
         </group>
 
-        <group position={[0.02, -1.08, 0.18]}>
-          <SkadisBin width={1.34} height={1.34} depth={0.78} position={[0, 0, 0]} material={tealPrint} rimMaterial={grayPrint} lineMaterial={layerLine} compartments={0} />
-          <ToolRod position={[0.26, 0.8, 0.8]} rotation={[0.52, 0.08, -0.34]} length={1.12} radius={0.07} material={blackPrint} accentMaterial={metalTool} />
-          <mesh material={blackPrint} position={[-0.28, 0.38, 0.74]} rotation={[0.24, 0, 0.18]} castShadow>
+        <group position={[0.02, -1.06, 0.2]}>
+          <SkadisBin width={1.36} height={1.36} depth={0.82} position={[0, 0, 0]} material={tealPrint} rimMaterial={grayPrint} lineMaterial={layerLine} compartments={0} />
+          <ToolRod position={[0.28, 0.84, 0.84]} rotation={[0.52, 0.08, -0.34]} length={1.16} radius={0.07} material={blackPrint} accentMaterial={metalTool} />
+          <mesh material={blackPrint} position={[-0.28, 0.39, 0.78]} rotation={[0.24, 0, 0.18]} castShadow>
             <boxGeometry args={[0.22, 0.86, 0.12]} />
           </mesh>
         </group>
 
-        <group position={[2.34, -0.98, 0.18]}>
-          <SkadisBin width={1.12} height={1.08} depth={0.62} position={[0, 0, 0]} material={blackPrint} rimMaterial={grayPrint} lineMaterial={layerLine} compartments={2} />
+        <group position={[2.34, -0.94, 0.18]}>
+          <SkadisBin width={1.14} height={1.1} depth={0.64} position={[0, 0, 0]} material={blackPrint} rimMaterial={grayPrint} lineMaterial={layerLine} compartments={2} />
           <ToolRod position={[0.22, 0.72, 0.68]} rotation={[0.58, -0.05, -0.2]} length={1.02} radius={0.06} material={metalTool} accentMaterial={amberPrint} />
           <mesh material={grayPrint} position={[-0.22, 0.54, 0.73]} rotation={[0.62, 0.1, 0.34]} castShadow>
             <boxGeometry args={[0.16, 0.74, 0.12]} />
           </mesh>
         </group>
 
-        <group position={[2.14, 1.06, 0.24]}>
-          <PrintedCuboid size={[1.36, 0.18, 0.36]} position={[0, 0, 0]} material={grayPrint} lineMaterial={layerLine} lineCount={2} />
+        <group position={[2.1, 1.02, 0.28]}>
+          <PerforatedTray position={[0, 0, 0]} material={grayPrint} holeMaterial={holeMaterial} rimMaterial={blackPrint} />
+          <PrintedCuboid size={[1.36, 0.1, 0.28]} position={[0, -0.23, -0.02]} material={blackPrint} lineMaterial={layerLine} lineCount={2} />
           {[-0.52, -0.17, 0.18, 0.53].map((x) => (
-            <mesh key={x} material={blackPrint} position={[x, 0.34, 0.02]} castShadow>
+            <mesh key={x} material={blackPrint} position={[x, 0.36, 0.04]} castShadow>
               <boxGeometry args={[0.11, 0.48, 0.18]} />
             </mesh>
           ))}
@@ -600,16 +690,34 @@ function HeroModel() {
 function HeroScene() {
   return (
     <div className="absolute inset-0">
-      <Canvas dpr={[1, 1.75]} shadows camera={{ position: [0.35, 0.15, 8.2], fov: 42 }} gl={{ antialias: true, alpha: true }}>
-        <color attach="background" args={["#2a2b2d"]} />
-        <fog attach="fog" args={["#2a2b2d", 8, 17]} />
-        <ambientLight intensity={1.45} />
-        <directionalLight position={[3.8, 5.4, 5.8]} intensity={2.4} castShadow />
-        <pointLight position={[-4, 2.6, 4]} intensity={1.2} color="#28c7df" />
-        <pointLight position={[3.5, -2.4, 4]} intensity={0.65} color="#f3c34d" />
+      <Canvas
+        dpr={[1.5, 2.5]}
+        shadows
+        camera={{ position: [0.3, 0.04, 8.0], fov: 39 }}
+        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+        onCreated={({ gl }) => {
+          gl.outputColorSpace = THREE.SRGBColorSpace;
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.08;
+        }}
+      >
+        <color attach="background" args={["#242527"]} />
+        <fog attach="fog" args={["#242527", 8, 16]} />
+        <ambientLight intensity={0.88} />
+        <hemisphereLight intensity={0.55} color="#f4f7fb" groundColor="#050505" />
+        <directionalLight
+          position={[3.8, 5.8, 5.4]}
+          intensity={3.2}
+          castShadow
+          shadow-mapSize-width={1024}
+          shadow-mapSize-height={1024}
+        />
+        <directionalLight position={[-3.0, 1.4, 3.4]} intensity={0.85} color="#d9f6ff" />
+        <pointLight position={[-4, 2.6, 4]} intensity={1.55} color="#28c7df" />
+        <pointLight position={[3.5, -2.4, 4]} intensity={0.8} color="#f3c34d" />
         <HeroModel />
       </Canvas>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_58%_42%,rgba(255,255,255,0.08),rgba(20,20,21,0)_48%),linear-gradient(90deg,rgba(10,10,11,0.90)_0%,rgba(12,12,13,0.72)_34%,rgba(18,18,19,0.18)_70%,rgba(18,18,19,0.34)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_62%_36%,rgba(255,255,255,0.12),rgba(20,20,21,0)_42%),radial-gradient(circle_at_38%_64%,rgba(43,184,220,0.11),rgba(20,20,21,0)_36%),linear-gradient(90deg,rgba(8,8,9,0.92)_0%,rgba(12,12,13,0.72)_33%,rgba(18,18,19,0.10)_68%,rgba(18,18,19,0.40)_100%)]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-[linear-gradient(0deg,#151515_0%,rgba(21,21,21,0)_100%)]" />
     </div>
   );
