@@ -1,7 +1,7 @@
 /** Main 3D viewport - fixed scaling, camera auto-fit, better lighting. */
  
 import { useEffect, useRef, useMemo, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
@@ -13,13 +13,13 @@ const VIEW_COLORS = {
   gridCell: "#707780",
   gridSection: "#d2d6dc",
   neutralBody: "#c7c4bc",
-  selectedBody: "#28c7df",
+  selectedBody: "#123a64",
   hoveredBody: "#cfd1d2",
   edgeSubtle: "#202124",
   edgeStrong: "#e7faff",
-  edgeSelected: "#f7fdff",
-  edgeSelectedInk: "#043642",
-  edgeSelectedDetail: "#d8fbff",
+  edgeSelected: "#dbeafe",
+  edgeSelectedInk: "#071f3b",
+  edgeSelectedDetail: "#93c5fd",
   edgeHover: "#38d5f4",
   measure: "#f8fafc",
   measureAccent: "#facc15",
@@ -459,12 +459,12 @@ function ScaledMesh({
     >
       <meshPhysicalMaterial
         color={visibleBodyColor(obj, selected, hovered)}
-        roughness={0.74}
-        metalness={0.02}
-        clearcoat={0.04}
+        roughness={selected ? 0.68 : 0.74}
+        metalness={selected ? 0.04 : 0.02}
+        clearcoat={selected ? 0.08 : 0.04}
         clearcoatRoughness={0.82}
-        emissive={selected ? "#073e48" : hovered ? "#111314" : "#000000"}
-        emissiveIntensity={selected ? 0.1 : hovered ? 0.04 : 0}
+        emissive={selected ? "#061a33" : hovered ? "#111314" : "#000000"}
+        emissiveIntensity={selected ? 0.06 : hovered ? 0.04 : 0}
         polygonOffset
         polygonOffsetFactor={1}
         polygonOffsetUnits={1}
@@ -543,10 +543,16 @@ function ScaledMesh({
 // Build plate
 // ---------------------------------------------------------------------------
  
-function BuildPlate({ volume }: { volume: [number, number, number] }) {
+function BuildPlate({
+  volume,
+  onPointerDown,
+}: {
+  volume: [number, number, number];
+  onPointerDown?: (event: ThreeEvent<PointerEvent>) => void;
+}) {
   const [px, py] = volume;
   return (
-    <group>
+    <group onPointerDown={onPointerDown}>
       {/* Base plate - visible and textured */}
       <mesh position={[0, -0.55, 0]} receiveShadow>
         <boxGeometry args={[px, 0.04, py]} />
@@ -612,6 +618,7 @@ interface CadViewportProps {
   selectedObjectId: string;
   selectedObjectIds?: string[];
   onSelectObject: (id: string) => void;
+  onDeselectObject?: () => void;
   transformMode: TransformMode;
   onTransformCommit: (
     objectId: string,
@@ -767,6 +774,7 @@ export default function CadViewport({
   selectedObjectId,
   selectedObjectIds = [],
   onSelectObject,
+  onDeselectObject,
   transformMode,
   onTransformCommit,
   printerVolume = [220, 220, 250],
@@ -796,6 +804,14 @@ export default function CadViewport({
     value: string;
   } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
+  const clearViewportSelection = () => {
+    if (!onDeselectObject) return;
+    if (!selectedObjectId && !selectedObjectIds.length) return;
+    if (transformDragging) return;
+    if (expertMode && expertTool !== "select") return;
+    setEdgeInput(null);
+    onDeselectObject();
+  };
   const measurementSpecs = useMemo(() => {
     if (!showMeasurements) return [];
     const selectedIds = new Set(selectedObjectIds.length ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : []);
@@ -917,6 +933,10 @@ export default function CadViewport({
           gl.toneMappingExposure = 1.08;
         }}
         onPointerUp={() => setTransformDragging(false)}
+        onPointerMissed={(event) => {
+          if (event.button !== 0) return;
+          clearViewportSelection();
+        }}
       >
       <color attach="background" args={[VIEW_COLORS.background]} />
  
@@ -958,7 +978,14 @@ export default function CadViewport({
       />
  
       {/* Build plate */}
-      <BuildPlate volume={printerVolume} />
+      <BuildPlate
+        volume={printerVolume}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          event.stopPropagation();
+          clearViewportSelection();
+        }}
+      />
       <SketchPlane
         active={expertMode}
         tool={expertTool}

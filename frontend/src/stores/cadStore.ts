@@ -91,6 +91,7 @@ interface CadState {
   patchAppearance: (appearance: { material?: string; color?: string }) => Promise<void>;
   onToggleFeature: (featureId: string, enabled: boolean) => Promise<void>;
   onSelectObject: (objectId: string) => Promise<void>;
+  clearSelection: () => void;
   selectAllObjects: () => void;
   onDeleteObject: () => Promise<void>;
   onTransformCommit: (
@@ -381,6 +382,7 @@ export const useCadStore = create<CadState>((set, get) => ({
       set({ status: err instanceof Error ? err.message : "Error" });
     }
   },
+  clearSelection: () => set({ selectedObjectId: "", selectedObjectIds: [], transformMode: "off" }),
 
   onDeleteObject: async () => {
     const { sessionId, selectedObjectId } = get();

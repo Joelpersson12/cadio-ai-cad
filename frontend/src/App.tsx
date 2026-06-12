@@ -508,6 +508,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     loadPrinters,
     applyScenePayload,
     onSelectObject,
+    clearSelection,
     onTransformCommit,
     setTransformMode,
     setExpertMode,
@@ -973,6 +974,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             selectedObjectId={selectedObjectId}
             selectedObjectIds={selectedObjectIds}
             onSelectObject={(id) => void onSelectObject(id)}
+            onDeselectObject={clearSelection}
             transformMode={transformMode}
             onTransformCommit={(id, t) => void onTransformCommit(id, t)}
             printerVolume={printerVolume}
@@ -1159,6 +1161,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             selectedObjectId={selectedObjectId}
             selectedObjectIds={selectedObjectIds}
             onSelectObject={(id) => void onSelectObject(id)}
+            onDeselectObject={clearSelection}
             transformMode={transformMode}
             onTransformCommit={(id, t) => void onTransformCommit(id, t)}
             printerVolume={printerVolume}
