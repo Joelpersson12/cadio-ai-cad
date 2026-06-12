@@ -158,11 +158,12 @@ def _coerce_feature(feature: Any) -> Feature:
     if isinstance(feature, Feature):
         return feature
     if isinstance(feature, str):
-        return Feature(id=feature, type=feature, enabled=True)
+        return Feature(id=feature, name=feature.replace("_", " ").title(), type=feature, enabled=True)
     if isinstance(feature, dict):
         feature_type = str(feature.get("type") or feature.get("id") or "")
         return Feature(
             id=str(feature.get("id") or feature_type),
+            name=str(feature.get("name") or feature_type.replace("_", " ").title()),
             type=feature_type,
             enabled=bool(feature.get("enabled", True)),
         )
@@ -229,7 +230,7 @@ def _ensure_feature(
         if f.type == feature_type:
             f.enabled = enabled
             return
-    features.append(Feature(id=feature_type, type=feature_type, enabled=enabled))
+    features.append(Feature(id=feature_type, name=feature_type.replace("_", " ").title(), type=feature_type, enabled=enabled))
 
 
 def _apply_deterministic_edit(
@@ -446,6 +447,7 @@ def parse_ai_command(
     prompt: str,
     session: Session,
     obj: CadObject,
+    research_brief: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Parse a natural-language prompt using GPT-4o into CAD changes.
     
@@ -454,6 +456,7 @@ def parse_ai_command(
     from backend.services.product_templates import get_template_for_prompt
     
     edit_only = is_edit_only_prompt(prompt)
+    source_brief = research_brief if isinstance(research_brief, dict) and research_brief else None
     # Detect if prompt is requesting a specific product template
     template = None if edit_only else get_template_for_prompt(prompt)
     
@@ -469,8 +472,12 @@ def parse_ai_command(
         external_actions = []
         
         obj["template_hint"] = template.name
-        research_brief = None
-        brief_actions: list[str] = []
+        if not edit_only and source_brief:
+            research_brief = source_brief
+            brief_actions = _apply_research_brief(research_brief, params, features)
+        else:
+            research_brief = None
+            brief_actions = []
     else:
         params = dict(obj["parameters"])
         features = [_coerce_feature(f) for f in obj["feature_tree"]]
@@ -479,9 +486,12 @@ def parse_ai_command(
             research_brief = None
             brief_actions = []
         else:
-            from backend.services.design_brief import build_design_brief
+            if source_brief:
+                research_brief = source_brief
+            else:
+                from backend.services.design_brief import build_design_brief
 
-            research_brief = build_design_brief(prompt, limit=4)
+                research_brief = build_design_brief(prompt, limit=4)
             brief_actions = _apply_research_brief(research_brief, params, features)
             obj["template_hint"] = None
     

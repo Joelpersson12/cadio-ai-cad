@@ -664,11 +664,22 @@ def get_template_for_prompt(prompt: str) -> ProductTemplate | None:
     translated_prompt = normalize_source_query(prompt)
     prompt_lower = f"{prompt} {translated_prompt}".lower()
     words = set(re.findall(r"[a-z0-9]+", prompt_lower))
+    phrases = {
+        "phone_stand": ("phone stand", "phone holder", "smartphone stand", "mobile stand", "magsafe stand"),
+        "tablet_stand": ("tablet stand", "ipad stand", "tablet holder"),
+        "headphone_stand": ("headphone stand", "headset stand", "headphone holder", "headset holder"),
+        "battery_holder": ("battery holder", "battery mount", "battery wall mount", "power tool battery"),
+        "electronics_holder": ("cdi holder", "ecu holder", "electronics holder", "ignition module holder"),
+        "cable_organizer": ("cable organizer", "cable holder", "cord organizer", "wire organizer"),
+        "storage_bin": ("storage bin", "storage box", "organizer bin", "drawer box"),
+        "wall_hook": ("wall hook", "coat hook", "hanger hook"),
+        "shelf_bracket": ("shelf bracket", "shelf support"),
+    }
     aliases = {
         "phone_stand": {"phone", "smartphone", "mobile", "iphone", "android", "dock"},
         "tablet_stand": {"tablet", "ipad", "kindle"},
         "headphone_stand": {"headphone", "headphones", "headset", "headsets", "gaming", "earphone"},
-        "battery_holder": {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch", "holder", "charger"},
+        "battery_holder": {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch", "charger"},
         "electronics_holder": {"cdi", "ecu", "ecm", "electronics", "module", "ignition", "honda", "cr250r", "crf"},
         "cable_organizer": {"cable", "cord", "wire", "organizer", "organiser"},
         "storage_bin": {"storage", "bin", "box", "container", "drawer"},
@@ -682,15 +693,22 @@ def get_template_for_prompt(prompt: str) -> ProductTemplate | None:
         name_words = set(re.findall(r"[a-z0-9]+", template.name.lower()))
         score = len(words & aliases.get(key, set())) * 4
         score += len(words & name_words) * 2
+        score += sum(10 for phrase in phrases.get(key, ()) if phrase in prompt_lower)
         if template.name.lower() in prompt_lower:
             score += 8
         if "stand" in words and key.endswith("_stand") and score > 0:
             score += 1
+        if key == "battery_holder" and not (words & {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch"}):
+            score = 0
+        if key == "electronics_holder" and not (words & {"cdi", "ecu", "ecm", "electronics", "module", "ignition"}):
+            score = 0
+        if key == "wall_hook" and words & {"helmet", "cup", "mug", "tool", "battery", "phone", "headphone", "headset"}:
+            score = max(0, score - 8)
         if score > best_score:
             best_key = key
             best_score = score
 
-    if best_key:
+    if best_key and best_score >= 6:
         return PRODUCT_TEMPLATES[best_key]
 
     return None

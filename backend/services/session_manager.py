@@ -154,7 +154,7 @@ def create_primitive_object(
     obj["transform"].position = [cx, cy, 0.0]
     if kind == "hole":
         obj["feature_tree"] = [
-            Feature(id="hole_guide", type="hole_guide", enabled=True),
+            Feature(id="hole_guide", name="Hole Guide", type="hole_guide", enabled=True),
         ]
     return obj
 
@@ -973,15 +973,23 @@ def _try_replace_with_imported_source_model(
     *,
     preferred_slots: int = 0,
     prefer_flat: bool = False,
+    source_examples: list[Any] | None = None,
 ) -> tuple[list[str], CadObject | None]:
     try:
         from backend.services.design_providers import get_provider_registry, resolve_printables_model_files
 
-        examples = [
-            example
-            for example in get_provider_registry().search_all(prompt, limit=12)
-            if example.source == "printables"
-        ]
+        if source_examples is not None:
+            examples = [
+                example
+                for example in source_examples
+                if getattr(example, "source", "") == "printables"
+            ]
+        else:
+            examples = [
+                example
+                for example in get_provider_registry().search_all(prompt, limit=12)
+                if example.source == "printables"
+            ]
     except Exception:
         examples = []
 
@@ -1579,7 +1587,12 @@ def _make_source_phone_stand_mesh(params: dict[str, float]) -> TriMesh:
     return shift_mesh_to_buildplate(mesh)
 
 
-def replace_object_with_source_model(session: Session, obj: CadObject, prompt: str) -> list[str]:
+def replace_object_with_source_model(
+    session: Session,
+    obj: CadObject,
+    prompt: str,
+    source_examples: list[Any] | None = None,
+) -> list[str]:
     """Replace generated seed with a source-matched reconstructed CAD model."""
     prompt_text = _prompt_match_text(prompt)
     kind = _source_prompt_kind(prompt)
@@ -1593,6 +1606,7 @@ def replace_object_with_source_model(session: Session, obj: CadObject, prompt: s
         prompt,
         preferred_slots=3 if kind in {"dewalt_battery_holder", "battery_holder"} else 0,
         prefer_flat=_prefer_flat_for_prompt(prompt),
+        source_examples=source_examples,
     )
     if generic_actions:
         return generic_actions
@@ -1825,6 +1839,7 @@ def replace_object_with_research_assembly(
         return []
 
     category = str(brief.get("category") or "generic").strip().lower()
+    prompt_text = _prompt_match_text(str(brief.get("prompt", "")))
 
     parts: list[CadObject] = []
     color = obj.get("color", "#a9aaad")
@@ -1919,6 +1934,77 @@ def replace_object_with_research_assembly(
             parts.append(
                 _create_box_component("holder_strap_bridge", width * 0.72, thickness * 0.8, thickness * 1.2, [0.0, 0.0, thickness + tray_h], params, color=color)
             )
+    elif category == "cup_holder":
+        cradle_h = max(height, thickness * 8.0)
+        wall_h = cradle_h * 0.72
+        cup_w = min(width * 0.82, depth * 0.86)
+        side_gap = cup_w * 0.42
+        parts = [
+            _create_box_component("cup_mount_plate", width, depth, thickness, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
+            _create_cylinder_component("cup_round_floor", cup_w / 2.0, max(thickness * 0.65, 3.0), [0.0, -depth * 0.06, thickness], params, color=color),
+            _create_box_component("cup_back_wall", cup_w, wall, wall_h, [0.0, depth * 0.22, thickness], params, color=color),
+            _create_box_component("cup_left_cradle_wall", wall, depth * 0.58, wall_h * 0.86, [-side_gap, -depth * 0.04, thickness], params, color=color),
+            _create_box_component("cup_right_cradle_wall", wall, depth * 0.58, wall_h * 0.86, [side_gap, -depth * 0.04, thickness], params, color=color),
+            _create_box_component("cup_front_retaining_lip", cup_w * 0.62, wall, wall_h * 0.34, [0.0, -depth * 0.34, thickness], params, color=color),
+        ]
+        if any(word in prompt_text for word in ("desk", "table", "clamp")):
+            parts.extend([
+                _create_box_component("cup_desk_clamp_top", width * 0.72, thickness * 1.2, thickness * 2.3, [0.0, -depth * 0.50, thickness * 0.75], params, color=color),
+                _create_box_component("cup_desk_clamp_lower", width * 0.52, thickness, thickness * 1.6, [0.0, -depth * 0.50, thickness * 0.10], params, color=color),
+            ])
+    elif category == "tool_holder":
+        slot_count = max(3, min(8, int(round(float(params.get("divider_count", 4.0))))))
+        rack_h = max(height, thickness * 5.0)
+        parts = [
+            _create_box_component("tool_wall_plate", width, depth, thickness, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
+            _create_box_component("tool_top_register", width * 0.90, wall, rack_h * 0.42, [0.0, depth * 0.32, thickness], params, color=color),
+            _create_box_component("tool_front_rail", width * 0.92, wall, rack_h * 0.28, [0.0, -depth * 0.38, thickness], params, color=color),
+        ]
+        spacing = width * 0.82 / max(1, slot_count - 1)
+        for idx in range(slot_count):
+            x = -width * 0.41 + spacing * idx
+            parts.append(_create_box_component(f"tool_slot_divider_{idx + 1}", wall, depth * 0.62, rack_h * 0.78, [x, -depth * 0.02, thickness], params, color=color))
+        if any(word in prompt_text for word in ("pegboard", "skadis")):
+            parts.extend([
+                _create_box_component("tool_upper_peg_hook", wall * 1.8, wall * 2.2, rack_h * 0.36, [-width * 0.30, depth * 0.49, thickness + rack_h * 0.20], params, color=color),
+                _create_box_component("tool_lower_peg_hook", wall * 1.8, wall * 2.2, rack_h * 0.36, [width * 0.30, depth * 0.49, thickness + rack_h * 0.20], params, color=color),
+            ])
+    elif category == "helmet_holder":
+        arm_h = max(height * 0.55, thickness * 4.0)
+        saddle_w = max(width * 0.72, 105.0)
+        parts = [
+            _create_box_component("helmet_wall_plate", width * 0.74, depth * 0.36, thickness, [0.0, depth * 0.20, 0.0], base_params, color=color, cut_holes=True),
+            _create_box_component("helmet_support_arm", width * 0.34, depth * 0.74, arm_h, [0.0, -depth * 0.10, thickness], params, color=color),
+            _create_box_component("helmet_wide_saddle", saddle_w, depth * 0.34, thickness * 2.2, [0.0, -depth * 0.38, thickness + arm_h], params, color=color),
+            _create_gusset_component("helmet_left_gusset", thickness * 1.4, depth * 0.54, arm_h * 0.82, [-width * 0.25, -depth * 0.06, thickness], params, color=color),
+            _create_gusset_component("helmet_right_gusset", thickness * 1.4, depth * 0.54, arm_h * 0.82, [width * 0.25, -depth * 0.06, thickness], params, color=color),
+        ]
+    elif category == "wardrobe_holder":
+        hook_count = 4 if width > 130.0 else 3
+        hook_spacing = width * 0.74 / max(1, hook_count - 1)
+        hook_depth = max(depth * 0.72, 34.0)
+        hook_h = max(height, thickness * 5.0)
+        parts = [
+            _create_box_component("wardrobe_mount_bar", width, depth * 0.34, thickness, [0.0, depth * 0.18, 0.0], base_params, color=color, cut_holes=True),
+        ]
+        for idx in range(hook_count):
+            x = -width * 0.37 + hook_spacing * idx
+            parts.extend([
+                _create_box_component(f"wardrobe_hook_{idx + 1}_arm", wall * 1.4, hook_depth, wall * 1.4, [x, -depth * 0.16, thickness + hook_h * 0.50], params, color=color),
+                _create_box_component(f"wardrobe_hook_{idx + 1}_upturn", wall * 1.6, wall * 1.6, hook_h * 0.45, [x, -depth * 0.48, thickness + hook_h * 0.52], params, color=color),
+            ])
+    elif category == "round_can_holder":
+        radius = min(width, depth) * 0.42
+        cup_h = max(height, thickness * 6.0)
+        parts = [
+            _create_cylinder_component("can_round_floor", radius, max(thickness, wall), [0.0, 0.0, 0.0], params, color=color),
+            _create_box_component("can_back_retainer", radius * 1.55, wall, cup_h * 0.72, [0.0, radius * 0.70, thickness], params, color=color),
+            _create_box_component("can_front_lip", radius * 1.10, wall, cup_h * 0.34, [0.0, -radius * 0.78, thickness], params, color=color),
+            _create_box_component("can_left_wall", wall, radius * 1.25, cup_h * 0.62, [-radius * 0.82, -radius * 0.05, thickness], params, color=color),
+            _create_box_component("can_right_wall", wall, radius * 1.25, cup_h * 0.62, [radius * 0.82, -radius * 0.05, thickness], params, color=color),
+        ]
+        if any(word in prompt_text for word in ("bike", "bicycle", "handlebar")):
+            parts.append(_create_box_component("can_handlebar_mount_saddle", radius * 1.25, wall * 2.0, wall * 2.0, [0.0, radius * 1.0, thickness + cup_h * 0.35], params, color=color))
     elif category == "enclosure":
         parts = [
             _create_box_component("enclosure_floor", width, depth, wall, [0.0, 0.0, 0.0], params, color=color),
@@ -1971,7 +2057,6 @@ def replace_object_with_research_assembly(
             _create_box_component("tool_alignment_rib", width * 0.72, wall, max(height * 0.8, wall), [0.0, 0.0, max(height, thickness)], params, color=color),
         ]
     elif category == "generic":
-        prompt_text = _prompt_match_text(str(brief.get("prompt", "")))
         base_h = max(thickness, min(height * 0.22, 14.0))
         core_h = max(height - base_h, base_h)
         core_w = max(width * 0.62, min(width - wall * 2.0, width * 0.78))
@@ -2758,7 +2843,7 @@ def _set_feature_enabled(features: list[Feature], feature_type: str, enabled: bo
         if feature.type == feature_type:
             feature.enabled = enabled
             return
-    features.append(Feature(id=feature_type, type=feature_type, enabled=enabled))
+    features.append(Feature(id=feature_type, name=feature_type.replace("_", " ").title(), type=feature_type, enabled=enabled))
 
 
 def _is_base_like(obj: CadObject) -> bool:

@@ -54,6 +54,7 @@ from backend.services.account_store import (
     save_saved_library,
 )
 from backend.services.prompt_translation import normalize_source_query
+from backend.services.model_pipeline import build_model_source_context
 from backend.services.session_manager import (
     acquire_lock,
     add_history,
@@ -333,11 +334,22 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                         session,
                         f"generated_{len(session['edit_history']) + 1}",
                     )
-                source_actions = [] if edit_only else replace_object_with_source_model(session, obj, data.prompt)
+                source_context = None if edit_only else build_model_source_context(data.prompt, limit=12)
+                source_actions = [] if edit_only else replace_object_with_source_model(
+                    session,
+                    obj,
+                    data.prompt,
+                    source_context.examples if source_context else None,
+                )
                 if source_actions:
                     actions = source_actions
                 else:
-                    parsed = parse_ai_command(data.prompt, session, obj)
+                    parsed = parse_ai_command(
+                        data.prompt,
+                        session,
+                        obj,
+                        source_context.research_brief if source_context else None,
+                    )
                     research_brief = parsed.get("research_brief") if isinstance(parsed.get("research_brief"), dict) else {}
                     source_examples = research_brief.get("source_examples") if isinstance(research_brief, dict) else []
                     no_reliable_source = (
@@ -345,7 +357,10 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                         and not parsed.get("template")
                         and isinstance(research_brief, dict)
                         and str(research_brief.get("category") or "").lower() == "generic"
-                        and not source_examples
+                        and (
+                            not source_examples
+                            or float(research_brief.get("confidence") or 0.0) <= 0.38
+                        )
                     )
                     if no_reliable_source:
                         remove_object(session, obj["id"])

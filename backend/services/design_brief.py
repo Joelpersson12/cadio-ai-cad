@@ -43,6 +43,26 @@ CATEGORY_KEYWORDS: dict[str, set[str]] = {
     "battery_holder": {"battery", "batteries", "batteri", "dewalt", "makita", "milwaukee", "ryobi", "bosch"},
     "device_stand": {"stand", "stall", "dock", "cradle", "phone", "mobil", "tablet", "headset", "headphone"},
     "electronics_holder": {"cdi", "ecu", "ecm", "module", "modul", "ignition", "controller", "electronics"},
+    "cup_holder": {"cup", "mug", "drink", "bottle", "tumbler", "caneca", "taza", "vaso", "kopp", "mugg"},
+    "tool_holder": {
+        "tool",
+        "tools",
+        "verktyg",
+        "drill",
+        "screwdriver",
+        "wrench",
+        "pliers",
+        "bit",
+        "bits",
+        "pegboard",
+        "skadis",
+        "gridfinity",
+        "garage",
+        "workshop",
+    },
+    "helmet_holder": {"helmet", "helmets", "hjalm", "hjalmar", "casque"},
+    "wardrobe_holder": {"belt", "belts", "clothes", "coat", "jacket", "hanger", "wardrobe", "closet", "balte", "skap"},
+    "round_can_holder": {"snus", "snusdosa", "snusdose", "snusdosahallare", "snusdosehallare", "tin", "can", "dosa", "container"},
     "holder": {
         "holder",
         "hallare",
@@ -74,6 +94,19 @@ CATEGORY_KEYWORDS: dict[str, set[str]] = {
     "organizer": {"organizer", "organiser", "tray", "bin", "rack", "divider", "storage"},
     "organic": {"octopus", "blackfisk", "figurine", "statue", "miniature", "toy", "animal", "sculpture"},
     "tool": {"jig", "fixture", "adapter", "spacer", "shim", "washer", "tool", "tools", "drill", "screwdriver", "wrench", "pliers", "bit", "knife", "nozzle"},
+}
+
+CATEGORY_PHRASES: dict[str, tuple[str, ...]] = {
+    "battery_holder": ("battery holder", "battery mount", "battery wall mount", "batteri hallare"),
+    "device_stand": ("phone stand", "phone holder", "tablet stand", "headphone stand", "headset stand"),
+    "electronics_holder": ("cdi holder", "ecu holder", "electronics module", "ignition module"),
+    "cup_holder": ("cup holder", "mug holder", "drink holder", "desk cup holder", "mugghallare"),
+    "tool_holder": ("tool holder", "tool rack", "pegboard holder", "skadis holder", "gridfinity holder"),
+    "helmet_holder": ("helmet holder", "helmet hanger", "hjalmhallare"),
+    "wardrobe_holder": ("belt holder", "clothes hanger", "coat hanger", "wardrobe hanger", "closet organizer"),
+    "round_can_holder": ("snus can holder", "snusdosa holder", "snus holder", "round can holder"),
+    "vehicle_part": ("chain guide", "fork tool", "dirtbike tool", "motorcycle tool", "swingarm guard"),
+    "accessory": ("pressure washer", "power washer", "hose holder", "nozzle holder", "wand holder"),
 }
 
 
@@ -111,6 +144,62 @@ DEFAULTS: dict[str, dict[str, float]] = {
         "chamfer_size": 0.0,
         "hole_count": 2.0,
         "hole_diameter": 5.0,
+        "wall_thickness": 3.0,
+    },
+    "cup_holder": {
+        "width": 96.0,
+        "depth": 96.0,
+        "height": 78.0,
+        "thickness": 5.0,
+        "fillet_radius": 3.0,
+        "chamfer_size": 0.0,
+        "hole_count": 2.0,
+        "hole_diameter": 5.0,
+        "wall_thickness": 3.0,
+    },
+    "tool_holder": {
+        "width": 138.0,
+        "depth": 58.0,
+        "height": 48.0,
+        "thickness": 6.0,
+        "fillet_radius": 2.0,
+        "chamfer_size": 0.5,
+        "hole_count": 2.0,
+        "hole_diameter": 5.0,
+        "wall_thickness": 3.0,
+        "divider_count": 4.0,
+    },
+    "helmet_holder": {
+        "width": 155.0,
+        "depth": 105.0,
+        "height": 95.0,
+        "thickness": 7.0,
+        "fillet_radius": 3.0,
+        "chamfer_size": 0.5,
+        "hole_count": 2.0,
+        "hole_diameter": 6.0,
+        "wall_thickness": 4.0,
+    },
+    "wardrobe_holder": {
+        "width": 112.0,
+        "depth": 48.0,
+        "height": 36.0,
+        "thickness": 5.0,
+        "fillet_radius": 2.0,
+        "chamfer_size": 0.0,
+        "hole_count": 2.0,
+        "hole_diameter": 4.5,
+        "wall_thickness": 3.0,
+    },
+    "round_can_holder": {
+        "width": 82.0,
+        "depth": 82.0,
+        "height": 34.0,
+        "thickness": 4.0,
+        "fillet_radius": 3.0,
+        "chamfer_size": 0.0,
+        "hole_count": 0.0,
+        "hole_diameter": 4.5,
         "wall_thickness": 3.0,
     },
     "holder": {
@@ -209,6 +298,11 @@ FEATURES: dict[str, list[str]] = {
     "battery_holder": ["base", "slide_rails", "front_stop", "rear_register", "mounting_holes", "rounded_edges"],
     "device_stand": ["base", "front_lip", "back_support", "side_rails", "rounded_edges"],
     "electronics_holder": ["base", "tray_walls", "strap_bridge", "mounting_holes", "rounded_edges"],
+    "cup_holder": ["mounting_base", "cup_cradle", "retaining_lip", "mounting_holes", "rounded_edges"],
+    "tool_holder": ["mounting_base", "tool_slots", "retaining_lips", "mounting_holes", "reinforcing_ribs"],
+    "helmet_holder": ["wall_plate", "wide_saddle", "reinforced_arm", "mounting_holes", "rounded_edges"],
+    "wardrobe_holder": ["mounting_base", "hooks", "belt_slots", "mounting_holes", "rounded_edges"],
+    "round_can_holder": ["round_cradle", "front_lip", "retaining_walls", "rounded_edges"],
     "vehicle_part": ["mounting_base", "guide_channel", "reinforcing_ribs", "mounting_holes", "chamfered_edges"],
     "accessory": ["mounting_base", "adapter_body", "retaining_lip", "mounting_holes", "rounded_edges"],
     "holder": ["base", "side_walls", "front_lip", "mounting_holes", "rounded_edges"],
@@ -220,8 +314,12 @@ FEATURES: dict[str, list[str]] = {
 }
 
 
-def build_design_brief(prompt: str, limit: int = 6) -> dict[str, Any]:
-    examples = _search_sources(prompt, limit)
+def build_design_brief(
+    prompt: str,
+    limit: int = 6,
+    examples: list[ExampleDesign] | None = None,
+) -> dict[str, Any]:
+    examples = list(examples[:limit]) if examples is not None else _search_sources(prompt, limit)
     text = _combined_text(prompt, examples)
     category, confidence = _infer_category(prompt, examples)
     dimensions = dict(DEFAULTS[category])
@@ -283,8 +381,21 @@ def _infer_category(prompt: str, examples: list[ExampleDesign]) -> tuple[str, fl
     translated_prompt = normalize_source_query(prompt)
     prompt_words = set(re.findall(r"[a-z0-9]+", f"{prompt} {translated_prompt}".lower()))
 
-    for priority_category in ("battery_holder", "electronics_holder", "vehicle_part", "accessory", "organic"):
-        if prompt_words & CATEGORY_KEYWORDS[priority_category]:
+    for priority_category in (
+        "battery_holder",
+        "electronics_holder",
+        "vehicle_part",
+        "cup_holder",
+        "helmet_holder",
+        "tool_holder",
+        "wardrobe_holder",
+        "round_can_holder",
+        "accessory",
+        "organic",
+    ):
+        if prompt_words & CATEGORY_KEYWORDS[priority_category] or any(
+            phrase in text for phrase in CATEGORY_PHRASES.get(priority_category, ())
+        ):
             confidence = min(0.94, 0.72 + min(len(examples), 4) * 0.04)
             return priority_category, confidence
 
@@ -293,7 +404,9 @@ def _infer_category(prompt: str, examples: list[ExampleDesign]) -> tuple[str, fl
     for category, keywords in CATEGORY_KEYWORDS.items():
         prompt_hits = len(prompt_words & keywords)
         source_hits = len(words & keywords) - prompt_hits
+        phrase_hits = sum(1 for phrase in CATEGORY_PHRASES.get(category, ()) if phrase in text)
         score = prompt_hits * 3.0 + source_hits * 0.75
+        score += phrase_hits * 3.5
         if category == "holder" and {"holder", "mount"} & prompt_words:
             score += 1.5
         if category == "device_stand" and "stand" in prompt_words:
@@ -401,6 +514,19 @@ def _apply_product_family_hints(text: str, dimensions: dict[str, float], notes: 
         dimensions.update({"width": max(dimensions["width"], 120.0), "depth": max(dimensions["depth"], 120.0)})
         dimensions["height"] = max(dimensions["height"], 190.0)
         notes.append("used headset stand proportions")
+    if any(word in text for word in ("cup", "mug", "drink holder", "bottle holder")):
+        dimensions.update({"width": max(dimensions["width"], 96.0), "depth": max(dimensions["depth"], 96.0)})
+        dimensions["height"] = max(dimensions["height"], 72.0)
+        dimensions["wall_thickness"] = max(dimensions.get("wall_thickness", 3.0), 3.0)
+        if any(word in text for word in ("desk", "table", "clamp")):
+            dimensions["width"] = max(dimensions["width"], 118.0)
+            dimensions["hole_count"] = max(dimensions.get("hole_count", 0.0), 2.0)
+        notes.append("used cup-holder cradle proportions")
+    if any(word in text for word in ("tool holder", "tool rack", "pegboard", "skadis", "gridfinity", "screwdriver", "wrench", "pliers")):
+        dimensions.update({"width": max(dimensions["width"], 138.0), "depth": max(dimensions["depth"], 58.0)})
+        dimensions["height"] = max(dimensions["height"], 48.0)
+        dimensions["hole_count"] = max(dimensions.get("hole_count", 0.0), 2.0)
+        notes.append("used workshop/tool-holder proportions")
     if "phone" in text:
         dimensions.update({"width": max(dimensions["width"], 86.0), "depth": max(dimensions["depth"], 82.0)})
         dimensions["height"] = max(dimensions["height"], 118.0)

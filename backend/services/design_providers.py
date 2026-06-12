@@ -699,6 +699,41 @@ def _query_variants(query: str) -> list[str]:
         add("pressure washer adapter 3d print")
         add("power washer hose holder printable")
         add("pressure washer wand holder wall mount")
+    if {"cup", "mug", "drink", "bottle", "tumbler"} & words and {"holder", "mount", "stand", "clamp", "desk", "wall"} & words:
+        add("cup holder 3d print")
+        add("mug holder printable")
+        add("desk cup holder clamp 3d print")
+        add("wall mounted cup holder stl")
+        if "desk" in words or "clamp" in words:
+            add("clamp on desk cup holder")
+            add("desk mount mug holder stl")
+    if {"tool", "tools", "drill", "screwdriver", "wrench", "pliers", "bit", "bits"} & words and {"holder", "rack", "organizer", "pegboard", "skadis", "gridfinity", "wall", "garage", "workshop"} & words:
+        object_words = [
+            word
+            for word in core_words
+            if word not in {"holder", "rack", "organizer", "wall", "mounted", "garage", "workshop"}
+        ]
+        object_phrase = " ".join(object_words) or "tool"
+        add(f"{object_phrase} holder 3d print")
+        add(f"{object_phrase} wall mount holder")
+        add(f"{object_phrase} pegboard holder stl")
+        add(f"{object_phrase} skadis holder")
+        add(f"gridfinity {object_phrase} holder")
+    if {"helmet", "helmets"} & words and {"holder", "hanger", "mount", "wall", "garage"} & words:
+        add("helmet holder wall mount 3d print")
+        add("helmet hanger printable")
+        add("garage helmet holder stl")
+    if {"belt", "belts", "clothes", "coat", "jacket", "hanger", "wardrobe", "closet"} & words:
+        add("belt holder closet organizer 3d print")
+        add("wardrobe hanger organizer printable")
+        add("coat hanger wall hook stl")
+        add("closet belt rack 3d print")
+    if {"snus", "tin"} & words or ({"can"} & words and {"holder", "mount", "bike", "bicycle", "car"} & words):
+        add("snus can holder 3d print")
+        add("round can holder printable")
+        add("tin holder stl")
+        if "bike" in words or "bicycle" in words:
+            add("bike mounted can holder 3d print")
     if {"holder", "hanger", "hook", "mount", "bracket", "rack", "stand", "clip", "organizer"} & words:
         utility_words = {
             "holder",
