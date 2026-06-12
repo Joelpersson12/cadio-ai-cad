@@ -622,6 +622,8 @@ def _source_part_roles(source_file: dict[str, Any]) -> set[str]:
         "arm": ("arm", "link", "hinge", "joint", "support"),
         "side": ("left", "right", "front", "rear", "back", "side"),
         "rail": ("rail", "slide", "track", "guide"),
+        "roller": ("roller", "wheel", "pulley", "idler", "bearing", "spool", "reel", "rotor"),
+        "axle": ("axle", "shaft"),
         "cover": ("top", "cover", "cap", "lid"),
     }
     for role, tokens in role_tokens.items():
@@ -682,6 +684,95 @@ def _source_file_component_score(source_file: dict[str, Any], prompt: str, prefe
     return score
 
 
+_SOURCE_ROLE_WORDS = {
+    "arm",
+    "axle",
+    "back",
+    "base",
+    "bearing",
+    "body",
+    "bottom",
+    "bracket",
+    "cap",
+    "clamp",
+    "clip",
+    "cover",
+    "cup",
+    "desk",
+    "floor",
+    "front",
+    "guide",
+    "hinge",
+    "holder",
+    "idler",
+    "joint",
+    "left",
+    "lid",
+    "link",
+    "main",
+    "mount",
+    "mug",
+    "plate",
+    "pulley",
+    "rail",
+    "rear",
+    "reel",
+    "right",
+    "roller",
+    "rotor",
+    "shaft",
+    "side",
+    "slide",
+    "spool",
+    "support",
+    "table",
+    "top",
+    "track",
+    "wheel",
+}
+
+
+def _source_file_family_words(source_file: dict[str, Any]) -> set[str]:
+    """Return model-family words, leaving out part-role and variant words."""
+    name = _source_file_name(source_file).lower()
+    stem = re.sub(r"\.[a-z0-9]+$", "", name)
+    tokens = re.findall(r"[a-z0-9]+", stem)
+    ignored = _SOURCE_ROLE_WORDS | {
+        "stl",
+        "3mf",
+        "obj",
+        "step",
+        "v1",
+        "v2",
+        "v3",
+        "rev1",
+        "rev2",
+        "rev3",
+        "small",
+        "medium",
+        "large",
+        "xl",
+        "xs",
+        "print",
+        "part",
+        "file",
+    }
+    return {token for token in tokens if len(token) > 2 and token not in ignored and not re.fullmatch(r"\d+", token)}
+
+
+def _source_files_share_family(files: list[dict[str, Any]]) -> bool:
+    """Detect component files from the same named model family."""
+    families = [_source_file_family_words(source_file) for source_file in files]
+    families = [family for family in families if family]
+    if len(families) < 2:
+        return False
+    for index, family in enumerate(families):
+        for other in families[index + 1:]:
+            if len(family & other) >= 1 and (len(family | other) <= 3 or len(family & other) >= 2):
+                return True
+    return False
+
+
 def _select_source_assembly_files(
     files: list[dict[str, Any]],
     prompt: str,
@@ -736,12 +827,20 @@ def _select_source_assembly_files(
         {"body", "side"},
         {"base", "arm"},
         {"base", "rail"},
+        {"body", "rail"},
+        {"body", "roller"},
+        {"base", "roller"},
+        {"rail", "roller"},
+        {"body", "axle"},
+        {"roller", "axle"},
     )
     has_complement = any(pair <= selected_roles for pair in complementary_pairs)
     has_left_right = any("left" in _source_file_name(item).lower() for item in selected) and any(
         "right" in _source_file_name(item).lower() for item in selected
     )
-    if len(selected) >= 2 and (has_complement or has_left_right or len(selected_roles) >= 3):
+    shares_family = _source_files_share_family(selected)
+    has_mechanical_pair = bool({"roller", "axle", "arm", "clamp"} & selected_roles) and shares_family
+    if len(selected) >= 2 and (has_complement or has_left_right or len(selected_roles) >= 3 or has_mechanical_pair):
         return selected
     return []
 
