@@ -7,12 +7,12 @@ import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
 
 const VIEW_COLORS = {
-  background: "#343435",
-  plate: "#5a5a5c",
-  plateEdge: "#9da3aa",
-  gridCell: "#777b83",
-  gridSection: "#c7cbd1",
-  neutralBody: "#b9b8b3",
+  background: "#303133",
+  plate: "#56585c",
+  plateEdge: "#a9afb8",
+  gridCell: "#707780",
+  gridSection: "#d2d6dc",
+  neutralBody: "#c7c4bc",
   selectedBody: "#28c7df",
   hoveredBody: "#cfd1d2",
   edgeSubtle: "#202124",

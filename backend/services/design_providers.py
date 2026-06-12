@@ -8,6 +8,7 @@ real source mesh before falling back to generated CAD.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
@@ -127,10 +128,14 @@ class DesignProvider(ABC):
 _SEARCH_CACHE: dict[tuple[str, str, int], tuple[float, list[ExampleDesign]]] = {}
 _FILE_CACHE: dict[str, tuple[float, list[SourceModelFile]]] = {}
 _MODEL_META_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_NEGATIVE_SEARCH_CACHE: dict[tuple[str, str], float] = {}
 _CACHE_TTL_SECONDS = 600.0
+_NEGATIVE_CACHE_TTL_SECONDS = 120.0
+_SEARCH_TOTAL_BUDGET_SECONDS = 5.5
+_SEARCH_WORKERS = 10
 
 
-def _fetch_text(url: str, timeout: float = 5.0) -> str:
+def _fetch_text(url: str, timeout: float = 2.8) -> str:
     req = Request(
         url,
         headers={
@@ -376,6 +381,17 @@ _SOURCE_WEIGHTS = {
     "thangs": 14,
 }
 
+_PROVIDER_PRIORITY = {
+    "printables": 100,
+    "thingiverse": 76,
+    "makerworld": 72,
+    "stlfinder": 66,
+    "yeggi": 64,
+    "cults3d": 58,
+    "myminifactory": 56,
+    "thangs": 52,
+}
+
 _BAD_TITLE_WORDS = {
     "login",
     "sign up",
@@ -515,7 +531,16 @@ def _vehicle_context_words(core_words: list[str]) -> list[str]:
 
 def _clean_title(text: str) -> str:
     title = re.sub(r"<[^>]+>", " ", html.unescape(text))
+    title = re.sub(r'^(?:painting|image|img)#loaded.*?/\>\s*', "", title, flags=re.I)
+    title = re.sub(r'^[^A-Za-z0-9]{0,8}(?:painting|image|img)[^A-Za-z0-9]+', "", title, flags=re.I)
     title = re.sub(r"\s+", " ", title).strip()
+    if "painting#loaded" in title.lower() and "/>" in title:
+        title = title.rsplit("/>", 1)[-1].strip()
+    title = re.sub(r'^.*?painting#error"\s*>\s*', "", title, flags=re.I).strip()
+    title = re.sub(r'^.*?(?:painting|image|img)#loaded.*?(?:">\s*|>\s*)', "", title, flags=re.I).strip()
+    title = re.sub(r'^.*?src=""\s*/?>\s*', "", title, flags=re.I).strip()
+    title = re.sub(r"^(?:loaded|loading|image|picture)\s+", "", title, flags=re.I).strip()
+    title = re.sub(r"\s+(?:SEK|USD|EUR|GBP)\s*kr?\s*[\d.,]+.*$", "", title, flags=re.I).strip()
     title = re.sub(r"^(free|download|3d model)\s+", "", title, flags=re.I).strip()
     return title
 
@@ -1429,19 +1454,56 @@ class ProviderRegistry:
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
         search_query = normalize_source_query(query) or query
         variants = _query_variants(search_query) or [search_query]
-        variants = variants[:10]
-        per_query_limit = max(6, min(limit * 2, 12))
-        for provider in self.providers.values():
-            if not provider.is_available():
-                continue
-            for variant in variants:
-                for design in provider.search(variant, per_query_limit):
-                    score = _design_score(search_query, design)
-                    if score <= 0:
+        variants = variants[:8]
+        per_query_limit = max(5, min(limit * 2, 10))
+        provider_items = sorted(
+            (
+                (name, provider)
+                for name, provider in self.providers.items()
+                if provider.is_available()
+            ),
+            key=lambda item: _PROVIDER_PRIORITY.get(item[0], 40),
+            reverse=True,
+        )
+        tasks: list[tuple[str, DesignProvider, str]] = []
+        now = time.time()
+        for name, provider in provider_items:
+            variant_limit = 5 if name == "printables" else 3 if name in {"thingiverse", "stlfinder", "yeggi"} else 2
+            for variant in variants[:variant_limit]:
+                negative_key = (name, variant)
+                if now - _NEGATIVE_SEARCH_CACHE.get(negative_key, 0.0) < _NEGATIVE_CACHE_TTL_SECONDS:
+                    continue
+                tasks.append((name, provider, variant))
+
+        def run_task(task: tuple[str, DesignProvider, str]) -> tuple[str, str, list[ExampleDesign]]:
+            name, provider, variant = task
+            try:
+                return name, variant, provider.search(variant, per_query_limit)
+            except Exception:
+                return name, variant, []
+
+        if tasks:
+            max_workers = min(_SEARCH_WORKERS, len(tasks))
+            executor = ThreadPoolExecutor(max_workers=max_workers)
+            futures = {executor.submit(run_task, task): task for task in tasks}
+            try:
+                for future in as_completed(futures, timeout=_SEARCH_TOTAL_BUDGET_SECONDS):
+                    provider_name, variant, designs = future.result()
+                    if not designs:
+                        _NEGATIVE_SEARCH_CACHE[(provider_name, variant)] = time.time()
                         continue
-                    existing = ranked.get(design.url)
-                    if existing is None or score > existing[0]:
-                        ranked[design.url] = (score, design)
+                    for design in designs:
+                        score = _design_score(search_query, design)
+                        if score <= 0:
+                            continue
+                        existing = ranked.get(design.url)
+                        if existing is None or score > existing[0]:
+                            ranked[design.url] = (score, design)
+            except FuturesTimeoutError:
+                for future in futures:
+                    future.cancel()
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
 
         results = list(ranked.values())
         results.sort(key=lambda item: item[0], reverse=True)

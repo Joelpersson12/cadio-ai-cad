@@ -241,7 +241,7 @@ export default function ObjectInspector() {
           className="grid h-8 w-8 place-items-center rounded-lg text-[#bdbdbd] hover:bg-[#2a2a2b] hover:text-white"
           title="Refresh"
         >
-          ↻
+          R
         </button>
       </div>
 

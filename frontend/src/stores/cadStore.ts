@@ -301,7 +301,19 @@ export const useCadStore = create<CadState>((set, get) => ({
       const notFound = actions.find((action) => action.toLowerCase().startsWith("model-not-found:"));
       if (notFound) {
         const message = notFound.replace(/^model-not-found:\s*/i, "").trim() || "Cadio could not find that model yet.";
-        set({ status: "Model not found", notice: message, isBusy: false });
+        const searchedQuery = actions
+          .find((action) => action.toLowerCase().startsWith("searched-query:"))
+          ?.replace(/^searched-query:\s*/i, "")
+          .trim();
+        const tip = actions
+          .find((action) => action.toLowerCase().startsWith("tip:"))
+          ?.replace(/^tip:\s*/i, "")
+          .trim();
+        set({
+          status: "Model not found",
+          notice: [message, searchedQuery ? `Searched: ${searchedQuery}` : "", tip || ""].filter(Boolean).join("\n"),
+          isBusy: false,
+        });
       } else {
         set({ status: `Updated v${data.version}`, notice: "", isBusy: false });
       }

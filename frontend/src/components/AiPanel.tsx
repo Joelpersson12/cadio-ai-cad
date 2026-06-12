@@ -22,6 +22,13 @@ const QUICK_COMMANDS = [
   "Make it stronger",
 ];
 
+const STARTER_PROMPTS = [
+  "Mug holder for desk mount",
+  "Helmet holder for garage wall",
+  "IKEA Skadis cable organizer",
+  "Foldable phone stand with MagSafe",
+];
+
 const SEARCH_FILTER_GROUPS = [
   {
     label: "Object",
@@ -56,7 +63,7 @@ function creationTitle(prompt: string) {
 }
 
 function isTechnicalAction(action: string) {
-  return /^(source-|translated-query:|generative-recipe:|generated clean|source-search:|source-match:|source-files:)/i.test(action.trim());
+  return /^(source-|translated-query:|searched-query:|tip:|model-not-found:|generative-recipe:|generated clean|source-search:|source-match:|source-files:)/i.test(action.trim());
 }
 
 export default function AiPanel() {
@@ -132,8 +139,17 @@ export default function AiPanel() {
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] px-3 py-3 shadow-xl">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#777]">Current model</div>
-        <div className="mt-1 truncate text-sm font-semibold text-white">{creationTitle(latestPrompt || "Untitled workspace")}</div>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#777]">
+          {objects.length ? "Current model" : "Start here"}
+        </div>
+        <div className="mt-1 truncate text-sm font-semibold text-white">
+          {objects.length ? creationTitle(latestPrompt || "Untitled workspace") : "Describe anything printable"}
+        </div>
+        {!objects.length && (
+          <p className="mt-2 text-xs leading-5 text-[#a8a8ab]">
+            Cadio searches source models first, then opens the best match in an editable CAD workspace.
+          </p>
+        )}
       </div>
 
       <div className="hidden">
@@ -186,6 +202,24 @@ export default function AiPanel() {
           >
             Next model
           </button>
+        </div>
+      )}
+
+      {!objects.length && (
+        <div className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#777]">Try a prompt</div>
+          <div className="flex flex-wrap gap-2">
+            {STARTER_PROMPTS.map((item) => (
+              <button
+                key={item}
+                onClick={() => void run(item, false)}
+                disabled={isLoading}
+                className="rounded-full border border-[#343436] bg-[#242424] px-3 py-1.5 text-[11px] font-semibold text-[#d8d8da] hover:border-[#28c7df] hover:text-white disabled:opacity-40"
+              >
+                {item}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -272,7 +306,7 @@ export default function AiPanel() {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Keep iterating with Cadio..."
+          placeholder={objects.length ? "Describe the next edit..." : "Search or generate any printable model..."}
           rows={2}
           disabled={isLoading}
           className="h-16 w-full resize-none bg-transparent px-1 text-sm text-white outline-none placeholder:text-[#858585] disabled:opacity-50"
@@ -283,7 +317,7 @@ export default function AiPanel() {
             className="grid h-9 w-9 place-items-center rounded-lg border border-[#333] bg-[#202020] text-[#bdbdbd]"
             title="Add image reference"
           >
-            ▧
+            Ref
           </button>
           <div className="flex items-center gap-2">
             <select
@@ -300,10 +334,10 @@ export default function AiPanel() {
             <button
               type="submit"
               disabled={!prompt.trim() || isLoading}
-              className="grid h-9 w-9 place-items-center rounded-lg bg-[#3d3d3f] text-white hover:bg-[#505052] disabled:opacity-40"
+              className="grid h-9 min-w-9 place-items-center rounded-lg bg-[#3d3d3f] px-3 text-xs font-semibold text-white hover:bg-[#505052] disabled:opacity-40"
               title="Generate"
             >
-              {isLoading ? "…" : "↑"}
+              {isLoading ? "..." : "Go"}
             </button>
           </div>
         </div>

@@ -84,6 +84,12 @@ const FEEDBACK_MAILTO = "mailto:support@cadio.net?subject=Cadio%20Feedback";
 const DEFAULT_TITLE = "Cadio - AI CAD for 3D Printing";
 const DEFAULT_DESCRIPTION = "Search, remix, edit, and generate printable 3D models with AI.";
 const CANONICAL_DOMAIN = "https://cadio.net";
+const BUILDER_STARTER_PROMPTS = [
+  "Cup holder with desk clamp",
+  "Wall mounted tool holder for pegboard",
+  "Bike mounted snus can holder",
+  "Foldable phone stand with cable cutout",
+];
 
 type StaticPage = "terms" | "privacy" | "contact";
 
@@ -528,7 +534,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
   const [showMeasurements, setShowMeasurements] = useState(false);
   const [workspacePanelOpen, setWorkspacePanelOpen] = useState(true);
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(true);
-  const [parametersPanelOpen, setParametersPanelOpen] = useState(true);
+  const [parametersPanelOpen, setParametersPanelOpen] = useState(false);
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(292);
   const [assistantPanelWidth, setAssistantPanelWidth] = useState(380);
   const [parametersPanelWidth, setParametersPanelWidth] = useState(330);
@@ -559,6 +565,14 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     }
     void runPrompt(shared.prompt);
   }, [runPrompt, setPrinter]);
+
+  useEffect(() => {
+    if (objects.length > 0) {
+      setParametersPanelOpen(true);
+    } else {
+      setParametersPanelOpen(false);
+    }
+  }, [objects.length]);
 
   useWebSocket(sessionId || null, applyScenePayload);
 
@@ -622,7 +636,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
       {notice && (
         <div className="fixed left-1/2 top-20 z-[90] w-[min(92vw,430px)] -translate-x-1/2 rounded-2xl border border-[#28c7df]/45 bg-[#151515]/96 p-4 text-white shadow-[0_22px_70px_rgba(0,0,0,0.42),0_0_34px_rgba(40,199,223,0.12)] backdrop-blur md:left-auto md:right-6 md:top-6 md:translate-x-0">
           <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#69d9f5]">Search notice</div>
-          <p className="text-sm leading-6 text-[#e8e8e8]">{notice}</p>
+          <p className="whitespace-pre-line text-sm leading-6 text-[#e8e8e8]">{notice}</p>
           <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[#a7a7aa]">
             <span>Try more context or use filters.</span>
             <button
@@ -977,6 +991,36 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             onCreatePrimitive={(payload) => void createPrimitive(payload)}
             showMeasurements={showMeasurements}
           />
+          {!objects.length && !modelBusy && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6">
+              <div className="pointer-events-auto w-full max-w-xl rounded-2xl border border-white/10 bg-[#181819]/88 p-5 text-white shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-md">
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#69d9f5]">Start workspace</div>
+                <h2 className="mt-3 text-2xl font-semibold">What should Cadio find or build?</h2>
+                <p className="mt-2 text-sm leading-6 text-[#bdbdc1]">
+                  Describe a printable model in any supported language, choose a quick idea, or open a blank plate for manual CAD.
+                </p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {BUILDER_STARTER_PROMPTS.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => void runPrompt(item)}
+                      className="rounded-xl border border-[#333] bg-[#242426] px-3 py-2 text-left text-xs font-semibold text-[#e8e8e8] hover:border-[#28c7df] hover:text-white"
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={startBlankCreation}
+                  className="mt-4 h-10 rounded-xl border border-white/15 px-4 text-sm font-semibold text-[#e8e8e8] hover:border-[#28c7df] hover:text-white"
+                >
+                  Blank workspace
+                </button>
+              </div>
+            </div>
+          )}
           {modelBusy && <ModelLoadingOverlay status={status} />}
         </main>
         <div
@@ -1038,12 +1082,20 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             >
               Export
             </button>
-            <button
-              onClick={() => setMobileEditOpen(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-cadio-accent text-[#081225] text-xs font-semibold"
+            <a
+              href={FEEDBACK_MAILTO}
+              className="rounded-lg bg-[#2b2b2d] px-2.5 py-1.5 text-xs font-semibold text-cadio-text"
             >
-              Edit
-            </button>
+              Feedback
+            </a>
+            {objects.length > 0 && (
+              <button
+                onClick={() => setMobileEditOpen(true)}
+                className="px-2.5 py-1.5 rounded-lg bg-cadio-accent text-[#081225] text-xs font-semibold"
+              >
+                Edit
+              </button>
+            )}
           </div>
         </div>
 
@@ -1059,13 +1111,14 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
               {mode.label}
             </button>
           ))}
-          <button
-            onClick={selectAllObjects}
-            disabled={!objects.length}
-            className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text disabled:opacity-35"
-          >
-            Select all
-          </button>
+          {objects.length > 0 && (
+            <button
+              onClick={selectAllObjects}
+              className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text"
+            >
+              Select all
+            </button>
+          )}
           <button
             onClick={() => setShowMeasurements((value) => !value)}
             className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold ${
@@ -1074,27 +1127,29 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           >
             mm
           </button>
-          <button
-            onClick={() => void snapSelectedObjects("on_plate")}
-            disabled={!objects.length}
-            className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text disabled:opacity-35"
-          >
-            On plate
-          </button>
-          <button
-            onClick={() => void snapSelectedObjects("center_on_plate")}
-            disabled={!objects.length}
-            className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text disabled:opacity-35"
-          >
-            Center
-          </button>
-          <button
-            onClick={() => void onDeleteObject()}
-            disabled={!selectedObjectId}
-            className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-[#ff8b8b] disabled:opacity-35"
-          >
-            Delete
-          </button>
+          {objects.length > 0 && (
+            <>
+              <button
+                onClick={() => void snapSelectedObjects("on_plate")}
+                className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text"
+              >
+                On plate
+              </button>
+              <button
+                onClick={() => void snapSelectedObjects("center_on_plate")}
+                className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text"
+              >
+                Center
+              </button>
+              <button
+                onClick={() => void onDeleteObject()}
+                disabled={!selectedObjectId}
+                className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-[#ff8b8b] disabled:opacity-35"
+              >
+                Delete
+              </button>
+            </>
+          )}
         </div>
 
         {/* Viewport - takes most space */}
@@ -1116,13 +1171,6 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         </div>
 
         <MobileModelVariantBar />
-        <a
-          href={FEEDBACK_MAILTO}
-          className="fixed bottom-[5.8rem] right-3 z-30 rounded-full border border-[#28c7df]/40 bg-[#151515]/90 px-3 py-2 text-xs font-semibold text-[#c9f7ff] shadow-xl backdrop-blur md:hidden"
-        >
-          Feedback
-        </a>
-
         {/* Bottom AI input bar */}
         <div className="border-t border-cadio-border bg-cadio-panel/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur-sm">
           <MobileAiBar />

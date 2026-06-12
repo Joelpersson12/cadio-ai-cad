@@ -7,13 +7,13 @@ import SiteFooter from "./SiteFooter";
 type Language = "en" | "sv" | "es" | "fr" | "it" | "de" | "pt";
 
 const languageOptions: Array<{ value: Language; label: string }> = [
-  { value: "en", label: "EN" },
-  { value: "sv", label: "SV" },
-  { value: "es", label: "ES" },
-  { value: "fr", label: "FR" },
-  { value: "it", label: "IT" },
-  { value: "de", label: "DE" },
-  { value: "pt", label: "PT" },
+  { value: "en", label: "English" },
+  { value: "sv", label: "Svenska" },
+  { value: "es", label: "Español" },
+  { value: "fr", label: "Français" },
+  { value: "it", label: "Italiano" },
+  { value: "de", label: "Deutsch" },
+  { value: "pt", label: "Português" },
 ];
 
 const enCopy = {
@@ -144,6 +144,166 @@ const copy: Record<Language, typeof enCopy> = {
   pt: enCopy,
 };
 
+const localizedCopy: Record<Language, typeof enCopy> = {
+  en: enCopy,
+  sv: {
+    nav: { product: "Produkt", workflow: "Arbetsflöde", pricing: "Beta", start: "Börja bygga" },
+    hero: {
+      eyebrow: "AI-CAD för verkliga 3D-utskrifter",
+      title: "Hitta modellen. Ändra detaljerna. Exportera för din skrivare.",
+      body: "Cadio söker i publika 3D-modellkällor, gör starka träffar redigerbara och samlar mått, varianter, material och export i ett rent flöde.",
+      prompt: "verktygshållare till verktygstavla, snusdosehållare till cykel, vikbart telefonställ...",
+      primary: "Börja bygga",
+      secondary: "Betatillgång",
+    },
+    stats: [
+      ["Källbaserad", "Söker efter beprövade printbara modeller innan CAD-logiken tar över"],
+      ["Prompt + CAD", "Beskriv med vanlig text och finjustera sedan delar, mått, kanter och transformeringar"],
+      ["Printklar", "Skrivare, material, skala, skaparinställningar och exportformat hålls ihop"],
+    ],
+    product: {
+      title: "En CAD-byggare för alla nivåer",
+      body: "Easy mode hjälper dig beskriva vad du vill skapa. Expert mode ger dig kontroll över skisser, delar, transformeringar, kanter och CAD-operationer.",
+    },
+    cards: [
+      ["Bred modellsökning", "Skriv på engelska, svenska, spanska, franska, italienska, tyska eller portugisiska. Cadio normaliserar prompten innan sökning."],
+      ["Variantkontroll", "Byt till nästa eller föregående populära träff när första resultatet är nära men inte rätt."],
+      ["Manuell CAD", "Rita, markera delar, flytta, rotera, mät och förfina modellen när du vill ta över själv."],
+    ],
+    details: {
+      label: "Praktiskt CAD-flöde",
+      title: "Byggd för steget mellan idé och slicer",
+      body: "De flesta printprojekt börjar som en halvtydlig idé: en hållare för en viss plats, ett fäste för ett visst verktyg eller en remix av en känd modell. Cadio håller sökning, varianter, mått, printinställningar och CAD-redigering nära varandra.",
+      items: [
+        ["Variantkontroll", "Byt modellförslag när första resultatet inte passar."],
+        ["Verkliga mått", "Kontrollera mått och skala innan filen hamnar i skrivarprofilen."],
+        ["Redigerbart flöde", "Börja med AI och finjustera sedan för hand när precision spelar roll."],
+      ],
+    },
+    workflow: {
+      title: "Från idé till STL utan att byta verktyg",
+      steps: [
+        ["1", "Skriv en prompt", "Exempel: mugg-hållare till skrivbord, telefonställ eller en reservdelshållare."],
+        ["2", "Välj variant", "Byt mellan populära modellförslag tills formen sitter."],
+        ["3", "Finjustera", "Ändra dimensioner, material, färg, placering och CAD-detaljer."],
+        ["4", "Exportera", "Ladda ner STL, 3MF, OBJ eller AMF med rekommenderade printinställningar."],
+      ],
+    },
+    pricingTitle: "Priser kommer snart",
+    pricingBody: "Just nu är Cadio gratis under Early Access Beta. Bygg, redigera och ladda ner medan vi förbättrar plattformen.",
+    beta: {
+      title: "Early Access Beta",
+      body: "Cadio är under aktiv utveckling.",
+      downloads: "Alla nedladdningar är upplåsta just nu.",
+      pricing: "Priser lanseras senare.",
+      feedback: "Vi tar gärna emot feedback på",
+    },
+  },
+  es: {
+    ...enCopy,
+    nav: { product: "Producto", workflow: "Flujo", pricing: "Beta", start: "Empezar" },
+    hero: {
+      eyebrow: "Búsqueda CAD con IA para impresión 3D real",
+      title: "Encuentra el modelo. Ajusta los detalles. Expórtalo para tu impresora.",
+      body: "Cadio busca en fuentes públicas de modelos imprimibles, convierte las mejores coincidencias en un espacio editable y mantiene dimensiones, variantes, materiales y exportación en un flujo limpio.",
+      prompt: "soporte de herramientas para panel, soporte de lata para bicicleta, soporte de teléfono plegable...",
+      primary: "Empezar",
+      secondary: "Acceso beta",
+    },
+    stats: [
+      ["Basado en fuentes", "Busca modelos imprimibles probados antes de usar lógica CAD"],
+      ["Prompt + CAD", "Describe con lenguaje natural y luego edita piezas, dimensiones, bordes y transformaciones"],
+      ["Listo para imprimir", "Impresora, material, escala, ajustes del creador y formato de exportación juntos"],
+    ],
+    product: {
+      title: "Un constructor CAD para todos los niveles",
+      body: "El modo Easy ayuda a describir lo que quieres. El modo Expert te da control sobre bocetos, piezas, transformaciones, bordes y operaciones CAD.",
+    },
+    cards: [
+      ["Búsqueda amplia", "Escribe en inglés, sueco, español, francés, italiano, alemán o portugués. Cadio normaliza el prompt antes de buscar."],
+      ["Control de variantes", "Cambia a la coincidencia popular siguiente o anterior cuando el primer resultado está cerca, pero no es perfecto."],
+      ["CAD manual", "Dibuja, selecciona piezas, mueve, rota, mide y ajusta el modelo cuando quieras control directo."],
+    ],
+    details: {
+      label: "Flujo CAD práctico",
+      title: "Creado para el paso entre búsqueda y slicer",
+      body: "La mayoría de las impresiones empiezan como una idea parcial: un soporte para un lugar concreto, una pieza para una herramienta concreta o una remezcla de un modelo conocido. Cadio mantiene búsqueda, variantes, medidas, ajustes de impresión y edición CAD cerca.",
+      items: [["Variantes", "Cambia de propuesta cuando el primer resultado no encaja."], ["Medidas reales", "Comprueba límites y escala antes de enviar el archivo a tu perfil de impresora."], ["Flujo editable", "Empieza con IA y ajusta a mano cuando la precisión importa."]],
+    },
+    workflow: {
+      title: "De la idea al STL sin cambiar de herramienta",
+      steps: [["1", "Escribe un prompt", "Ejemplo: soporte de taza para escritorio, soporte de teléfono o una pieza de repuesto."], ["2", "Elige una variante", "Avanza por opciones populares hasta encontrar la forma correcta."], ["3", "Ajusta", "Cambia dimensiones, material, color, colocación y detalles CAD."], ["4", "Exporta", "Descarga STL, 3MF, OBJ o AMF con ajustes de impresión recomendados."]],
+    },
+    pricingTitle: "Precios próximamente",
+    pricingBody: "Por ahora, Cadio es gratis durante Early Access Beta. Crea, edita y descarga mientras mejoramos la plataforma.",
+    beta: { title: "Early Access Beta", body: "Cadio está en desarrollo activo.", downloads: "Todas las descargas están desbloqueadas por ahora.", pricing: "Los precios llegarán más adelante.", feedback: "Agradecemos tus comentarios en" },
+  },
+  fr: {
+    ...enCopy,
+    nav: { product: "Produit", workflow: "Flux", pricing: "Bêta", start: "Commencer" },
+    hero: {
+      eyebrow: "Recherche CAO IA pour une vraie impression 3D",
+      title: "Trouvez le modèle. Ajustez les détails. Exportez pour votre imprimante.",
+      body: "Cadio recherche dans des sources publiques de modèles imprimables, transforme les meilleures correspondances en espace éditable et garde dimensions, variantes, matériaux et export dans un flux clair.",
+      prompt: "support d'outils pour panneau, support de boîte pour vélo, support de téléphone pliable...",
+      primary: "Commencer",
+      secondary: "Accès bêta",
+    },
+    stats: [["Basé sur des sources", "Recherche des modèles imprimables éprouvés avant la logique CAO"], ["Prompt + CAO", "Décrivez en langage naturel, puis modifiez pièces, dimensions, arêtes et transformations"], ["Prêt à imprimer", "Imprimante, matériau, échelle, réglages créateur et format d'export restent ensemble"]],
+    product: { title: "Un constructeur CAO pour tous les niveaux", body: "Le mode Easy aide à décrire ce que vous voulez. Le mode Expert donne le contrôle sur les esquisses, pièces, transformations, arêtes et opérations CAO." },
+    cards: [["Recherche large", "Écrivez en anglais, suédois, espagnol, français, italien, allemand ou portugais. Cadio normalise le prompt avant la recherche."], ["Variantes", "Passez au résultat populaire suivant ou précédent quand le premier est proche, mais pas parfait."], ["CAO manuelle", "Dessinez, sélectionnez les pièces, déplacez, faites pivoter, mesurez et affinez le modèle."]],
+    details: {
+      label: "Flux CAO pratique",
+      title: "Pensé pour l'étape entre recherche et slicer",
+      body: "La plupart des impressions commencent par une idée incomplète : un support pour un endroit précis, une fixation pour un outil précis ou un remix d'un modèle connu. Cadio garde recherche, variantes, mesures, réglages d'impression et édition CAO au même endroit.",
+      items: [["Contrôle des variantes", "Changez de proposition si le premier résultat ne convient pas."], ["Dimensions réelles", "Vérifiez limites et échelle avant le profil d'imprimante."], ["Flux éditable", "Commencez avec l'IA, puis ajustez à la main quand la précision compte."]],
+    },
+    workflow: { title: "De l'idée au STL sans changer d'outil", steps: [["1", "Écrivez un prompt", "Exemple : support de tasse pour bureau, support de téléphone ou pièce de remplacement."], ["2", "Choisissez une variante", "Parcourez les options populaires jusqu'à trouver la bonne forme."], ["3", "Affinez", "Ajustez dimensions, matériau, couleur, placement et détails CAO."], ["4", "Exportez", "Téléchargez STL, 3MF, OBJ ou AMF avec des réglages d'impression recommandés."]] },
+    pricingTitle: "Tarifs à venir",
+    pricingBody: "Pour l'instant, Cadio est gratuit pendant Early Access Beta. Créez, modifiez et téléchargez pendant que nous améliorons la plateforme.",
+    beta: { title: "Early Access Beta", body: "Cadio est en développement actif.", downloads: "Tous les téléchargements sont actuellement débloqués.", pricing: "Les tarifs seront lancés plus tard.", feedback: "Vos retours sont les bienvenus à" },
+  },
+  it: {
+    ...enCopy,
+    nav: { product: "Prodotto", workflow: "Flusso", pricing: "Beta", start: "Inizia" },
+    hero: { eyebrow: "Ricerca CAD con IA per vera stampa 3D", title: "Trova il modello. Modifica i dettagli. Esporta per la tua stampante.", body: "Cadio cerca fonti pubbliche di modelli stampabili, trasforma le corrispondenze migliori in uno spazio modificabile e tiene insieme dimensioni, varianti, materiali ed esportazione.", prompt: "supporto utensili per pannello, porta lattina per bici, supporto telefono pieghevole...", primary: "Inizia", secondary: "Accesso beta" },
+    stats: [["Basato su fonti", "Cerca modelli stampabili collaudati prima della logica CAD"], ["Prompt + CAD", "Descrivi in linguaggio naturale, poi modifica parti, dimensioni, bordi e trasformazioni"], ["Pronto per stampa", "Stampante, materiale, scala, impostazioni del creatore e formato di export restano insieme"]],
+    product: { title: "Un builder CAD per ogni livello", body: "Easy mode aiuta a descrivere cosa vuoi. Expert mode dà controllo su schizzi, parti, trasformazioni, bordi e operazioni CAD." },
+    cards: [["Ricerca ampia", "Scrivi in inglese, svedese, spagnolo, francese, italiano, tedesco o portoghese. Cadio normalizza il prompt prima della ricerca."], ["Controllo varianti", "Passa al modello popolare successivo o precedente quando il primo risultato è vicino ma non corretto."], ["CAD manuale", "Disegna, seleziona parti, sposta, ruota, misura e rifinisci il modello quando vuoi controllo diretto."]],
+    details: { label: "Flusso CAD pratico", title: "Creato per il passaggio tra ricerca e slicer", body: "Molte stampe iniziano da un'idea parziale: un supporto per un luogo preciso, una staffa per uno strumento preciso o un remix di un modello noto. Cadio tiene insieme ricerca, varianti, misure, impostazioni di stampa e modifica CAD.", items: [["Varianti", "Cambia proposta quando il primo risultato non va bene."], ["Misure reali", "Controlla ingombri e scala prima del profilo stampante."], ["Flusso modificabile", "Inizia con l'IA e regola a mano quando serve precisione."]] },
+    workflow: { title: "Dall'idea allo STL senza cambiare strumento", steps: [["1", "Scrivi un prompt", "Esempio: supporto tazza da scrivania, supporto telefono o ricambio."], ["2", "Scegli una variante", "Scorri opzioni popolari finché la forma è giusta."], ["3", "Rifinisci", "Modifica dimensioni, materiale, colore, posizione e dettagli CAD."], ["4", "Esporta", "Scarica STL, 3MF, OBJ o AMF con impostazioni di stampa consigliate."]] },
+    pricingTitle: "Prezzi in arrivo",
+    pricingBody: "Per ora Cadio è gratuito durante Early Access Beta. Crea, modifica e scarica mentre miglioriamo la piattaforma.",
+    beta: { title: "Early Access Beta", body: "Cadio è in sviluppo attivo.", downloads: "Tutti i download sono attualmente sbloccati.", pricing: "I prezzi arriveranno più avanti.", feedback: "Accogliamo feedback a" },
+  },
+  de: {
+    ...enCopy,
+    nav: { product: "Produkt", workflow: "Ablauf", pricing: "Beta", start: "Starten" },
+    hero: { eyebrow: "KI-CAD-Suche für echten 3D-Druck", title: "Modell finden. Details anpassen. Für deinen Drucker exportieren.", body: "Cadio durchsucht öffentliche Quellen für druckbare Modelle, macht starke Treffer editierbar und hält Maße, Varianten, Materialien und Export in einem klaren Ablauf zusammen.", prompt: "Werkzeughalter für Lochwand, Dosenhalter fürs Fahrrad, klappbarer Handyhalter...", primary: "Starten", secondary: "Beta-Zugang" },
+    stats: [["Quellenbasiert", "Sucht bewährte druckbare Modelle, bevor CAD-Logik übernimmt"], ["Prompt + CAD", "Beschreibe in natürlicher Sprache und bearbeite danach Teile, Maße, Kanten und Transformationen"], ["Druckbereit", "Drucker, Material, Skalierung, Creator-Einstellungen und Exportformat bleiben zusammen"]],
+    product: { title: "Ein CAD-Builder für jedes Niveau", body: "Easy Mode hilft beim Beschreiben. Expert Mode gibt Kontrolle über Skizzen, Teile, Transformationen, Kanten und CAD-Operationen." },
+    cards: [["Breite Modellsuche", "Schreibe auf Englisch, Schwedisch, Spanisch, Französisch, Italienisch, Deutsch oder Portugiesisch. Cadio normalisiert den Prompt vor der Suche."], ["Variantenkontrolle", "Wechsle zum nächsten oder vorherigen populären Treffer, wenn das erste Ergebnis nah dran ist."], ["Manuelles CAD", "Zeichne, wähle Teile, verschiebe, rotiere, messe und verfeinere das Modell direkt."]],
+    details: { label: "Praktischer CAD-Ablauf", title: "Gebaut für den Schritt zwischen Suche und Slicer", body: "Viele Druckprojekte beginnen als halbfertige Idee: ein Halter für einen bestimmten Ort, eine Halterung für ein bestimmtes Werkzeug oder ein Remix eines bekannten Modells. Cadio hält Suche, Varianten, Maße, Druckeinstellungen und CAD-Bearbeitung nah beieinander.", items: [["Varianten", "Wechsle den Modellvorschlag, wenn der erste nicht passt."], ["Echte Maße", "Prüfe Abmessungen und Skalierung vor dem Druckerprofil."], ["Editierbarer Ablauf", "Starte mit KI und passe manuell an, wenn Präzision zählt."]] },
+    workflow: { title: "Von der Idee zur STL ohne Werkzeugwechsel", steps: [["1", "Prompt schreiben", "Beispiel: Becherhalter mit Tischklemme, Handyhalter oder Ersatzteilhalter."], ["2", "Variante wählen", "Gehe durch populäre Optionen, bis die Form stimmt."], ["3", "Feinabstimmen", "Ändere Maße, Material, Farbe, Platzierung und CAD-Details."], ["4", "Exportieren", "Lade STL, 3MF, OBJ oder AMF mit empfohlenen Druckeinstellungen herunter."]] },
+    pricingTitle: "Preise kommen bald",
+    pricingBody: "Während Early Access Beta ist Cadio kostenlos. Erstelle, bearbeite und lade herunter, während wir die Plattform verbessern.",
+    beta: { title: "Early Access Beta", body: "Cadio befindet sich in aktiver Entwicklung.", downloads: "Alle Downloads sind derzeit freigeschaltet.", pricing: "Preise starten später.", feedback: "Feedback gerne an" },
+  },
+  pt: {
+    ...enCopy,
+    nav: { product: "Produto", workflow: "Fluxo", pricing: "Beta", start: "Começar" },
+    hero: { eyebrow: "Pesquisa CAD com IA para impressão 3D real", title: "Encontre o modelo. Ajuste os detalhes. Exporte para a sua impressora.", body: "Cadio pesquisa fontes públicas de modelos imprimíveis, transforma boas correspondências em um espaço editável e mantém dimensões, variantes, materiais e exportação em um fluxo limpo.", prompt: "suporte de ferramentas para painel, suporte de lata para bicicleta, suporte dobrável para telefone...", primary: "Começar", secondary: "Acesso beta" },
+    stats: [["Baseado em fontes", "Procura modelos imprimíveis comprovados antes de usar lógica CAD"], ["Prompt + CAD", "Descreva em linguagem natural e depois edite peças, dimensões, bordas e transformações"], ["Pronto para imprimir", "Impressora, material, escala, configurações do criador e formato de exportação juntos"]],
+    product: { title: "Um construtor CAD para todos os níveis", body: "O modo Easy ajuda a descrever o que você quer. O modo Expert dá controle sobre esboços, peças, transformações, bordas e operações CAD." },
+    cards: [["Pesquisa ampla", "Escreva em inglês, sueco, espanhol, francês, italiano, alemão ou português. Cadio normaliza o prompt antes de pesquisar."], ["Controle de variantes", "Passe para o próximo ou anterior modelo popular quando o primeiro resultado estiver perto, mas não perfeito."], ["CAD manual", "Desenhe, selecione peças, mova, gire, meça e refine o modelo quando quiser controle direto."]],
+    details: { label: "Fluxo CAD prático", title: "Feito para o passo entre pesquisa e slicer", body: "A maioria das impressões começa como uma ideia parcial: um suporte para um lugar específico, uma peça para uma ferramenta específica ou um remix de um modelo conhecido. Cadio mantém pesquisa, variantes, medidas, configurações de impressão e edição CAD no mesmo fluxo.", items: [["Variantes", "Troque de proposta quando o primeiro resultado não servir."], ["Medidas reais", "Confira limites e escala antes do perfil da impressora."], ["Fluxo editável", "Comece com IA e ajuste manualmente quando precisão importar."]] },
+    workflow: { title: "Da ideia ao STL sem trocar de ferramenta", steps: [["1", "Escreva um prompt", "Exemplo: suporte de caneca para mesa, suporte de telefone ou peça de reposição."], ["2", "Escolha uma variante", "Passe por opções populares até encontrar a forma certa."], ["3", "Ajuste", "Altere dimensões, material, cor, posicionamento e detalhes CAD."], ["4", "Exporte", "Baixe STL, 3MF, OBJ ou AMF com configurações de impressão recomendadas."]] },
+    pricingTitle: "Preços em breve",
+    pricingBody: "Por enquanto, Cadio é gratuito durante o Early Access Beta. Crie, edite e baixe enquanto melhoramos a plataforma.",
+    beta: { title: "Early Access Beta", body: "Cadio está em desenvolvimento ativo.", downloads: "Todos os downloads estão liberados no momento.", pricing: "Os preços serão lançados depois.", feedback: "Agradecemos feedback em" },
+  },
+};
+
 function PrintedCuboid({
   size,
   position,
@@ -210,6 +370,93 @@ function SkadisSlot({
   );
 }
 
+function SkadisBin({
+  width,
+  height,
+  depth,
+  position,
+  material,
+  rimMaterial,
+  lineMaterial,
+  compartments = 0,
+}: {
+  width: number;
+  height: number;
+  depth: number;
+  position: [number, number, number];
+  material: THREE.Material;
+  rimMaterial: THREE.Material;
+  lineMaterial: THREE.Material;
+  compartments?: number;
+}) {
+  const wall = 0.08;
+  return (
+    <group position={position}>
+      <mesh material={material} position={[0, -height / 2, depth / 2]} castShadow receiveShadow>
+        <boxGeometry args={[width, wall, depth]} />
+      </mesh>
+      <mesh material={material} position={[0, -height * 0.12, depth + wall / 2]} castShadow receiveShadow>
+        <boxGeometry args={[width, height * 0.76, wall]} />
+      </mesh>
+      <mesh material={material} position={[-width / 2 + wall / 2, -height * 0.1, depth / 2]} castShadow receiveShadow>
+        <boxGeometry args={[wall, height * 0.82, depth]} />
+      </mesh>
+      <mesh material={material} position={[width / 2 - wall / 2, -height * 0.1, depth / 2]} castShadow receiveShadow>
+        <boxGeometry args={[wall, height * 0.82, depth]} />
+      </mesh>
+      <mesh material={rimMaterial} position={[0, height * 0.31, depth + wall]} castShadow>
+        <boxGeometry args={[width * 0.98, wall, wall]} />
+      </mesh>
+      <mesh material={rimMaterial} position={[0, height * 0.31, depth * 0.12]} castShadow>
+        <boxGeometry args={[width * 0.98, wall, wall]} />
+      </mesh>
+      {Array.from({ length: 3 }).map((_, index) => (
+        <mesh key={index} material={lineMaterial} position={[0, -height * 0.36 + index * height * 0.2, depth + wall + 0.006]}>
+          <boxGeometry args={[width * 0.86, 0.012, 0.012]} />
+        </mesh>
+      ))}
+      {Array.from({ length: compartments }).map((_, index) => {
+        const x = -width / 2 + ((index + 1) * width) / (compartments + 1);
+        return (
+          <mesh key={index} material={rimMaterial} position={[x, height * 0.31, depth * 0.55]} castShadow>
+            <boxGeometry args={[0.055, wall, depth * 0.72]} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function ToolRod({
+  position,
+  rotation,
+  length,
+  radius,
+  material,
+  accentMaterial,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  length: number;
+  radius: number;
+  material: THREE.Material;
+  accentMaterial: THREE.Material;
+}) {
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh material={material} castShadow>
+        <cylinderGeometry args={[radius, radius, length, 26]} />
+      </mesh>
+      <mesh material={accentMaterial} position={[0, length / 2 + 0.055, 0]} castShadow>
+        <cylinderGeometry args={[radius * 1.18, radius * 1.18, 0.11, 26]} />
+      </mesh>
+      <mesh material={accentMaterial} position={[0, -length / 2 - 0.04, 0]} castShadow>
+        <cylinderGeometry args={[radius * 1.32, radius * 1.32, 0.08, 26]} />
+      </mesh>
+    </group>
+  );
+}
+
 function HeroModel() {
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef({ active: false, x: 0, rotation: 0, suppressContext: false });
@@ -232,6 +479,10 @@ function HeroModel() {
   );
   const grayPrint = useMemo(
     () => new THREE.MeshStandardMaterial({ color: "#8f969a", roughness: 0.74, metalness: 0.02 }),
+    [],
+  );
+  const metalTool = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#d7d3ca", roughness: 0.32, metalness: 0.7 }),
     [],
   );
   const tealPrint = useMemo(
@@ -308,70 +559,38 @@ function HeroModel() {
           <SkadisSlot key={`${x}-${y}`} x={x} y={y} material={holeMaterial} rimMaterial={slotRimMaterial} />
         ))}
 
-        <group position={[-2.35, 0.95, 0.24]}>
-          {[-0.34, 0, 0.34].map((x) => (
-            <group key={x} position={[x, 0, 0]}>
-              <mesh material={blackPrint} position={[0, 0.18, 0]} castShadow>
-                <boxGeometry args={[0.09, 0.48, 0.18]} />
-              </mesh>
-              <mesh material={blackPrint} position={[0, -0.12, 0.14]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-                <torusGeometry args={[0.16, 0.028, 10, 26, Math.PI * 1.35]} />
-              </mesh>
-            </group>
-          ))}
-        </group>
-
-        <group position={[1.65, 1.1, 0.33]}>
-          <PrintedCuboid size={[1.6, 0.16, 0.72]} position={[0, -0.22, 0]} material={blackPrint} lineMaterial={layerLine} lineCount={2} />
-          <PrintedCuboid size={[0.18, 0.72, 0.64]} position={[-0.55, -0.6, -0.02]} material={blackPrint} lineMaterial={layerLine} lineCount={3} />
-          <PrintedCuboid size={[0.18, 0.72, 0.64]} position={[0.55, -0.6, -0.02]} material={blackPrint} lineMaterial={layerLine} lineCount={3} />
-          <mesh material={tealPrint} position={[0, -0.09, 0.43]} castShadow>
-            <boxGeometry args={[1.25, 0.08, 0.08]} />
+        <group position={[-2.32, -0.74, 0.18]}>
+          <SkadisBin width={1.48} height={1.18} depth={0.7} position={[0, 0, 0]} material={blackPrint} rimMaterial={grayPrint} lineMaterial={layerLine} compartments={4} />
+          <ToolRod position={[-0.34, 0.73, 0.72]} rotation={[0.42, 0.08, -0.18]} length={1.18} radius={0.055} material={metalTool} accentMaterial={grayPrint} />
+          <ToolRod position={[0.22, 0.66, 0.68]} rotation={[0.28, -0.04, 0.22]} length={1.0} radius={0.045} material={metalTool} accentMaterial={blackPrint} />
+          <mesh material={metalTool} position={[0.02, 0.34, 0.78]} rotation={[Math.PI / 2, 0, 0.1]} castShadow>
+            <torusGeometry args={[0.15, 0.022, 12, 32]} />
           </mesh>
         </group>
 
-        <group position={[-1.35, -0.7, 0.36]}>
-          <PrintedCuboid size={[1.55, 0.78, 0.54]} position={[0, -0.08, 0.03]} material={tealPrint} lineMaterial={layerLine} lineCount={5} />
-          <PrintedCuboid size={[1.35, 0.18, 0.18]} position={[0, 0.38, 0.25]} material={tealPrint} lineMaterial={layerLine} lineCount={1} />
-          <PrintedCuboid size={[0.14, 0.66, 0.26]} position={[-0.69, 0, 0.23]} material={tealPrint} lineMaterial={layerLine} lineCount={3} />
-          <PrintedCuboid size={[0.14, 0.66, 0.26]} position={[0.69, 0, 0.23]} material={tealPrint} lineMaterial={layerLine} lineCount={3} />
+        <group position={[0.02, -1.08, 0.18]}>
+          <SkadisBin width={1.34} height={1.34} depth={0.78} position={[0, 0, 0]} material={tealPrint} rimMaterial={grayPrint} lineMaterial={layerLine} compartments={0} />
+          <ToolRod position={[0.26, 0.8, 0.8]} rotation={[0.52, 0.08, -0.34]} length={1.12} radius={0.07} material={blackPrint} accentMaterial={metalTool} />
+          <mesh material={blackPrint} position={[-0.28, 0.38, 0.74]} rotation={[0.24, 0, 0.18]} castShadow>
+            <boxGeometry args={[0.22, 0.86, 0.12]} />
+          </mesh>
         </group>
 
-        <group position={[1.28, -0.72, 0.54]}>
-          <mesh material={amberPrint} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
-            <cylinderGeometry args={[0.42, 0.44, 0.72, 42]} />
+        <group position={[2.34, -0.98, 0.18]}>
+          <SkadisBin width={1.12} height={1.08} depth={0.62} position={[0, 0, 0]} material={blackPrint} rimMaterial={grayPrint} lineMaterial={layerLine} compartments={2} />
+          <ToolRod position={[0.22, 0.72, 0.68]} rotation={[0.58, -0.05, -0.2]} length={1.02} radius={0.06} material={metalTool} accentMaterial={amberPrint} />
+          <mesh material={grayPrint} position={[-0.22, 0.54, 0.73]} rotation={[0.62, 0.1, 0.34]} castShadow>
+            <boxGeometry args={[0.16, 0.74, 0.12]} />
           </mesh>
-          <mesh material={holeMaterial} position={[0, 0, 0.38]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.31, 0.31, 0.018, 42]} />
-          </mesh>
-          {[-0.22, 0.02, 0.26].map((z, index) => (
-            <mesh key={index} material={layerLine} position={[0, 0, z]} rotation={[Math.PI / 2, 0, 0]}>
-              <torusGeometry args={[0.445, 0.008, 6, 44]} />
+        </group>
+
+        <group position={[2.14, 1.06, 0.24]}>
+          <PrintedCuboid size={[1.36, 0.18, 0.36]} position={[0, 0, 0]} material={grayPrint} lineMaterial={layerLine} lineCount={2} />
+          {[-0.52, -0.17, 0.18, 0.53].map((x) => (
+            <mesh key={x} material={blackPrint} position={[x, 0.34, 0.02]} castShadow>
+              <boxGeometry args={[0.11, 0.48, 0.18]} />
             </mesh>
           ))}
-        </group>
-
-        <group position={[-2.0, -1.55, 0.25]}>
-          <PrintedCuboid size={[2.2, 0.18, 0.36]} position={[0, 0, 0]} material={grayPrint} lineMaterial={layerLine} lineCount={2} />
-          {[-0.78, -0.39, 0, 0.39, 0.78].map((x) => (
-            <mesh key={x} material={grayPrint} position={[x, 0.3, 0.04]} castShadow>
-              <boxGeometry args={[0.12, 0.52, 0.18]} />
-            </mesh>
-          ))}
-        </group>
-
-        <group position={[2.65, -1.35, 0.28]}>
-          {[-0.3, 0, 0.3].map((y, index) => (
-            <mesh key={index} material={blackPrint} position={[0, y, 0]} castShadow>
-              <boxGeometry args={[0.95, 0.08, 0.22]} />
-            </mesh>
-          ))}
-          <mesh material={blackPrint} position={[-0.48, 0, 0]} castShadow>
-            <boxGeometry args={[0.08, 0.72, 0.22]} />
-          </mesh>
-          <mesh material={blackPrint} position={[0.48, 0, 0]} castShadow>
-            <boxGeometry args={[0.08, 0.72, 0.22]} />
-          </mesh>
         </group>
       </group>
     </group>
@@ -399,7 +618,7 @@ function HeroScene() {
 export default function LandingPage({ onStartBuilding }: { onStartBuilding: () => void }) {
   const [language, setLanguage] = useState<Language>("en");
   const [betaOpen, setBetaOpen] = useState(false);
-  const text = copy[language];
+  const text = localizedCopy[language];
 
   return (
     <div className="h-full overflow-y-auto bg-[#151515] text-white">
