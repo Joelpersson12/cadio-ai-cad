@@ -94,6 +94,10 @@ class ScenePayload(BaseModel):
 class GenerateRequest(BaseModel):
     session_id: str | None = None
     prompt: str = ""
+    image: str | None = None
+    imageName: str | None = None
+    imageType: str | None = None
+    mode: Literal["text", "image", "hybrid"] = "text"
     printer: str = "choose_printer"
     fit: bool = True
 

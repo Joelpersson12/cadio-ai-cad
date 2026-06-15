@@ -8,14 +8,14 @@ import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../uti
 
 const VIEW_COLORS = {
   background: "#303133",
-  plate: "#56585c",
-  plateEdge: "#a9afb8",
-  gridCell: "#707780",
-  gridSection: "#d2d6dc",
-  neutralBody: "#c7c4bc",
-  selectedBody: "#123a64",
-  hoveredBody: "#cfd1d2",
-  edgeSubtle: "#202124",
+  plate: "#6b7280",
+  plateEdge: "#cbd5e1",
+  gridCell: "#8b949e",
+  gridSection: "#d1d5db",
+  neutralBody: "#b8bcc4",
+  selectedBody: "#2563eb",
+  hoveredBody: "#93c5fd",
+  edgeSubtle: "#4b5563",
   edgeStrong: "#e7faff",
   edgeSelected: "#dbeafe",
   edgeSelectedInk: "#071f3b",
@@ -459,12 +459,16 @@ function ScaledMesh({
     >
       <meshPhysicalMaterial
         color={visibleBodyColor(obj, selected, hovered)}
-        roughness={selected ? 0.68 : 0.74}
-        metalness={selected ? 0.04 : 0.02}
-        clearcoat={selected ? 0.08 : 0.04}
-        clearcoatRoughness={0.82}
-        emissive={selected ? "#061a33" : hovered ? "#111314" : "#000000"}
-        emissiveIntensity={selected ? 0.06 : hovered ? 0.04 : 0}
+        roughness={selected ? 0.52 : 0.58}
+        metalness={0}
+        clearcoat={0.02}
+        clearcoatRoughness={0.72}
+        emissive={selected ? "#061f59" : hovered ? "#10213d" : "#000000"}
+        emissiveIntensity={selected ? 0.05 : hovered ? 0.035 : 0}
+        transparent={false}
+        opacity={1}
+        depthWrite
+        depthTest
         polygonOffset
         polygonOffsetFactor={1}
         polygonOffsetUnits={1}
@@ -475,7 +479,7 @@ function ScaledMesh({
       <lineBasicMaterial
         color={selected ? VIEW_COLORS.edgeSelectedInk : hovered ? VIEW_COLORS.edgeHover : VIEW_COLORS.edgeSubtle}
         transparent
-        opacity={selected ? 0.98 : hovered ? 0.72 : 0.28}
+        opacity={selected ? 0.75 : hovered ? 0.58 : 0.34}
         depthTest
       />
     </lineSegments>
@@ -485,7 +489,7 @@ function ScaledMesh({
         <lineBasicMaterial
           color={VIEW_COLORS.edgeSelected}
           transparent
-          opacity={0.78}
+          opacity={0.42}
           depthTest
         />
       </lineSegments>
@@ -496,7 +500,7 @@ function ScaledMesh({
         <lineBasicMaterial
           color={selectionMode === "edge" ? VIEW_COLORS.edgeStrong : selectionMode === "face" ? "#b9a7ff" : VIEW_COLORS.edgeSelectedDetail}
           transparent
-          opacity={hovered && !selected ? 1 : 0.9}
+          opacity={hovered && !selected ? 0.72 : 0.58}
           depthTest
         />
       </lineSegments>
@@ -558,10 +562,10 @@ function BuildPlate({
         <boxGeometry args={[px, 0.04, py]} />
         <meshStandardMaterial 
           color={VIEW_COLORS.plate}
-          roughness={0.82}
-          metalness={0.02}
+          roughness={0.86}
+          metalness={0}
           transparent
-          opacity={0.11}
+          opacity={0.16}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
@@ -924,13 +928,14 @@ export default function CadViewport({
       </div>
       <Canvas
         shadows
-        dpr={[1, 1.5]}
+        dpr={[1, Math.min(window.devicePixelRatio || 1, 2)]}
         camera={{ position: [300, 220, 300], fov: 42, near: 0.1, far: 10000 }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
           gl.toneMapping = THREE.NeutralToneMapping;
-          gl.toneMappingExposure = 1.08;
+          gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          gl.toneMappingExposure = 1.16;
         }}
         onPointerUp={() => setTransformDragging(false)}
         onPointerMissed={(event) => {
@@ -941,11 +946,11 @@ export default function CadViewport({
       <color attach="background" args={[VIEW_COLORS.background]} />
  
       {/* Lighting - enhanced for clarity */}
-      <hemisphereLight intensity={0.95} color="#ffffff" groundColor="#56585c" />
-      <ambientLight intensity={0.62} color="#ffffff" />
+      <hemisphereLight intensity={1.05} color="#ffffff" groundColor="#6b7280" />
+      <ambientLight intensity={0.7} color="#ffffff" />
       <directionalLight
         position={[220, 280, 180]}
-        intensity={2.15}
+        intensity={2.35}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
@@ -958,9 +963,9 @@ export default function CadViewport({
         shadow-bias={-0.00008}
         shadow-normalBias={0.025}
       />
-      <directionalLight position={[-220, 180, -180]} intensity={0.9} color="#e8f2ff" />
-      <directionalLight position={[40, -100, 160]} intensity={0.55} color="#ffffff" />
-      <pointLight position={[0, 260, 0]} intensity={0.28} color="#ffffff" />
+      <directionalLight position={[-220, 180, -180]} intensity={0.78} color="#e8f2ff" />
+      <directionalLight position={[40, -100, 160]} intensity={0.42} color="#ffffff" />
+      <pointLight position={[0, 260, 0]} intensity={0.22} color="#ffffff" />
  
       {/* Grid - improved visibility */}
       <Grid

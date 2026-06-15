@@ -39,6 +39,7 @@ from backend.services.export_service import (
     export_assembly,
     media_type_for,
 )
+from backend.services.image_to_3d import ImageTo3DError, build_image_model
 from backend.services.object_manager import (
     DEFAULT_PRINTER,
     PRINTERS,
@@ -289,9 +290,33 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
 
             prompt = (data.prompt or "").strip().lower()
             command_prompt = f"{prompt} {normalize_source_query(data.prompt)}".strip().lower()
+            image_mode = data.mode in {"image", "hybrid"} or bool(data.image)
 
             # Special commands
-            if "duplicate" in command_prompt:
+            if image_mode:
+                image_prompt = data.prompt.strip() or "Turn this image into a printable 3D model."
+                try:
+                    result = build_image_model(
+                        data.image,
+                        image_prompt,
+                        data.imageName or "uploaded image",
+                    )
+                except ImageTo3DError as exc:
+                    return _error(400, str(exc))
+                obj = prepare_generation_target(
+                    session,
+                    f"image_to_3d_{len(session['edit_history']) + 1}",
+                )
+                obj["shape"] = result.mesh
+                obj["parameters"] = result.parameters
+                obj["primitive"] = "image_to_3d"
+                obj["template_hint"] = None
+                obj["manual"] = True
+                obj["color"] = "#b8bcc4"
+                session["selected_object_id"] = obj["id"]
+                actions = result.actions
+                data.prompt = image_prompt
+            elif "duplicate" in command_prompt:
                 duplicate_object(session)
                 actions = ["duplicate selected object"]
             elif "delete object" in command_prompt or "remove object" in command_prompt:
