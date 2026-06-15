@@ -139,7 +139,7 @@ export default function DesktopBuilderOverlay() {
           Delete selected
         </button>
       )}
-      <div className="pointer-events-auto absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 w-[min(760px,calc(100%-1.5rem))] -translate-x-1/2 md:w-[min(760px,calc(100%-8rem))]">
+      <div className="pointer-events-auto absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-3 right-24 w-auto md:left-1/2 md:right-auto md:w-[min(560px,calc(100%-22rem))] md:-translate-x-1/2">
         {(attachment || error) && (
           <div className="mb-2 rounded-xl border border-[#333] bg-[#151515]/95 p-2 text-xs text-white shadow-xl backdrop-blur">
             {attachment && (
@@ -247,7 +247,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 async function imageFileToMask(file: File): Promise<AttachedImage> {
   const previewUrl = await readAsDataUrl(file);
   const image = await loadImage(previewUrl);
-  const maxSize = 96;
+  const maxSize = 128;
   const scale = Math.min(maxSize / Math.max(image.width, image.height), 1);
   const width = Math.max(1, Math.round(image.width * scale));
   const height = Math.max(1, Math.round(image.height * scale));
@@ -259,29 +259,77 @@ async function imageFileToMask(file: File): Promise<AttachedImage> {
   ctx.clearRect(0, 0, width, height);
   ctx.drawImage(image, 0, 0, width, height);
   const rgba = ctx.getImageData(0, 0, width, height).data;
-  let transparent = false;
-  for (let index = 3; index < rgba.length; index += 4) {
-    if (rgba[index] < 245) {
-      transparent = true;
-      break;
-    }
-  }
-  const pixels: number[] = [];
-  let active = 0;
-  for (let index = 0; index < rgba.length; index += 4) {
-    const r = rgba[index];
-    const g = rgba[index + 1];
-    const b = rgba[index + 2];
-    const a = rgba[index + 3];
-    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    const solid = transparent ? a > 32 : a > 32 && luma < 220;
-    pixels.push(solid ? 1 : 0);
-    if (solid) active += 1;
-  }
+  const pixels = extractForegroundMask(rgba, width, height);
+  const active = pixels.reduce((sum, value) => sum + value, 0);
   if (active < 4) {
     throw new Error("We could not detect a clean shape in this image. Try a simpler logo or higher contrast image.");
   }
   const json = JSON.stringify({ width, height, pixels });
   const maskDataUrl = `data:application/x-cadio-mask+json;base64,${btoa(json)}`;
   return { name: file.name, type: file.type, previewUrl, maskDataUrl };
+}
+
+function extractForegroundMask(rgba: Uint8ClampedArray, width: number, height: number): number[] {
+  const border: number[] = [];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (x !== 0 && y !== 0 && x !== width - 1 && y !== height - 1) continue;
+      border.push((y * width + x) * 4);
+    }
+  }
+  const transparentBorder = border.filter((index) => rgba[index + 3] < 32).length / Math.max(border.length, 1);
+  if (transparentBorder > 0.18) {
+    return buildCandidate(rgba, (index) => rgba[index + 3] > 32);
+  }
+
+  const opaqueBorder = border.filter((index) => rgba[index + 3] > 32);
+  const bg = opaqueBorder.reduce(
+    (acc, index) => {
+      acc.r += rgba[index];
+      acc.g += rgba[index + 1];
+      acc.b += rgba[index + 2];
+      return acc;
+    },
+    { r: 0, g: 0, b: 0 },
+  );
+  const count = Math.max(opaqueBorder.length, 1);
+  bg.r /= count;
+  bg.g /= count;
+  bg.b /= count;
+  const bgLuma = luma(bg.r, bg.g, bg.b);
+
+  const candidates = [
+    buildCandidate(rgba, (index) => colorDistance(rgba[index], rgba[index + 1], rgba[index + 2], bg.r, bg.g, bg.b) > 34),
+    buildCandidate(rgba, (index) => (bgLuma < 128 ? lumaAt(rgba, index) > bgLuma + 38 : lumaAt(rgba, index) < bgLuma - 38)),
+    buildCandidate(rgba, (index) => lumaAt(rgba, index) < 210),
+  ];
+  const viable = candidates
+    .map((pixels) => ({ pixels, ratio: activeRatio(pixels) }))
+    .filter(({ ratio }) => ratio > 0.0025 && ratio < 0.62)
+    .sort((a, b) => a.ratio - b.ratio);
+  return viable[0]?.pixels || candidates[0];
+}
+
+function buildCandidate(rgba: Uint8ClampedArray, isForeground: (index: number) => boolean): number[] {
+  const pixels: number[] = [];
+  for (let index = 0; index < rgba.length; index += 4) {
+    pixels.push(rgba[index + 3] > 32 && isForeground(index) ? 1 : 0);
+  }
+  return pixels;
+}
+
+function activeRatio(pixels: number[]) {
+  return pixels.reduce((sum, value) => sum + value, 0) / Math.max(pixels.length, 1);
+}
+
+function lumaAt(rgba: Uint8ClampedArray, index: number) {
+  return luma(rgba[index], rgba[index + 1], rgba[index + 2]);
+}
+
+function luma(r: number, g: number, b: number) {
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function colorDistance(r1: number, g1: number, b1: number, r2: number, g2: number, b2: number) {
+  return Math.hypot(r1 - r2, g1 - g2, b1 - b2);
 }

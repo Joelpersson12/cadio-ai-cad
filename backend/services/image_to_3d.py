@@ -80,6 +80,32 @@ def _crop_mask(width: int, height: int, pixels: list[int]) -> tuple[int, int, li
     return cropped_w, cropped_h, cropped
 
 
+def _border_active_ratio(width: int, height: int, pixels: list[int]) -> float:
+    if width <= 0 or height <= 0:
+        return 0.0
+    total = 0
+    active = 0
+    for y in range(height):
+        for x in range(width):
+            if x not in {0, width - 1} and y not in {0, height - 1}:
+                continue
+            total += 1
+            active += pixels[y * width + x]
+    return active / max(total, 1)
+
+
+def _normalize_foreground_mask(width: int, height: int, pixels: list[int]) -> list[int]:
+    active = sum(pixels)
+    total = max(width * height, 1)
+    border_ratio = _border_active_ratio(width, height, pixels)
+    if active / total > 0.42 and border_ratio > 0.62:
+        inverted = [0 if value else 1 for value in pixels]
+        inverted_active = sum(inverted)
+        if 4 <= inverted_active <= total * 0.72:
+            return inverted
+    return pixels
+
+
 def _apply_keychain_hole(width: int, height: int, pixels: list[int]) -> None:
     radius = max(2.5, min(width, height) * 0.055)
     cx = width * 0.5
@@ -148,7 +174,8 @@ def build_image_model(
     image_name: str = "uploaded image",
 ) -> ImageModelResult:
     mask = _decode_mask(image)
-    width, height, pixels = _crop_mask(mask["width"], mask["height"], mask["pixels"])
+    pixels = _normalize_foreground_mask(mask["width"], mask["height"], mask["pixels"])
+    width, height, pixels = _crop_mask(mask["width"], mask["height"], pixels)
 
     text = (prompt or "").lower()
     target_width = max(20.0, min(220.0, _parse_mm(text, ("wide", "width", "bred", "bredd"), 100.0)))
