@@ -170,7 +170,7 @@ function MobileExamplesSheet({
       )}
       {/* Sheet */}
       <div
-        className={`fixed bottom-0 left-0 right-0 z-50 md:hidden bg-[#16202e] border-t border-cadio-border rounded-t-2xl transition-transform duration-300 ${
+        className={`fixed bottom-0 left-0 right-0 z-50 md:hidden bg-cadio-bg border-t border-cadio-border rounded-t-2xl transition-transform duration-300 ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ maxHeight: "80dvh", overflowY: "auto" }}
@@ -208,7 +208,7 @@ function MobileExportSheet({
         />
       )}
       <div
-        className={`fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t border-cadio-border bg-[#1f1f20] transition-transform duration-300 md:hidden ${
+        className={`fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t border-cadio-border bg-cadio-bg transition-transform duration-300 md:hidden ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ maxHeight: "70dvh", overflowY: "auto" }}
@@ -252,7 +252,7 @@ function MobileEditSheet({
       )}
       {/* Sheet */}
       <div
-        className={`fixed bottom-0 left-0 right-0 z-50 md:hidden bg-[#16202e] border-t border-cadio-border rounded-t-2xl transition-transform duration-300 ${
+        className={`fixed bottom-0 left-0 right-0 z-50 md:hidden bg-cadio-bg border-t border-cadio-border rounded-t-2xl transition-transform duration-300 ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ maxHeight: "70dvh", overflowY: "auto" }}
@@ -271,7 +271,7 @@ function MobileEditSheet({
               <select
                 value={printSettings?.material ?? obj.material}
                 onChange={(e) => void patchAppearance({ material: e.target.value })}
-                className="h-10 rounded-lg border border-cadio-border bg-[#111827] px-3 text-sm text-cadio-text outline-none"
+                className="h-10 rounded-lg border border-cadio-border bg-cadio-surface px-3 text-sm text-cadio-text outline-none"
               >
                 {materialEntries.map(([key, material]) => (
                   <option value={key} key={key}>
@@ -286,48 +286,42 @@ function MobileEditSheet({
                 type="color"
                 value={obj.color}
                 onChange={(e) => void patchAppearance({ color: e.target.value })}
-                className="h-10 w-full rounded-lg border border-cadio-border bg-[#111827] p-1"
+                className="h-10 w-full rounded-lg border border-cadio-border bg-cadio-surface p-1"
               />
             </label>
           </div>
 
           {printSettings && (
-            <div className="rounded-xl border border-cadio-border bg-[#111827] p-3 text-xs text-cadio-text">
+            <div className="rounded-xl border border-cadio-border bg-cadio-surface p-3 text-xs text-cadio-text shadow-sm">
               <div className="mb-2 flex items-center justify-between">
-                <span className="font-semibold">Print setup</span>
-                <span className="text-cadio-accent">{printSettings.scale.recommended_scale_percent.toFixed(1)}% scale</span>
+                <span className="font-bold uppercase tracking-tight text-cadio-muted">Print Setup</span>
+                <span className="text-cadio-accent font-black">{printSettings.scale.recommended_scale_percent.toFixed(1)}%</span>
               </div>
-              <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-[#172033] p-2">
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-cadio-bg/50 p-2 border border-cadio-border/30">
                 <div>
-                  <div className="text-cadio-muted">Model scaling</div>
-                  <div className="text-[10px] text-cadio-muted">98,3% works</div>
+                  <div className="text-cadio-muted font-bold">Scaling</div>
                 </div>
                 <ScalePercentInput
                   value={modelScalePercent}
                   onCommit={(percent) => void setSelectedScalePercent(percent)}
-                  className="w-28"
+                  className="w-24 h-7"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2 text-cadio-muted">
+              <div className="grid grid-cols-2 gap-2 text-cadio-muted font-medium">
                 <span>Layer {printSettings.slicer.layer_height_mm} mm</span>
                 <span>Infill {printSettings.slicer.infill_percent}%</span>
-                <span>Nozzle {printSettings.slicer.nozzle_temp_c[0]}-{printSettings.slicer.nozzle_temp_c[1]} C</span>
-                <span>Bed {printSettings.slicer.bed_temp_c[0]}-{printSettings.slicer.bed_temp_c[1]} C</span>
               </div>
-              {printSettings.source_settings?.has_creator_settings && (
-                <p className="mt-2 text-cadio-accent">Creator settings loaded from Printables</p>
-              )}
             </div>
           )}
 
           {/* Parameters */}
           {Object.entries(obj.parameters).map(([key, value]) => (
             <div key={key} className="flex flex-col gap-1">
-              <div className="flex justify-between">
-                <label className="text-xs text-cadio-muted capitalize">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-bold uppercase tracking-tight text-cadio-muted truncate max-w-[70%]">
                   {key.replace(/_/g, " ")}
                 </label>
-                <span className="text-xs text-cadio-accent">{Number(value).toFixed(1)}</span>
+                <span className="text-[10px] font-black text-cadio-accent">{Number(value).toFixed(1)}</span>
               </div>
               <input
                 type="range"
@@ -344,23 +338,23 @@ function MobileEditSheet({
                 step={key.includes("count") ? 1 : 0.5}
                 value={Number(value)}
                 onChange={(e) => void patchParam(key, parseFloat(e.target.value))}
-                className="w-full accent-cadio-accent h-2"
+                className="w-full accent-cadio-accent h-1.5 bg-cadio-border rounded-full appearance-none cursor-pointer"
               />
             </div>
           ))}
 
           {/* Features */}
-          <div className="border-t border-cadio-border pt-3">
-            <p className="text-xs text-cadio-muted mb-3 uppercase tracking-wider">Features</p>
+          <div className="border-t border-cadio-border pt-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted mb-3">Feature Tree</p>
             <div className="grid grid-cols-2 gap-2">
               {obj.feature_tree.map((f) => (
                 <button
                   key={f.id}
                   onClick={() => void onToggleFeature(f.id, !f.enabled)}
-                  className={`py-2.5 px-3 rounded-lg text-xs font-medium transition-all ${
+                  className={`py-2 px-3 rounded-lg text-[10px] font-bold uppercase transition-all ${
                     f.enabled
-                      ? "bg-cadio-accent text-[#081225]"
-                      : "bg-[#1a2535] text-cadio-muted hover:text-cadio-text"
+                      ? "bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20"
+                      : "bg-cadio-surface border border-cadio-border text-cadio-muted"
                   }`}
                 >
                   {f.type.replace(/_/g, " ")}
@@ -393,25 +387,25 @@ function MobileModelVariantBar() {
   const loading = Boolean(loadingDirection);
 
   return (
-    <div className="border-t border-cadio-border bg-[#181819]/95 px-3 py-2 backdrop-blur-sm">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cadio-muted">Model variants</span>
-        <span className="max-w-[45%] truncate text-[11px] text-cadio-muted">{status}</span>
+    <div className="border-t border-cadio-border/50 bg-cadio-surface/95 px-4 py-3 backdrop-blur-xl">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[9px] font-black uppercase tracking-widest text-cadio-muted">Model variations</span>
+        <span className="max-w-[50%] truncate text-[9px] font-bold text-cadio-accent uppercase tracking-wider">{status}</span>
       </div>
-      <div className="grid grid-cols-[0.85fr_1.15fr] gap-2">
+      <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => void switchModel("previous")}
           disabled={loading}
-          className="h-11 rounded-xl border border-[#333] bg-[#242426] px-3 text-sm font-semibold text-cadio-text disabled:opacity-45"
+          className="h-11 rounded-xl border border-cadio-border bg-cadio-bg/50 px-4 text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-30"
         >
-          {loadingDirection === "previous" ? "Loading..." : "Previous"}
+          {loadingDirection === "previous" ? "..." : "Previous"}
         </button>
         <button
           onClick={() => void switchModel("next")}
           disabled={loading}
-          className="h-11 rounded-xl border border-[#28c7df] bg-[#28c7df] px-3 text-sm font-black text-[#081225] shadow-[0_0_18px_rgba(40,199,223,0.22)] disabled:opacity-45"
+          className="h-11 rounded-xl bg-white px-4 text-xs font-black uppercase tracking-widest text-cadio-bg transition-all active:scale-95 shadow-lg disabled:opacity-30"
         >
-          {loadingDirection === "next" ? "Loading..." : "Next model"}
+          {loadingDirection === "next" ? "..." : "Next model"}
         </button>
       </div>
     </div>
@@ -606,7 +600,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
               New Workspace
             </button>
             <button
-              onClick={() => setShowMeasurements((v) => !value)}
+              onClick={() => setShowMeasurements((v) => !v)}
               className={`w-full flex h-11 items-center gap-3 rounded-lg border px-4 text-xs font-bold transition-all ${
                 showMeasurements
                   ? "border-cadio-accent bg-cadio-accent/10 text-cadio-accent shadow-[0_0_15px_rgba(59,130,246,0.1)]"
@@ -970,7 +964,7 @@ function MobileAiBar() {
   return (
     <div className={`flex items-center gap-2 rounded-2xl border p-1.5 transition-all ${
       busy
-        ? "border-[#28c7df]/70 bg-[#101820] shadow-[0_0_28px_rgba(40,199,223,0.24)]"
+        ? "border-cadio-accent/70 bg-cadio-accent/10 shadow-[0_0_28px_rgba(59,130,246,0.24)]"
         : "border-transparent"
     }`}>
       <input
@@ -979,12 +973,12 @@ function MobileAiBar() {
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && void handleSend()}
         placeholder="Ask AI to change the model..."
-        className="min-h-11 flex-1 rounded-xl border border-cadio-border bg-[#111827] px-3 py-2 text-base text-cadio-text placeholder:text-cadio-muted focus:border-cadio-accent focus:outline-none"
+        className="min-h-11 flex-1 rounded-xl border border-cadio-border bg-cadio-surface px-3 py-2 text-base text-cadio-text placeholder:text-cadio-muted focus:border-cadio-accent focus:outline-none"
       />
       <button
         onClick={() => void handleSend()}
         disabled={busy || !prompt.trim()}
-        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cadio-accent text-base font-black text-[#081225] shadow-[0_0_18px_rgba(40,199,223,0.22)] disabled:opacity-40"
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cadio-accent text-base font-black text-white shadow-lg disabled:opacity-40"
       >
         {busy ? "..." : ">"}
       </button>
@@ -1004,25 +998,24 @@ function AuthRequiredDialog({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl border border-[#343436] bg-[#1f1f20] p-5 text-white shadow-2xl">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="w-full max-w-sm rounded-2xl border border-cadio-border/50 bg-cadio-surface p-6 text-white shadow-2xl">
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Logga in for nedladdning</h2>
-            <p className="mt-1 text-xs leading-5 text-[#a8a8ab]">
-              Gratispaketet ger 1 nedladdningsbar generering. Alla paket har samma CAD-upplevelse.
+            <h2 className="text-lg font-bold">Authentication Required</h2>
+            <p className="mt-1 text-xs font-medium text-cadio-muted">
+              Sign in to export and download your models.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#2b2b2d] text-sm text-[#bdbdbd] hover:text-white"
-            aria-label="Close"
+            className="p-1.5 rounded-md hover:bg-cadio-border/50 text-cadio-muted"
           >
-            x
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
         <form
-          className="space-y-3"
+          className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
             onAuthenticated();
@@ -1030,16 +1023,16 @@ function AuthRequiredDialog({
         >
           <input
             type="email"
-            placeholder="E-post"
-            className="h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm text-white outline-none placeholder:text-[#777] focus:border-[#2bb8dc]"
+            placeholder="Email address"
+            className="h-11 w-full rounded-lg border border-cadio-border bg-cadio-bg px-3 text-sm text-white outline-none focus:border-cadio-accent"
           />
           <input
             type="password"
-            placeholder="Losenord"
-            className="h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm text-white outline-none placeholder:text-[#777] focus:border-[#2bb8dc]"
+            placeholder="Password"
+            className="h-11 w-full rounded-lg border border-cadio-border bg-cadio-bg px-3 text-sm text-white outline-none focus:border-cadio-accent"
           />
-          <button className="h-11 w-full rounded-lg bg-[#e8e8e8] text-sm font-semibold text-[#151515] hover:bg-white">
-            Logga in
+          <button className="h-11 w-full rounded-lg bg-white font-bold text-cadio-bg hover:bg-cadio-text transition-all">
+            Continue to Download
           </button>
         </form>
       </div>

@@ -263,8 +263,8 @@ function MeasurementOverlay({ specs }: { specs: MeasurementSpec[] }) {
               label={`Height ${formatMm(spec.heightMm)}`}
             />
             <Html position={[(min.x + max.x) / 2, max.y + offset, (min.z + max.z) / 2]} center distanceFactor={32} style={{ pointerEvents: "none" }}>
-              <div className="min-w-64 rounded-xl border border-[#facc15]/55 bg-[#111]/95 px-4 py-3 text-sm leading-6 text-white shadow-2xl">
-                <div className="mb-1 max-w-72 truncate text-base font-semibold text-[#facc15]">{spec.name}</div>
+              <div className="min-w-64 rounded-xl border border-[#3b82f6]/55 bg-[#111]/95 px-4 py-3 text-sm leading-6 text-white shadow-2xl">
+                <div className="mb-1 max-w-72 truncate text-base font-semibold text-[#3b82f6]">{spec.name}</div>
                 <div>Long side: <span className="font-semibold">{formatMm(spec.longSideMm)}</span></div>
                 <div>Short side: <span className="font-semibold">{formatMm(spec.shortSideMm)}</span></div>
                 <div>Height: <span className="font-semibold">{formatMm(spec.heightMm)}</span></div>
@@ -301,8 +301,8 @@ function CameraController({
     
     // Better camera positioning for isometric-like view
     camera.position.set(distance * 0.7, distance * 0.7, distance * 0.7);
-    camera.near = 0.1;
-    camera.far = distance * 30;
+    camera.near = 1;
+    camera.far = 10000;
     (camera as THREE.PerspectiveCamera).updateProjectionMatrix?.();
     
     // Center on the build plate
@@ -486,17 +486,6 @@ function ScaledMesh({
           color={VIEW_COLORS.edgeSelected}
           transparent
           opacity={0.9}
-          depthTest
-        />
-      </lineSegments>
-    )}
-    {((selected && selectionMode !== "body") || (hovered && expertMode && selectionMode === "edge")) && (
-      <lineSegments renderOrder={6}>
-        <edgesGeometry args={[geometry, 8]} />
-        <lineBasicMaterial
-          color={selectionMode === "edge" ? VIEW_COLORS.edgeStrong : selectionMode === "face" ? "#b9a7ff" : VIEW_COLORS.edgeSelectedDetail}
-          transparent
-          opacity={hovered && !selected ? 1 : 0.9}
           depthTest
         />
       </lineSegments>
@@ -796,6 +785,7 @@ export default function CadViewport({
     value: string;
   } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
+  
   const measurementSpecs = useMemo(() => {
     if (!showMeasurements) return [];
     const selectedIds = new Set(selectedObjectIds.length ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : []);
@@ -860,55 +850,53 @@ export default function CadViewport({
             </button>
           ))}
         </div>
+        <div className="my-1 h-px bg-cadio-border/30 mx-2" />
+        <div className="space-y-3 px-1 pb-1">
+          <label className="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-tight text-cadio-muted">
+            <span>New Height</span>
+            <input
+              type="number"
+              min={0.5}
+              step={0.5}
+              value={sketchHeight}
+              onChange={(e) => onSetSketchHeight?.(Number(e.target.value))}
+              className="w-16 rounded border border-cadio-border bg-cadio-bg/50 px-2 py-1 text-white outline-none focus:border-cadio-accent"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-tight text-cadio-muted">
+            <span>Op Size</span>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={operationAmount}
+              onChange={(e) => onSetOperationAmount?.(Number(e.target.value))}
+              className="w-16 rounded border border-cadio-border bg-cadio-bg/50 px-2 py-1 text-white outline-none focus:border-cadio-accent"
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            {["extrude", "fillet", "chamfer", "shell"].map((op) => (
+              <button
+                key={op}
+                disabled={!expertMode}
+                onClick={() => {
+                  if (selectionMode === "edge" && (op === "fillet" || op === "chamfer")) {
+                    setEdgeOperation(op);
+                    return;
+                  }
+                  onApplyExpertOperation?.(op);
+                }}
+                className={`rounded-lg py-2 text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-30 ${
+                  edgeOperation === op ? "bg-cadio-surface border border-cadio-border text-white shadow-sm" : "text-cadio-muted hover:text-white"
+                }`}
+              >
+                {op}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-        <div className="my-1 h-px bg-cadio-border" />
-        <label className="flex items-center justify-between gap-2 px-1 text-xs text-cadio-muted">
-          <span>
-            New height
-            <span className="block text-[10px] text-[#858585]">next sketch</span>
-          </span>
-          <input
-            type="number"
-            min={0.5}
-            step={0.5}
-            value={sketchHeight}
-            onChange={(e) => onSetSketchHeight?.(Number(e.target.value))}
-            className="w-20 rounded border border-cadio-border bg-[#202023] px-2 py-1 text-cadio-text"
-          />
-        </label>
-        <label className="flex items-center justify-between gap-2 px-1 text-xs text-cadio-muted">
-          <span>
-            Op size
-            <span className="block text-[10px] text-[#858585]">mm amount</span>
-          </span>
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            value={operationAmount}
-            onChange={(e) => onSetOperationAmount?.(Number(e.target.value))}
-            className="w-20 rounded border border-cadio-border bg-[#202023] px-2 py-1 text-cadio-text"
-          />
-        </label>
-        {["extrude", "fillet", "chamfer", "shell"].map((op) => (
-          <button
-            key={op}
-            disabled={!expertMode}
-            onClick={() => {
-              if (selectionMode === "edge" && (op === "fillet" || op === "chamfer")) {
-                setEdgeOperation(op);
-                return;
-              }
-              onApplyExpertOperation?.(op);
-            }}
-            className={`rounded-md px-3 py-2 text-left text-xs capitalize disabled:opacity-40 ${
-              edgeOperation === op ? "bg-[#55565b] text-white" : "bg-transparent text-cadio-muted hover:bg-[#38383b] hover:text-cadio-text"
-            }`}
-          >
-            {op}
-          </button>
-        ))}
-      </div>
+
       <Canvas
         shadows
         dpr={[1, 2]}
@@ -951,7 +939,6 @@ export default function CadViewport({
         position={[0, 0.05, 0]}
       />
  
-      {/* Build plate */}
       <BuildPlate volume={printerVolume} />
       <SketchPlane
         active={expertMode}
@@ -1019,9 +1006,9 @@ export default function CadViewport({
       </GizmoHelper>
       </Canvas>
       {showMeasurements && (
-        <div className="pointer-events-none absolute bottom-4 left-4 z-10 max-w-[min(460px,calc(100%-2rem))] rounded-xl border border-[#facc15]/45 bg-[#151515]/92 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur">
-          <div className="text-base font-semibold text-[#facc15]">Real measurements</div>
-          <div className="mt-1 text-[#d7d7d8]">
+        <div className="pointer-events-none absolute bottom-4 left-4 z-10 max-w-[min(460px,calc(100%-2rem))] rounded-xl border border-[#3b82f6]/45 bg-[#0b0f14]/92 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur">
+          <div className="text-base font-semibold text-[#3b82f6]">Real Measurements</div>
+          <div className="mt-1 text-cadio-muted">
             {measurementSpecs.length
               ? `${measurementSpecs.length} ${measurementSpecs.length === 1 ? "part" : "parts"} measured in mm`
               : "Create or select a model to measure."}
@@ -1040,7 +1027,7 @@ export default function CadViewport({
             }
             setEdgeInput(null);
           }}
-          className="absolute z-20 flex items-center gap-1 rounded-md border border-cadio-border bg-[#2b2b2e] p-1 shadow-xl"
+          className="absolute z-20 flex items-center gap-1 rounded-md border border-cadio-border bg-cadio-surface p-1 shadow-xl"
           style={{ left: edgeInput.x + 10, top: edgeInput.y + 10 }}
         >
           <span className="px-1 text-[11px] capitalize text-cadio-muted">
@@ -1054,7 +1041,7 @@ export default function CadViewport({
               e.stopPropagation();
               if (e.key === "Escape") setEdgeInput(null);
             }}
-            className="w-16 rounded border border-cadio-border bg-[#202023] px-2 py-1 text-xs text-cadio-text outline-none"
+            className="w-16 rounded border border-cadio-border bg-cadio-bg px-2 py-1 text-xs text-white outline-none focus:border-cadio-accent"
           />
         </form>
       )}
