@@ -13,23 +13,33 @@ export default function CadioLogo({
 }: CadioLogoProps) {
   const content = (
     <>
-      <span className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#28c7df] text-base font-black text-[#081013] shadow-[0_0_22px_rgba(40,199,223,0.22)]">
-        <span className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.42),rgba(255,255,255,0)_48%)]" />
-        <span className="absolute bottom-1.5 left-1.5 h-2.5 w-2.5 rounded-md bg-[#062630]/45" />
-        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white/90" />
-        <span className="relative">C</span>
-      </span>
+      <div className="relative h-9 w-9 shrink-0 flex items-center justify-center rounded-md border border-cadio-accent/20 bg-cadio-surface shadow-sm">
+        {/* Geometric "C" inspired by wireframe/CAD */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-5 w-5 text-cadio-accent"
+        >
+          <path d="M16 8a4.5 4.5 0 0 0-7.07 1.14l-1.42 2.85A4.5 4.5 0 0 0 9 18h4" />
+          <path d="M16 8V6a2 2 0 0 0-2-2h-4" />
+        </svg>
+        <div className="absolute inset-0 rounded-md bg-gradient-to-tr from-cadio-accent/5 to-transparent pointer-events-none" />
+      </div>
       {!compact && (
-        <span className="min-w-0">
-          <span className="block text-sm font-black uppercase tracking-[0.24em] text-white">
+        <div className="min-w-0 flex flex-col justify-center">
+          <span className="block text-base font-bold tracking-tight text-cadio-text leading-none">
             Cadio
           </span>
           {subtitle && (
-            <span className="block text-[11px] leading-4 text-[#9a9a9d]">
+            <span className="block text-[10px] font-medium tracking-wide text-cadio-muted mt-1 uppercase">
               {subtitle}
             </span>
           )}
-        </span>
+        </div>
       )}
     </>
   );
@@ -39,7 +49,7 @@ export default function CadioLogo({
       <button
         type="button"
         onClick={onClick}
-        className={`flex min-w-0 items-center gap-3 text-left ${className}`}
+        className={`flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80 ${className}`}
       >
         {content}
       </button>

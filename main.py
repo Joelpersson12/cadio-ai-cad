@@ -44,18 +44,7 @@ def root_health() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-FRONTEND_DIST_CANDIDATES = (
-    PROJECT_ROOT / "dist",
-    PROJECT_ROOT / "frontend" / "dist",
-)
-FRONTEND_DIST = next(
-    (
-        candidate
-        for candidate in FRONTEND_DIST_CANDIDATES
-        if (candidate / "index.html").exists()
-    ),
-    FRONTEND_DIST_CANDIDATES[0],
-)
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
 
 @app.middleware("http")

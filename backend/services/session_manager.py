@@ -154,7 +154,7 @@ def create_primitive_object(
     obj["transform"].position = [cx, cy, 0.0]
     if kind == "hole":
         obj["feature_tree"] = [
-            Feature(id="hole_guide", name="Hole Guide", type="hole_guide", enabled=True),
+            Feature(id="hole_guide", type="hole_guide", enabled=True),
         ]
     return obj
 
@@ -622,8 +622,6 @@ def _source_part_roles(source_file: dict[str, Any]) -> set[str]:
         "arm": ("arm", "link", "hinge", "joint", "support"),
         "side": ("left", "right", "front", "rear", "back", "side"),
         "rail": ("rail", "slide", "track", "guide"),
-        "roller": ("roller", "wheel", "pulley", "idler", "bearing", "spool", "reel", "rotor"),
-        "axle": ("axle", "shaft"),
         "cover": ("top", "cover", "cap", "lid"),
     }
     for role, tokens in role_tokens.items():
@@ -684,95 +682,6 @@ def _source_file_component_score(source_file: dict[str, Any], prompt: str, prefe
     return score
 
 
-_SOURCE_ROLE_WORDS = {
-    "arm",
-    "axle",
-    "back",
-    "base",
-    "bearing",
-    "body",
-    "bottom",
-    "bracket",
-    "cap",
-    "clamp",
-    "clip",
-    "cover",
-    "cup",
-    "desk",
-    "floor",
-    "front",
-    "guide",
-    "hinge",
-    "holder",
-    "idler",
-    "joint",
-    "left",
-    "lid",
-    "link",
-    "main",
-    "mount",
-    "mug",
-    "plate",
-    "pulley",
-    "rail",
-    "rear",
-    "reel",
-    "right",
-    "roller",
-    "rotor",
-    "shaft",
-    "side",
-    "slide",
-    "spool",
-    "support",
-    "table",
-    "top",
-    "track",
-    "wheel",
-}
-
-
-def _source_file_family_words(source_file: dict[str, Any]) -> set[str]:
-    """Return model-family words, leaving out part-role and variant words."""
-    name = _source_file_name(source_file).lower()
-    stem = re.sub(r"\.[a-z0-9]+$", "", name)
-    tokens = re.findall(r"[a-z0-9]+", stem)
-    ignored = _SOURCE_ROLE_WORDS | {
-        "stl",
-        "3mf",
-        "obj",
-        "step",
-        "v1",
-        "v2",
-        "v3",
-        "rev1",
-        "rev2",
-        "rev3",
-        "small",
-        "medium",
-        "large",
-        "xl",
-        "xs",
-        "print",
-        "part",
-        "file",
-    }
-    return {token for token in tokens if len(token) > 2 and token not in ignored and not re.fullmatch(r"\d+", token)}
-
-
-def _source_files_share_family(files: list[dict[str, Any]]) -> bool:
-    """Detect component files from the same named model family."""
-    families = [_source_file_family_words(source_file) for source_file in files]
-    families = [family for family in families if family]
-    if len(families) < 2:
-        return False
-    for index, family in enumerate(families):
-        for other in families[index + 1:]:
-            if len(family & other) >= 1 and (len(family | other) <= 3 or len(family & other) >= 2):
-                return True
-    return False
-
-
 def _select_source_assembly_files(
     files: list[dict[str, Any]],
     prompt: str,
@@ -827,20 +736,12 @@ def _select_source_assembly_files(
         {"body", "side"},
         {"base", "arm"},
         {"base", "rail"},
-        {"body", "rail"},
-        {"body", "roller"},
-        {"base", "roller"},
-        {"rail", "roller"},
-        {"body", "axle"},
-        {"roller", "axle"},
     )
     has_complement = any(pair <= selected_roles for pair in complementary_pairs)
     has_left_right = any("left" in _source_file_name(item).lower() for item in selected) and any(
         "right" in _source_file_name(item).lower() for item in selected
     )
-    shares_family = _source_files_share_family(selected)
-    has_mechanical_pair = bool({"roller", "axle", "arm", "clamp"} & selected_roles) and shares_family
-    if len(selected) >= 2 and (has_complement or has_left_right or len(selected_roles) >= 3 or has_mechanical_pair):
+    if len(selected) >= 2 and (has_complement or has_left_right or len(selected_roles) >= 3):
         return selected
     return []
 
@@ -1072,23 +973,15 @@ def _try_replace_with_imported_source_model(
     *,
     preferred_slots: int = 0,
     prefer_flat: bool = False,
-    source_examples: list[Any] | None = None,
 ) -> tuple[list[str], CadObject | None]:
     try:
         from backend.services.design_providers import get_provider_registry, resolve_printables_model_files
 
-        if source_examples is not None:
-            examples = [
-                example
-                for example in source_examples
-                if getattr(example, "source", "") == "printables"
-            ]
-        else:
-            examples = [
-                example
-                for example in get_provider_registry().search_all(prompt, limit=12)
-                if example.source == "printables"
-            ]
+        examples = [
+            example
+            for example in get_provider_registry().search_all(prompt, limit=12)
+            if example.source == "printables"
+        ]
     except Exception:
         examples = []
 
@@ -1686,12 +1579,7 @@ def _make_source_phone_stand_mesh(params: dict[str, float]) -> TriMesh:
     return shift_mesh_to_buildplate(mesh)
 
 
-def replace_object_with_source_model(
-    session: Session,
-    obj: CadObject,
-    prompt: str,
-    source_examples: list[Any] | None = None,
-) -> list[str]:
+def replace_object_with_source_model(session: Session, obj: CadObject, prompt: str) -> list[str]:
     """Replace generated seed with a source-matched reconstructed CAD model."""
     prompt_text = _prompt_match_text(prompt)
     kind = _source_prompt_kind(prompt)
@@ -1705,7 +1593,6 @@ def replace_object_with_source_model(
         prompt,
         preferred_slots=3 if kind in {"dewalt_battery_holder", "battery_holder"} else 0,
         prefer_flat=_prefer_flat_for_prompt(prompt),
-        source_examples=source_examples,
     )
     if generic_actions:
         return generic_actions
@@ -1938,7 +1825,6 @@ def replace_object_with_research_assembly(
         return []
 
     category = str(brief.get("category") or "generic").strip().lower()
-    prompt_text = _prompt_match_text(str(brief.get("prompt", "")))
 
     parts: list[CadObject] = []
     color = obj.get("color", "#a9aaad")
@@ -1994,32 +1880,6 @@ def replace_object_with_research_assembly(
                 _create_box_component("stand_left_rail", max(thickness * 0.65, 4.5), depth * 0.55, thickness * 1.2, [-width * 0.42, -depth * 0.02, thickness], params, color=color),
                 _create_box_component("stand_right_rail", max(thickness * 0.65, 4.5), depth * 0.55, thickness * 1.2, [width * 0.42, -depth * 0.02, thickness], params, color=color),
             ]
-    elif category == "vehicle_part":
-        guide_h = max(height, thickness * 4.0)
-        channel_w = max(width * 0.42, wall * 5.0)
-        rail_w = max(wall, thickness * 0.7)
-        parts = [
-            _create_box_component("vehicle_mount_base", width, depth, thickness, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
-            _create_box_component("vehicle_left_guide_rail", rail_w, depth * 0.78, guide_h, [-channel_w / 2.0, 0.0, thickness], params, color=color),
-            _create_box_component("vehicle_right_guide_rail", rail_w, depth * 0.78, guide_h, [channel_w / 2.0, 0.0, thickness], params, color=color),
-            _create_box_component("vehicle_front_guard_lip", channel_w + rail_w * 2.0, wall, guide_h * 0.72, [0.0, -depth / 2.0 + wall / 2.0, thickness], params, color=color),
-            _create_box_component("vehicle_rear_register", channel_w + rail_w, wall, guide_h * 0.55, [0.0, depth / 2.0 - wall / 2.0, thickness], params, color=color),
-            _create_box_component("vehicle_center_wear_pad", channel_w * 0.62, depth * 0.52, max(wall, thickness * 0.6), [0.0, 0.0, thickness], params, color=color),
-        ]
-        for idx, x in enumerate((-width * 0.34, width * 0.34), start=1):
-            parts.append(
-                _create_box_component(f"vehicle_reinforcing_rib_{idx}", wall, depth * 0.62, guide_h * 0.78, [x, 0.0, thickness], params, color=color)
-            )
-    elif category == "accessory":
-        saddle_h = max(height, thickness * 3.4)
-        parts = [
-            _create_box_component("accessory_mount_plate", width, depth, thickness, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
-            _create_box_component("accessory_back_register", width * 0.78, wall, saddle_h * 0.78, [0.0, depth / 2.0 - wall / 2.0, thickness], params, color=color),
-            _create_box_component("accessory_front_lip", width * 0.70, wall, saddle_h * 0.42, [0.0, -depth / 2.0 + wall / 2.0, thickness], params, color=color),
-            _create_box_component("accessory_left_socket_wall", wall, depth * 0.62, saddle_h, [-width * 0.28, 0.0, thickness], params, color=color),
-            _create_box_component("accessory_right_socket_wall", wall, depth * 0.62, saddle_h, [width * 0.28, 0.0, thickness], params, color=color),
-            _create_box_component("accessory_center_adapter_pad", width * 0.32, depth * 0.42, max(wall, thickness * 0.7), [0.0, -depth * 0.06, thickness], params, color=color),
-        ]
     elif category in {"electronics_holder", "holder"}:
         tray_h = max(height, thickness * 4.0)
         parts = [
@@ -2033,77 +1893,6 @@ def replace_object_with_research_assembly(
             parts.append(
                 _create_box_component("holder_strap_bridge", width * 0.72, thickness * 0.8, thickness * 1.2, [0.0, 0.0, thickness + tray_h], params, color=color)
             )
-    elif category == "cup_holder":
-        cradle_h = max(height, thickness * 8.0)
-        wall_h = cradle_h * 0.72
-        cup_w = min(width * 0.82, depth * 0.86)
-        side_gap = cup_w * 0.42
-        parts = [
-            _create_box_component("cup_mount_plate", width, depth, thickness, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
-            _create_cylinder_component("cup_round_floor", cup_w / 2.0, max(thickness * 0.65, 3.0), [0.0, -depth * 0.06, thickness], params, color=color),
-            _create_box_component("cup_back_wall", cup_w, wall, wall_h, [0.0, depth * 0.22, thickness], params, color=color),
-            _create_box_component("cup_left_cradle_wall", wall, depth * 0.58, wall_h * 0.86, [-side_gap, -depth * 0.04, thickness], params, color=color),
-            _create_box_component("cup_right_cradle_wall", wall, depth * 0.58, wall_h * 0.86, [side_gap, -depth * 0.04, thickness], params, color=color),
-            _create_box_component("cup_front_retaining_lip", cup_w * 0.62, wall, wall_h * 0.34, [0.0, -depth * 0.34, thickness], params, color=color),
-        ]
-        if any(word in prompt_text for word in ("desk", "table", "clamp")):
-            parts.extend([
-                _create_box_component("cup_desk_clamp_top", width * 0.72, thickness * 1.2, thickness * 2.3, [0.0, -depth * 0.50, thickness * 0.75], params, color=color),
-                _create_box_component("cup_desk_clamp_lower", width * 0.52, thickness, thickness * 1.6, [0.0, -depth * 0.50, thickness * 0.10], params, color=color),
-            ])
-    elif category == "tool_holder":
-        slot_count = max(3, min(8, int(round(float(params.get("divider_count", 4.0))))))
-        rack_h = max(height, thickness * 5.0)
-        parts = [
-            _create_box_component("tool_wall_plate", width, depth, thickness, [0.0, 0.0, 0.0], base_params, color=color, cut_holes=True),
-            _create_box_component("tool_top_register", width * 0.90, wall, rack_h * 0.42, [0.0, depth * 0.32, thickness], params, color=color),
-            _create_box_component("tool_front_rail", width * 0.92, wall, rack_h * 0.28, [0.0, -depth * 0.38, thickness], params, color=color),
-        ]
-        spacing = width * 0.82 / max(1, slot_count - 1)
-        for idx in range(slot_count):
-            x = -width * 0.41 + spacing * idx
-            parts.append(_create_box_component(f"tool_slot_divider_{idx + 1}", wall, depth * 0.62, rack_h * 0.78, [x, -depth * 0.02, thickness], params, color=color))
-        if any(word in prompt_text for word in ("pegboard", "skadis")):
-            parts.extend([
-                _create_box_component("tool_upper_peg_hook", wall * 1.8, wall * 2.2, rack_h * 0.36, [-width * 0.30, depth * 0.49, thickness + rack_h * 0.20], params, color=color),
-                _create_box_component("tool_lower_peg_hook", wall * 1.8, wall * 2.2, rack_h * 0.36, [width * 0.30, depth * 0.49, thickness + rack_h * 0.20], params, color=color),
-            ])
-    elif category == "helmet_holder":
-        arm_h = max(height * 0.55, thickness * 4.0)
-        saddle_w = max(width * 0.72, 105.0)
-        parts = [
-            _create_box_component("helmet_wall_plate", width * 0.74, depth * 0.36, thickness, [0.0, depth * 0.20, 0.0], base_params, color=color, cut_holes=True),
-            _create_box_component("helmet_support_arm", width * 0.34, depth * 0.74, arm_h, [0.0, -depth * 0.10, thickness], params, color=color),
-            _create_box_component("helmet_wide_saddle", saddle_w, depth * 0.34, thickness * 2.2, [0.0, -depth * 0.38, thickness + arm_h], params, color=color),
-            _create_gusset_component("helmet_left_gusset", thickness * 1.4, depth * 0.54, arm_h * 0.82, [-width * 0.25, -depth * 0.06, thickness], params, color=color),
-            _create_gusset_component("helmet_right_gusset", thickness * 1.4, depth * 0.54, arm_h * 0.82, [width * 0.25, -depth * 0.06, thickness], params, color=color),
-        ]
-    elif category == "wardrobe_holder":
-        hook_count = 4 if width > 130.0 else 3
-        hook_spacing = width * 0.74 / max(1, hook_count - 1)
-        hook_depth = max(depth * 0.72, 34.0)
-        hook_h = max(height, thickness * 5.0)
-        parts = [
-            _create_box_component("wardrobe_mount_bar", width, depth * 0.34, thickness, [0.0, depth * 0.18, 0.0], base_params, color=color, cut_holes=True),
-        ]
-        for idx in range(hook_count):
-            x = -width * 0.37 + hook_spacing * idx
-            parts.extend([
-                _create_box_component(f"wardrobe_hook_{idx + 1}_arm", wall * 1.4, hook_depth, wall * 1.4, [x, -depth * 0.16, thickness + hook_h * 0.50], params, color=color),
-                _create_box_component(f"wardrobe_hook_{idx + 1}_upturn", wall * 1.6, wall * 1.6, hook_h * 0.45, [x, -depth * 0.48, thickness + hook_h * 0.52], params, color=color),
-            ])
-    elif category == "round_can_holder":
-        radius = min(width, depth) * 0.42
-        cup_h = max(height, thickness * 6.0)
-        parts = [
-            _create_cylinder_component("can_round_floor", radius, max(thickness, wall), [0.0, 0.0, 0.0], params, color=color),
-            _create_box_component("can_back_retainer", radius * 1.55, wall, cup_h * 0.72, [0.0, radius * 0.70, thickness], params, color=color),
-            _create_box_component("can_front_lip", radius * 1.10, wall, cup_h * 0.34, [0.0, -radius * 0.78, thickness], params, color=color),
-            _create_box_component("can_left_wall", wall, radius * 1.25, cup_h * 0.62, [-radius * 0.82, -radius * 0.05, thickness], params, color=color),
-            _create_box_component("can_right_wall", wall, radius * 1.25, cup_h * 0.62, [radius * 0.82, -radius * 0.05, thickness], params, color=color),
-        ]
-        if any(word in prompt_text for word in ("bike", "bicycle", "handlebar")):
-            parts.append(_create_box_component("can_handlebar_mount_saddle", radius * 1.25, wall * 2.0, wall * 2.0, [0.0, radius * 1.0, thickness + cup_h * 0.35], params, color=color))
     elif category == "enclosure":
         parts = [
             _create_box_component("enclosure_floor", width, depth, wall, [0.0, 0.0, 0.0], params, color=color),
@@ -2156,6 +1945,7 @@ def replace_object_with_research_assembly(
             _create_box_component("tool_alignment_rib", width * 0.72, wall, max(height * 0.8, wall), [0.0, 0.0, max(height, thickness)], params, color=color),
         ]
     elif category == "generic":
+        prompt_text = _prompt_match_text(str(brief.get("prompt", "")))
         base_h = max(thickness, min(height * 0.22, 14.0))
         core_h = max(height - base_h, base_h)
         core_w = max(width * 0.62, min(width - wall * 2.0, width * 0.78))
@@ -2942,7 +2732,7 @@ def _set_feature_enabled(features: list[Feature], feature_type: str, enabled: bo
         if feature.type == feature_type:
             feature.enabled = enabled
             return
-    features.append(Feature(id=feature_type, name=feature_type.replace("_", " ").title(), type=feature_type, enabled=enabled))
+    features.append(Feature(id=feature_type, type=feature_type, enabled=enabled))
 
 
 def _is_base_like(obj: CadObject) -> bool:
@@ -3844,13 +3634,14 @@ def split_object_by_line(session: Session, obj: CadObject, center: list[float], 
 
 
 def create_session(session_id: str | None = None) -> str:
-    """Create a new blank session. Returns session id."""
+    """Create a new session with one default object.  Returns session id."""
     sid = (session_id or "").strip() or str(uuid.uuid4())
+    base = create_object("part_1")
     with _lock:
         _sessions[sid] = {
             "session_id": sid,
-            "objects": {},
-            "object_order": [],
+            "objects": {base["id"]: base},
+            "object_order": [base["id"]],
             "selected_object_id": "",
             "edit_history": [],
             "version": 0,

@@ -14,28 +14,3 @@ body,
   overscroll-behavior: none;
   touch-action: manipulation;
 }
-
-@media (min-width: 768px) {
-  #root > .relative > .md\:grid > aside:first-child:not(.items-center) {
-    overflow-y: auto !important;
-    padding: 1rem !important;
-  }
-
-  #root > .relative > .md\:grid > aside:first-child:not(.items-center) > * {
-    flex-shrink: 0;
-  }
-
-  #root > .relative > .md\:grid > aside:first-child:not(.items-center) .rounded-xl {
-    border-radius: 0.5rem;
-  }
-
-  #root > .relative > .md\:grid > aside:first-child:not(.items-center) button {
-    min-height: 2rem;
-  }
-}
-
-@media (max-width: 767px) {
-  #root > .relative > .md\:hidden > div:last-child {
-    display: none;
-  }
-}

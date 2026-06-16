@@ -22,14 +22,8 @@ def analyze_printability(session: Session) -> PrintAssistantResult:
 
     # Build volume check
     bounds = scene_bounds(session)
-    printer_key = str(session.get("printer") or "").strip()
-    if printer_key == "choose_printer":
-        printer_key = ""
-    printer = (
-        PRINTERS.get(printer_key, PRINTERS[DEFAULT_PRINTER])
-        if printer_key
-        else {"name": "selected printer", "build_volume": (220, 220, 250)}
-    )
+    printer_key = session.get("printer", DEFAULT_PRINTER)
+    printer = PRINTERS.get(printer_key, PRINTERS[DEFAULT_PRINTER])
     px, py, pz = printer["build_volume"]
 
     if bounds["x"] > px or bounds["y"] > py or bounds["z"] > pz:

@@ -28,15 +28,11 @@ export default function PartMesh({ object, selected, onSelect }: PartMeshProps) 
   const material = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: selected ? "#2563eb" : object.color || "#b8bcc4",
-        roughness: selected ? 0.52 : 0.58,
-        metalness: 0,
-        emissive: selected ? "#061f59" : "#000000",
-        emissiveIntensity: selected ? 0.05 : 0,
-        transparent: false,
-        opacity: 1,
-        depthWrite: true,
-        depthTest: true,
+        color: selected ? "#3b82f6" : object.color && object.color !== "#b9b8b3" ? object.color : "#94a3b8",
+        roughness: selected ? 0.35 : 0.5,
+        metalness: selected ? 0.2 : 0.1,
+        emissive: selected ? "#1e40af" : "#000000",
+        emissiveIntensity: selected ? 0.2 : 0,
         flatShading: false,
       }),
     [object.color, selected],

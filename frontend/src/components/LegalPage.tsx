@@ -1,8 +1,7 @@
-import { useEffect } from "react";
 import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
 
-type LegalPageKind = "terms" | "privacy" | "contact";
+type LegalPageKind = "terms" | "privacy" | "cookies" | "contact";
 
 const pages: Record<
   LegalPageKind,
@@ -10,13 +9,13 @@ const pages: Record<
     title: string;
     eyebrow: string;
     updated: string;
-    sections: Array<{ heading: string; body: string[]; id?: string }>;
+    sections: Array<{ heading: string; body: string[] }>;
   }
 > = {
   terms: {
     title: "Terms of Service",
     eyebrow: "Cadio legal",
-    updated: "Effective June 8, 2026",
+    updated: "Effective June 7, 2026",
     sections: [
       {
         heading: "What Cadio Is",
@@ -55,7 +54,7 @@ const pages: Record<
   privacy: {
     title: "Privacy Policy",
     eyebrow: "Cadio privacy",
-    updated: "Effective June 8, 2026",
+    updated: "Effective June 7, 2026",
     sections: [
       {
         heading: "Data Cadio May Process",
@@ -72,14 +71,6 @@ const pages: Record<
         ],
       },
       {
-        heading: "Cookies",
-        id: "cookies",
-        body: [
-          "Cadio uses essential browser storage and cookies to keep the workspace working, remember session state, support saved accounts, and preserve preferences such as language and project context.",
-          "Cadio may use analytics cookies or similar technologies only when analytics are configured for the site. You can block non-essential cookies in your browser settings.",
-        ],
-      },
-      {
         heading: "Third-Party Model Sources",
         body: [
           "When Cadio searches for public models or inspiration, it may request information from public model sites. Those services may have their own privacy practices.",
@@ -88,6 +79,37 @@ const pages: Record<
       {
         heading: "Contact",
         body: ["For privacy questions, contact support@cadio.net."],
+      },
+    ],
+  },
+  cookies: {
+    title: "Cookie Policy",
+    eyebrow: "Cadio cookies",
+    updated: "Effective June 8, 2026",
+    sections: [
+      {
+        heading: "How Cadio Uses Cookies",
+        body: [
+          "Cadio uses essential browser storage and cookies to keep the workspace working, remember session state, support saved accounts, and preserve preferences such as language and project context.",
+          "These essential items are required for core product functionality and are not used to sell personal information.",
+        ],
+      },
+      {
+        heading: "Analytics Cookies",
+        body: [
+          "Cadio may use analytics cookies or similar technologies only when analytics are configured for the site.",
+          "Analytics help understand product usage, diagnose issues, and improve the experience. You can block non-essential cookies in your browser settings.",
+        ],
+      },
+      {
+        heading: "Third-Party Services",
+        body: [
+          "When Cadio connects to third-party model sources, hosting, analytics, or infrastructure providers, those services may set their own cookies or process technical request data under their own policies.",
+        ],
+      },
+      {
+        heading: "Contact",
+        body: ["Questions about cookies can be sent to support@cadio.net."],
       },
     ],
   },
@@ -115,21 +137,12 @@ const pages: Record<
 
 export default function LegalPage({
   page,
-  initialSection,
   onStartBuilding,
 }: {
   page: LegalPageKind;
-  initialSection?: string;
   onStartBuilding: () => void;
 }) {
   const content = pages[page];
-
-  useEffect(() => {
-    if (!initialSection) return;
-    window.setTimeout(() => {
-      document.getElementById(initialSection)?.scrollIntoView({ block: "start" });
-    }, 0);
-  }, [initialSection, page]);
 
   return (
     <div className="h-full overflow-y-auto bg-[#151515] text-white">
@@ -154,7 +167,7 @@ export default function LegalPage({
 
         <div className="mt-10 space-y-8">
           {content.sections.map((section) => (
-            <section id={section.id} key={section.heading} className="scroll-mt-20 border-t border-white/10 pt-6">
+            <section key={section.heading} className="border-t border-white/10 pt-6">
               <h2 className="text-xl font-semibold text-white">{section.heading}</h2>
               <div className="mt-3 space-y-3 text-sm leading-7 text-[#c8c8cb]">
                 {section.body.map((paragraph) =>

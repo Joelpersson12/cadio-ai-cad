@@ -20,20 +20,12 @@ export interface MeshPayload {
 export interface CadObject {
   id: string;
   name: string;
-  primitive?: string;
   parameters: Record<string, number>;
   feature_tree: Feature[];
   transform: Transform;
   material: string;
   color: string;
   mesh?: MeshPayload | null;
-  source_settings?: {
-    title?: string;
-    author?: string;
-    url?: string;
-    source?: string;
-    query?: string;
-  } | null;
 }
 
 export interface PrintAssistantResult {

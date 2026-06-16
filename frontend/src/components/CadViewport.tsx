@@ -1,28 +1,28 @@
 /** Main 3D viewport - fixed scaling, camera auto-fit, better lighting. */
  
 import { useEffect, useRef, useMemo, useState } from "react";
-import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
 
 const VIEW_COLORS = {
-  background: "#303133",
-  plate: "#6b7280",
-  plateEdge: "#cbd5e1",
-  gridCell: "#8b949e",
-  gridSection: "#d1d5db",
-  neutralBody: "#b8bcc4",
-  selectedBody: "#2563eb",
-  hoveredBody: "#93c5fd",
-  edgeSubtle: "#4b5563",
-  edgeStrong: "#e7faff",
-  edgeSelected: "#dbeafe",
-  edgeSelectedInk: "#071f3b",
+  background: "#0b0f14",
+  plate: "#111827",
+  plateEdge: "#1f2937",
+  gridCell: "#1f2937",
+  gridSection: "#3b82f6",
+  neutralBody: "#94a3b8",
+  selectedBody: "#3b82f6",
+  hoveredBody: "#cbd5e1",
+  edgeSubtle: "#0f172a",
+  edgeStrong: "#3b82f6",
+  edgeSelected: "#ffffff",
+  edgeSelectedInk: "#1e3a8a",
   edgeSelectedDetail: "#93c5fd",
-  edgeHover: "#38d5f4",
+  edgeHover: "#60a5fa",
   measure: "#f8fafc",
-  measureAccent: "#facc15",
+  measureAccent: "#3b82f6",
 };
 const SKETCH_GRID_STEP_MM = 5;
 
@@ -459,16 +459,12 @@ function ScaledMesh({
     >
       <meshPhysicalMaterial
         color={visibleBodyColor(obj, selected, hovered)}
-        roughness={selected ? 0.52 : 0.58}
-        metalness={0}
-        clearcoat={0.02}
-        clearcoatRoughness={0.72}
-        emissive={selected ? "#061f59" : hovered ? "#10213d" : "#000000"}
-        emissiveIntensity={selected ? 0.05 : hovered ? 0.035 : 0}
-        transparent={false}
-        opacity={1}
-        depthWrite
-        depthTest
+        roughness={selected ? 0.35 : 0.5}
+        metalness={selected ? 0.2 : 0.1}
+        clearcoat={selected ? 0.2 : 0}
+        clearcoatRoughness={0.25}
+        emissive={selected ? "#1e40af" : hovered ? "#1e293b" : "#000000"}
+        emissiveIntensity={selected ? 0.2 : hovered ? 0.1 : 0}
         polygonOffset
         polygonOffsetFactor={1}
         polygonOffsetUnits={1}
@@ -479,7 +475,7 @@ function ScaledMesh({
       <lineBasicMaterial
         color={selected ? VIEW_COLORS.edgeSelectedInk : hovered ? VIEW_COLORS.edgeHover : VIEW_COLORS.edgeSubtle}
         transparent
-        opacity={selected ? 0.75 : hovered ? 0.58 : 0.34}
+        opacity={selected ? 0.8 : hovered ? 0.6 : 0.15}
         depthTest
       />
     </lineSegments>
@@ -489,7 +485,7 @@ function ScaledMesh({
         <lineBasicMaterial
           color={VIEW_COLORS.edgeSelected}
           transparent
-          opacity={0.42}
+          opacity={0.9}
           depthTest
         />
       </lineSegments>
@@ -500,7 +496,7 @@ function ScaledMesh({
         <lineBasicMaterial
           color={selectionMode === "edge" ? VIEW_COLORS.edgeStrong : selectionMode === "face" ? "#b9a7ff" : VIEW_COLORS.edgeSelectedDetail}
           transparent
-          opacity={hovered && !selected ? 0.72 : 0.58}
+          opacity={hovered && !selected ? 1 : 0.9}
           depthTest
         />
       </lineSegments>
@@ -547,25 +543,19 @@ function ScaledMesh({
 // Build plate
 // ---------------------------------------------------------------------------
  
-function BuildPlate({
-  volume,
-  onPointerDown,
-}: {
-  volume: [number, number, number];
-  onPointerDown?: (event: ThreeEvent<PointerEvent>) => void;
-}) {
+function BuildPlate({ volume }: { volume: [number, number, number] }) {
   const [px, py] = volume;
   return (
-    <group onPointerDown={onPointerDown}>
+    <group>
       {/* Base plate - visible and textured */}
       <mesh position={[0, -0.55, 0]} receiveShadow>
         <boxGeometry args={[px, 0.04, py]} />
         <meshStandardMaterial 
           color={VIEW_COLORS.plate}
-          roughness={0.86}
-          metalness={0}
+          roughness={0.82}
+          metalness={0.02}
           transparent
-          opacity={0.16}
+          opacity={0.11}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
@@ -622,7 +612,6 @@ interface CadViewportProps {
   selectedObjectId: string;
   selectedObjectIds?: string[];
   onSelectObject: (id: string) => void;
-  onDeselectObject?: () => void;
   transformMode: TransformMode;
   onTransformCommit: (
     objectId: string,
@@ -778,7 +767,6 @@ export default function CadViewport({
   selectedObjectId,
   selectedObjectIds = [],
   onSelectObject,
-  onDeselectObject,
   transformMode,
   onTransformCommit,
   printerVolume = [220, 220, 250],
@@ -808,14 +796,6 @@ export default function CadViewport({
     value: string;
   } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
-  const clearViewportSelection = () => {
-    if (!onDeselectObject) return;
-    if (!selectedObjectId && !selectedObjectIds.length) return;
-    if (transformDragging) return;
-    if (expertMode && expertTool !== "select") return;
-    setEdgeInput(null);
-    onDeselectObject();
-  };
   const measurementSpecs = useMemo(() => {
     if (!showMeasurements) return [];
     const selectedIds = new Set(selectedObjectIds.length ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : []);
@@ -827,14 +807,14 @@ export default function CadViewport({
 
   return (
     <div
-      className="relative h-full w-full select-none bg-[#343435]"
+      className="relative h-full w-full select-none bg-cadio-bg"
       style={{ touchAction: "none" }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-3 top-14 z-10 w-56 flex-col gap-1.5 rounded-lg border border-[#454548] bg-[#242424]/92 p-2 shadow-xl backdrop-blur`}>
-        <div className="flex items-center justify-between gap-2 px-2 py-2">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cadio-muted">
-            Expert tools
+      <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-6 top-6 z-10 w-64 flex-col gap-2 rounded-2xl border border-cadio-border/50 bg-cadio-surface/90 p-3 shadow-2xl backdrop-blur-xl transition-all`}>
+        <div className="flex items-center justify-between px-2 py-1 mb-2">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted">
+            Expert Tools
           </div>
           <button
             type="button"
@@ -842,42 +822,45 @@ export default function CadViewport({
               onSetExpertTool?.("select");
               onSetExpertMode?.(false);
             }}
-            className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-[#454548] bg-[#1d1d1f] text-sm font-semibold leading-none text-[#cfcfcf] hover:border-[#28c7df] hover:text-white"
-            title="Close expert tools"
-            aria-label="Close expert tools"
+            className="p-1 rounded-md hover:bg-cadio-border/50 text-cadio-muted hover:text-white transition-colors"
           >
-            ×
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
-        {(["select", "rectangle", "circle", "line", "hole"] as ExpertTool[]).map((tool) => (
-          <button
-            key={tool}
-            disabled={!expertMode}
-            onClick={() => onSetExpertTool?.(tool)}
-            className={`px-3 py-2 rounded-md text-left text-xs capitalize transition-colors ${
-              expertMode && expertTool === tool
-                ? "bg-[#55565b] text-white font-semibold"
-                : "bg-transparent text-cadio-muted hover:bg-[#38383b] hover:text-cadio-text disabled:opacity-40"
-            }`}
-          >
-            {tool}
-          </button>
-        ))}
-        <div className="my-1 h-px bg-cadio-border" />
-        {(["body", "face", "edge"] as SelectionMode[]).map((mode) => (
-          <button
-            key={mode}
-            disabled={!expertMode}
-            onClick={() => onSetSelectionMode?.(mode)}
-            className={`px-3 py-2 rounded-md text-left text-xs capitalize transition-colors ${
-              expertMode && selectionMode === mode
-                ? "bg-cadio-accent text-[#111] font-semibold"
-                : "bg-transparent text-cadio-muted hover:bg-[#38383b] hover:text-cadio-text disabled:opacity-40"
-            }`}
-          >
-            {mode}
-          </button>
-        ))}
+        <div className="grid grid-cols-1 gap-1">
+          {(["select", "rectangle", "circle", "line", "hole"] as ExpertTool[]).map((tool) => (
+            <button
+              key={tool}
+              disabled={!expertMode}
+              onClick={() => onSetExpertTool?.(tool)}
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                expertMode && expertTool === tool
+                  ? "bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20"
+                  : "text-cadio-muted hover:bg-cadio-border/30 hover:text-white disabled:opacity-30"
+              }`}
+            >
+              <span className="capitalize">{tool}</span>
+            </button>
+          ))}
+        </div>
+        <div className="h-px bg-cadio-border/30 my-1 mx-2" />
+        <div className="grid grid-cols-3 gap-1 px-1">
+          {(["body", "face", "edge"] as SelectionMode[]).map((mode) => (
+            <button
+              key={mode}
+              disabled={!expertMode}
+              onClick={() => onSetSelectionMode?.(mode)}
+              className={`py-2 rounded-md text-[10px] font-bold uppercase tracking-tighter transition-all ${
+                expertMode && selectionMode === mode
+                  ? "bg-cadio-accent/10 border border-cadio-accent text-cadio-accent"
+                  : "border border-transparent text-cadio-muted hover:text-white"
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+      </div>
         <div className="my-1 h-px bg-cadio-border" />
         <label className="flex items-center justify-between gap-2 px-1 text-xs text-cadio-muted">
           <span>
@@ -928,69 +911,48 @@ export default function CadViewport({
       </div>
       <Canvas
         shadows
-        dpr={[1, Math.min(window.devicePixelRatio || 1, 2)]}
-        camera={{ position: [300, 220, 300], fov: 42, near: 0.1, far: 10000 }}
+        dpr={[1, 2]}
+        camera={{ position: [300, 220, 300], fov: 35, near: 1, far: 5000 }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
-        onCreated={({ gl }) => {
+        onCreated={({ gl, scene }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
           gl.toneMapping = THREE.NeutralToneMapping;
-          gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-          gl.toneMappingExposure = 1.16;
+          gl.toneMappingExposure = 1.2;
+          scene.background = new THREE.Color(VIEW_COLORS.background);
         }}
         onPointerUp={() => setTransformDragging(false)}
-        onPointerMissed={(event) => {
-          if (event.button !== 0) return;
-          clearViewportSelection();
-        }}
       >
-      <color attach="background" args={[VIEW_COLORS.background]} />
- 
-      {/* Lighting - enhanced for clarity */}
-      <hemisphereLight intensity={1.05} color="#ffffff" groundColor="#6b7280" />
-      <ambientLight intensity={0.7} color="#ffffff" />
-      <directionalLight
-        position={[220, 280, 180]}
-        intensity={2.35}
+      {/* Premium Studio Lighting */}
+      <hemisphereLight intensity={0.5} color="#ffffff" groundColor="#0f172a" />
+      <ambientLight intensity={0.3} />
+      <spotLight
+        position={[400, 500, 400]}
+        angle={0.15}
+        penumbra={1}
+        intensity={2.5}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-near={1}
-        shadow-camera-far={2000}
-        shadow-camera-left={-400}
-        shadow-camera-right={400}
-        shadow-camera-top={400}
-        shadow-camera-bottom={-400}
-        shadow-bias={-0.00008}
-        shadow-normalBias={0.025}
+        shadow-mapSize={[2048, 2048]}
       />
-      <directionalLight position={[-220, 180, -180]} intensity={0.78} color="#e8f2ff" />
-      <directionalLight position={[40, -100, 160]} intensity={0.42} color="#ffffff" />
-      <pointLight position={[0, 260, 0]} intensity={0.22} color="#ffffff" />
+      <directionalLight position={[-400, 300, -200]} intensity={0.8} color="#93c5fd" />
+      <pointLight position={[0, 400, 0]} intensity={0.4} color="#ffffff" />
  
-      {/* Grid - improved visibility */}
+      {/* Refined Grid */}
       <Grid
-        args={[printerVolume[0] * 2.2, printerVolume[1] * 2.2]}
+        args={[printerVolume[0] * 3, printerVolume[1] * 3]}
         cellSize={SKETCH_GRID_STEP_MM}
-        cellThickness={0.42}
+        cellThickness={1}
         cellColor={VIEW_COLORS.gridCell}
-        sectionSize={25}
-        sectionThickness={1.05}
+        sectionSize={50}
+        sectionThickness={1.5}
         sectionColor={VIEW_COLORS.gridSection}
-        fadeDistance={1000}
-        fadeStrength={1.15}
+        fadeDistance={800}
+        fadeStrength={1.5}
         infiniteGrid={false}
-        position={[0, 0.055, 0]}
+        position={[0, 0.05, 0]}
       />
  
       {/* Build plate */}
-      <BuildPlate
-        volume={printerVolume}
-        onPointerDown={(event) => {
-          if (event.button !== 0) return;
-          event.stopPropagation();
-          clearViewportSelection();
-        }}
-      />
+      <BuildPlate volume={printerVolume} />
       <SketchPlane
         active={expertMode}
         tool={expertTool}

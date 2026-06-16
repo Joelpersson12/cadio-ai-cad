@@ -3,18 +3,23 @@ export default {
   content: ["./index.html", "./frontend/src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
+      },
       colors: {
         cadio: {
-          bg: "#202022",
-          panel: "#282829",
-          border: "#3b3b3f",
-          text: "#f3f3f4",
-          muted: "#a7a8ac",
-          accent: "#2bb8dc",
-          "accent-hover": "#69d9f5",
-          selected: "#27c2e8",
-          danger: "#ff6b6b",
-          success: "#4ecdc4",
+          bg: "#0b0f14",
+          surface: "#111827",
+          "surface-secondary": "#1f2937",
+          panel: "#111827",
+          border: "#1f2937",
+          text: "#f8fafc",
+          muted: "#94a3b8",
+          accent: "#3b82f6",
+          "accent-hover": "#2563eb",
+          selected: "#2563eb",
+          danger: "#ef4444",
+          success: "#10b981",
         },
       },
     },

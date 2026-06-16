@@ -77,7 +77,6 @@ def parse_hole_edit(prompt: str) -> dict[str, float]:
         "counterbore_diameter": float(counterbore_match.group(1)) if counterbore_match else 9.0,
     }
 
-
 SYSTEM_PROMPT = """You are a professional CAD assistant that converts natural language into realistic 3D model parameters.
 
 Your role: Create practical, printable objects with appropriate dimensions and structural features.
@@ -158,12 +157,11 @@ def _coerce_feature(feature: Any) -> Feature:
     if isinstance(feature, Feature):
         return feature
     if isinstance(feature, str):
-        return Feature(id=feature, name=feature.replace("_", " ").title(), type=feature, enabled=True)
+        return Feature(id=feature, type=feature, enabled=True)
     if isinstance(feature, dict):
         feature_type = str(feature.get("type") or feature.get("id") or "")
         return Feature(
             id=str(feature.get("id") or feature_type),
-            name=str(feature.get("name") or feature_type.replace("_", " ").title()),
             type=feature_type,
             enabled=bool(feature.get("enabled", True)),
         )
@@ -230,7 +228,7 @@ def _ensure_feature(
         if f.type == feature_type:
             f.enabled = enabled
             return
-    features.append(Feature(id=feature_type, name=feature_type.replace("_", " ").title(), type=feature_type, enabled=enabled))
+    features.append(Feature(id=feature_type, type=feature_type, enabled=enabled))
 
 
 def _apply_deterministic_edit(
@@ -447,7 +445,6 @@ def parse_ai_command(
     prompt: str,
     session: Session,
     obj: CadObject,
-    research_brief: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Parse a natural-language prompt using GPT-4o into CAD changes.
     
@@ -456,7 +453,6 @@ def parse_ai_command(
     from backend.services.product_templates import get_template_for_prompt
     
     edit_only = is_edit_only_prompt(prompt)
-    source_brief = research_brief if isinstance(research_brief, dict) and research_brief else None
     # Detect if prompt is requesting a specific product template
     template = None if edit_only else get_template_for_prompt(prompt)
     
@@ -469,29 +465,22 @@ def parse_ai_command(
                 params[key] = obj["parameters"][key]
         
         features = _feature_tree_for_template(template.default_features)
-        external_actions = []
+        external_actions = _external_design_signals(prompt, params)
         
         obj["template_hint"] = template.name
-        if not edit_only and source_brief:
-            research_brief = source_brief
-            brief_actions = _apply_research_brief(research_brief, params, features)
-        else:
-            research_brief = None
-            brief_actions = []
+        research_brief = None
+        brief_actions: list[str] = []
     else:
         params = dict(obj["parameters"])
         features = [_coerce_feature(f) for f in obj["feature_tree"]]
-        external_actions = []
+        external_actions = [] if edit_only else _external_design_signals(prompt, params)
         if edit_only:
             research_brief = None
             brief_actions = []
         else:
-            if source_brief:
-                research_brief = source_brief
-            else:
-                from backend.services.design_brief import build_design_brief
+            from backend.services.design_brief import build_design_brief
 
-                research_brief = build_design_brief(prompt, limit=4)
+            research_brief = build_design_brief(prompt)
             brief_actions = _apply_research_brief(research_brief, params, features)
             obj["template_hint"] = None
     

@@ -31,7 +31,7 @@ import {
 } from "../utils/api";
 
 const SESSION_KEY = "cadio_session_id";
-const MIN_BUSY_MS = 280;
+const MIN_BUSY_MS = 650;
 
 async function waitForMinimumBusy(startedAt: number) {
   const remaining = MIN_BUSY_MS - (Date.now() - startedAt);
@@ -64,7 +64,6 @@ interface CadState {
 
   // UI
   status: string;
-  notice: string;
   isBusy: boolean;
   transformMode: TransformMode;
   expertMode: boolean;
@@ -81,7 +80,6 @@ interface CadState {
   setSelectionMode: (mode: SelectionMode) => void;
   setSketchHeight: (height: number) => void;
   setOperationAmount: (amount: number) => void;
-  dismissNotice: () => void;
   applyScenePayload: (payload: ScenePayload) => void;
   startBlankCreation: () => void;
   loadPrinters: () => Promise<void>;
@@ -91,7 +89,6 @@ interface CadState {
   patchAppearance: (appearance: { material?: string; color?: string }) => Promise<void>;
   onToggleFeature: (featureId: string, enabled: boolean) => Promise<void>;
   onSelectObject: (objectId: string) => Promise<void>;
-  clearSelection: () => void;
   selectAllObjects: () => void;
   onDeleteObject: () => Promise<void>;
   onTransformCommit: (
@@ -143,7 +140,6 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
   printSettings: null,
   status: "Ready",
-  notice: "",
   isBusy: false,
   transformMode: "off",
   expertMode: false,
@@ -163,7 +159,6 @@ export const useCadStore = create<CadState>((set, get) => ({
   setSelectionMode: (mode) => set({ selectionMode: mode }),
   setSketchHeight: (height) => set({ sketchHeight: Math.max(0.5, height) }),
   setOperationAmount: (amount) => set({ operationAmount: Math.max(0, amount) }),
-  dismissNotice: () => set({ notice: "" }),
   startBlankCreation: () => {
     localStorage.removeItem(SESSION_KEY);
     set({
@@ -183,7 +178,6 @@ export const useCadStore = create<CadState>((set, get) => ({
       },
       printSettings: null,
       status: "Blank workspace",
-      notice: "",
       isBusy: false,
       transformMode: "off",
       expertTool: "select",
@@ -192,9 +186,9 @@ export const useCadStore = create<CadState>((set, get) => ({
     });
   },
   setPrinter: async (printer) => {
-    const { sessionId, objects } = get();
+    const { sessionId } = get();
     set({ printer });
-    if (!sessionId || objects.length === 0) return;
+    if (!sessionId) return;
     try {
       const data = await apiUpdatePrinter({ session_id: sessionId, printer });
       set({
@@ -206,24 +200,6 @@ export const useCadStore = create<CadState>((set, get) => ({
         editHistory: data.edit_history,
       });
     } catch (err) {
-      if (err instanceof Error && /session not found/i.test(err.message)) {
-        localStorage.removeItem(SESSION_KEY);
-        set({
-          sessionId: "",
-          version: 0,
-          sceneToken: "",
-          objects: [],
-          objectOrder: [],
-          selectedObjectId: "",
-          selectedObjectIds: [],
-          bounds: { x: 0, y: 0, z: 0 },
-          printSettings: null,
-          printAssistant: { warnings: [], checks: [], hints: [], printability_score: 0 },
-          editHistory: [],
-          status: printer && printer !== "choose_printer" ? "Printer selected" : "Choose printer",
-        });
-        return;
-      }
       set({ status: err instanceof Error ? err.message : "Error" });
     }
   },
@@ -292,32 +268,12 @@ export const useCadStore = create<CadState>((set, get) => ({
       const data = await apiGenerate({
         session_id: sessionId || undefined,
         prompt,
-        printer: printer || "choose_printer",
+        printer,
         fit: true,
       });
       get().applyScenePayload(data);
       await waitForMinimumBusy(startedAt);
-      const latest = data.edit_history[data.edit_history.length - 1];
-      const actions = Array.isArray(latest?.actions) ? latest.actions.map(String) : [];
-      const notFound = actions.find((action) => action.toLowerCase().startsWith("model-not-found:"));
-      if (notFound) {
-        const message = notFound.replace(/^model-not-found:\s*/i, "").trim() || "Cadio could not find that model yet.";
-        const searchedQuery = actions
-          .find((action) => action.toLowerCase().startsWith("searched-query:"))
-          ?.replace(/^searched-query:\s*/i, "")
-          .trim();
-        const tip = actions
-          .find((action) => action.toLowerCase().startsWith("tip:"))
-          ?.replace(/^tip:\s*/i, "")
-          .trim();
-        set({
-          status: "Model not found",
-          notice: [message, searchedQuery ? `Searched: ${searchedQuery}` : "", tip || ""].filter(Boolean).join("\n"),
-          isBusy: false,
-        });
-      } else {
-        set({ status: `Updated v${data.version}`, notice: "", isBusy: false });
-      }
+      set({ status: `Updated v${data.version}`, isBusy: false });
     } catch (err) {
       await waitForMinimumBusy(startedAt);
       set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
@@ -382,7 +338,6 @@ export const useCadStore = create<CadState>((set, get) => ({
       set({ status: err instanceof Error ? err.message : "Error" });
     }
   },
-  clearSelection: () => set({ selectedObjectId: "", selectedObjectIds: [], transformMode: "off" }),
 
   onDeleteObject: async () => {
     const { sessionId, selectedObjectId } = get();

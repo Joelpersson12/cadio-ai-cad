@@ -138,8 +138,8 @@ function ParameterRow({
 
   const display = formatValue(draft, meta.step);
   return (
-    <div className="grid grid-cols-[82px_1fr_58px_26px] items-center gap-3 py-2">
-      <label className="text-xs leading-tight text-[#b9b9b9]">{meta.label}</label>
+    <div className="group grid grid-cols-[100px_1fr_60px_24px] items-center gap-4 py-2.5">
+      <label className="text-[11px] font-bold text-cadio-muted truncate uppercase tracking-tight">{meta.label}</label>
       <input
         type="range"
         min={meta.min}
@@ -151,7 +151,7 @@ function ParameterRow({
         onKeyDown={(e) => {
           if (e.key === "Enter") commit();
         }}
-        className="h-2 w-full accent-[#245b70]"
+        className="h-1.5 w-full bg-cadio-border rounded-full appearance-none cursor-pointer accent-cadio-accent transition-all hover:accent-cadio-accent-hover"
       />
       <input
         type="number"
@@ -166,9 +166,9 @@ function ParameterRow({
             e.currentTarget.blur();
           }
         }}
-        className="h-7 rounded-lg border-0 bg-[#2b2b2c] px-2 text-center text-xs font-semibold text-white outline-none"
+        className="h-8 rounded-md border border-cadio-border bg-cadio-surface px-2 text-center text-[11px] font-bold text-white outline-none focus:border-cadio-accent transition-colors"
       />
-      <span className="text-xs text-[#9f9f9f]">{meta.unit ?? ""}</span>
+      <span className="text-[10px] font-bold text-cadio-muted text-right">{meta.unit ?? ""}</span>
     </div>
   );
 }
@@ -233,270 +233,238 @@ export default function ObjectInspector() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-[#1d1d1e] text-white">
-      <div className="flex h-14 items-center justify-between border-b border-[#303033] px-6">
-        <h2 className="text-lg font-semibold">Parameters</h2>
-        <button
-          onClick={() => window.location.reload()}
-          className="grid h-8 w-8 place-items-center rounded-lg text-[#bdbdbd] hover:bg-[#2a2a2b] hover:text-white"
-          title="Refresh"
-        >
-          R
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 py-5">
-        <div className="mb-5 flex gap-2">
-          <button onClick={() => void undo()} className="rounded-lg bg-[#2a2a2b] px-3 py-2 text-xs font-semibold hover:bg-[#343436]">
-            Undo
+    <div className="flex h-full flex-col bg-cadio-bg text-cadio-text font-sans border-l border-cadio-border/50 shadow-2xl">
+      <div className="flex h-14 items-center justify-between border-b border-cadio-border/50 px-6 bg-cadio-surface/30">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-white flex items-center gap-2">
+          <svg className="w-4 h-4 text-cadio-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          Inspector
+        </h2>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => void undo()}
+            className="p-2 rounded-md text-cadio-muted hover:text-white hover:bg-cadio-surface transition-colors"
+            title="Undo"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
           </button>
-          <button onClick={() => void redo()} className="rounded-lg bg-[#2a2a2b] px-3 py-2 text-xs font-semibold hover:bg-[#343436]">
-            Redo
+          <button
+            onClick={() => void redo()}
+            className="p-2 rounded-md text-cadio-muted hover:text-white hover:bg-cadio-surface transition-colors"
+            title="Redo"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" /></svg>
           </button>
         </div>
+      </div>
 
-        <label className="mb-5 block">
-          <span className="mb-2 block text-xs text-[#a9a9a9]">Printer</span>
-          <select
-            value={printer}
-            onChange={(e) => void setPrinter(e.target.value)}
-            className="w-full rounded-lg border border-[#333] bg-[#252526] px-3 py-2 text-sm text-white outline-none"
-          >
-            <option value="choose_printer">Choose printer</option>
-            {Object.entries(printers).map(([key, p]) => (
-              <option value={key} key={key}>
-                {(p as PrinterProfile).name}
-              </option>
-            ))}
-          </select>
-          {selectedPrinter && (
-            <span className="mt-1 block text-[11px] text-[#898989]">
-              {selectedPrinter.build_volume[0]} x {selectedPrinter.build_volume[1]} x {selectedPrinter.build_volume[2]} mm
-            </span>
-          )}
-        </label>
-
-        <section className="border-t border-[#303033] py-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Placement</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => void snapSelectedObjects("on_plate")}
-              disabled={!selectedObjectId}
-              className="rounded-lg bg-[#2a2a2b] px-3 py-2 text-xs font-semibold hover:bg-[#343436] disabled:opacity-35"
-            >
-              On plate
-            </button>
-            <button
-              onClick={() => void snapSelectedObjects("center_on_plate")}
-              disabled={!selectedObjectId}
-              className="rounded-lg bg-[#2a2a2b] px-3 py-2 text-xs font-semibold hover:bg-[#343436] disabled:opacity-35"
-            >
-              Center on plate
-            </button>
+      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 scrollbar-thin scrollbar-thumb-cadio-border scrollbar-track-transparent">
+        {/* Device Setup */}
+        <section>
+          <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-cadio-muted">Device Configuration</div>
+          <div className="space-y-4">
+            <label className="block">
+              <span className="mb-2 block text-[11px] font-bold text-cadio-muted/70">3D Printer Profile</span>
+              <select
+                value={printer}
+                onChange={(e) => void setPrinter(e.target.value)}
+                className="w-full rounded-lg border border-cadio-border bg-cadio-surface px-4 py-2.5 text-sm font-semibold text-white outline-none focus:border-cadio-accent transition-all"
+              >
+                <option value="choose_printer">+ New Device</option>
+                {Object.entries(printers).map(([key, p]) =>
+                  key === "choose_printer" ? null : (
+                    <option value={key} key={key}>
+                      {(p as PrinterProfile).name}
+                    </option>
+                  )
+                )}
+              </select>
+              {selectedPrinter && (
+                <div className="mt-2 flex items-center gap-2 text-[10px] font-medium text-cadio-muted">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                  {selectedPrinter.build_volume[0]} × {selectedPrinter.build_volume[1]} × {selectedPrinter.build_volume[2]} mm
+                </div>
+              )}
+            </label>
+            
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => void snapSelectedObjects("on_plate")}
+                disabled={!selectedObjectId}
+                className="flex items-center justify-center gap-2 rounded-lg border border-cadio-border bg-cadio-surface px-3 py-2 text-[11px] font-bold text-white hover:bg-cadio-surface-secondary disabled:opacity-30 transition-colors shadow-sm"
+              >
+                Snap to Plate
+              </button>
+              <button
+                onClick={() => void snapSelectedObjects("center_on_plate")}
+                disabled={!selectedObjectId}
+                className="flex items-center justify-center gap-2 rounded-lg border border-cadio-border bg-cadio-surface px-3 py-2 text-[11px] font-bold text-white hover:bg-cadio-surface-secondary disabled:opacity-30 transition-colors shadow-sm"
+              >
+                Center Grid
+              </button>
+            </div>
           </div>
         </section>
 
-        <section className="border-t border-[#303033] py-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Dimensions</h3>
-            <span className="text-[10px] text-[#858585]">{parameterKeys.length}</span>
-          </div>
-          {selectedObject ? (
-            parameterKeys.map((key) => (
-              <ParameterRow
-                key={key}
-                paramKey={key}
-                value={Number(selectedObject.parameters[key] ?? PARAM_META[key].min)}
-                meta={PARAM_META[key]}
-                onChange={(paramKey, value) => void patchParam(paramKey, value)}
-              />
-            ))
-          ) : (
-            <p className="text-sm text-[#9f9f9f]">Create or select a model to edit parameters.</p>
-          )}
-        </section>
-
-        <section className="border-t border-[#303033] py-5">
+        {/* Geometry Parameters */}
+        <section>
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Material & color</h3>
-            <span className="text-[10px] text-[#858585]">{Object.keys(materials).length || 1}</span>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted">Geometry Parameters</div>
+            <div className="px-1.5 py-0.5 rounded-full bg-cadio-surface border border-cadio-border text-[9px] font-black text-cadio-muted">
+              {parameterKeys.length}
+            </div>
           </div>
-          <label className="mb-4 block">
-            <span className="mb-2 block text-xs text-[#a9a9a9]">Material</span>
+          <div className="rounded-xl border border-cadio-border/30 bg-cadio-surface/20 p-4">
+            {selectedObject ? (
+              parameterKeys.map((key) => (
+                <ParameterRow
+                  key={key}
+                  paramKey={key}
+                  value={Number(selectedObject.parameters[key] ?? PARAM_META[key].min)}
+                  meta={PARAM_META[key]}
+                  onChange={(paramKey, value) => void patchParam(paramKey, value)}
+                />
+              ))
+            ) : (
+              <div className="py-8 text-center">
+                <p className="text-xs font-medium text-cadio-muted">Select a part to view parameters</p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Appearance */}
+        <section>
+          <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-cadio-muted">Material & Appearance</div>
+          <div className="space-y-6 rounded-xl border border-cadio-border/30 bg-cadio-surface/20 p-5">
+            <label className="block">
+              <span className="mb-2 block text-[11px] font-bold text-cadio-muted/70">Material Profile</span>
+              <select
+                value={materialKey}
+                onChange={(e) => void patchAppearance({ material: e.target.value })}
+                className="w-full rounded-lg border border-cadio-border bg-cadio-surface px-4 py-2.5 text-sm font-semibold text-white outline-none focus:border-cadio-accent transition-all"
+              >
+                {materialEntries.map(([key, material]) => (
+                  <option value={key} key={key}>
+                    {material.label}
+                  </option>
+                ))}
+              </select>
+              {materials[materialKey] && (
+                <div className="mt-2 flex items-center gap-2 text-[10px] font-medium text-cadio-muted">
+                  <svg className="w-3 h-3 text-cadio-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.5-7 3 10 1 15 1 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 11c.193-.11.402-.211.626-.303" /></svg>
+                  {tempRange(materials[materialKey].nozzle_temp_c)} Nozzle / {tempRange(materials[materialKey].bed_temp_c)} Bed
+                </div>
+              )}
+            </label>
+            
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[11px] font-bold text-cadio-muted uppercase tracking-tight">Display Color</span>
+              <label className="flex items-center gap-3 rounded-lg border border-cadio-border bg-cadio-surface px-4 py-2 cursor-pointer hover:border-cadio-muted/50 transition-colors">
+                <input
+                  type="color"
+                  value={color}
+                  onChange={(e) => void patchAppearance({ color: e.target.value })}
+                  className="h-5 w-5 rounded-md border-0 bg-transparent p-0 cursor-pointer"
+                />
+                <span className="font-mono text-[10px] font-bold uppercase text-white">{color}</span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        {/* Print Analytics */}
+        {printSettings && (
+          <section>
+            <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-cadio-muted">Print Insights</div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-cadio-border/30 bg-cadio-surface/40 p-4">
+                  <div className="text-[10px] font-bold text-cadio-muted uppercase mb-1">Scale Rec</div>
+                  <div className="text-lg font-black text-white">{printSettings.scale.recommended_scale_percent.toFixed(1)}%</div>
+                  <div className="text-[9px] font-bold text-cadio-accent/60 uppercase">Max {printSettings.scale.fit_scale_percent.toFixed(1)}%</div>
+                </div>
+                <div className="rounded-xl border border-cadio-border/30 bg-cadio-surface/40 p-4">
+                  <div className="text-[10px] font-bold text-cadio-muted uppercase mb-1">Layer Height</div>
+                  <div className="text-lg font-black text-white">{printSettings.slicer.layer_height_mm}mm</div>
+                  <div className="text-[9px] font-bold text-cadio-muted/50 uppercase">Base {printSettings.slicer.first_layer_height_mm}mm</div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-cadio-border/30 bg-cadio-surface/20 p-4 space-y-3">
+                <div className="flex justify-between items-center text-[10px] font-bold">
+                  <span className="text-cadio-muted uppercase tracking-tight">Precision Scaling</span>
+                  <ScalePercentInput
+                    value={selectedScalePercent}
+                    onCommit={(percent) => void setSelectedScalePercent(percent)}
+                    disabled={!selectedObject}
+                    className="w-24 h-7 rounded-md"
+                  />
+                </div>
+                <div className="h-px bg-cadio-border/20 mx-1" />
+                <div className="space-y-2 text-[10px] font-bold uppercase tracking-tighter">
+                  <div className="flex justify-between text-cadio-muted">
+                    <span>Extrusion Temp</span>
+                    <span className="text-white">{tempRange(printSettings.slicer.nozzle_temp_c)}</span>
+                  </div>
+                  <div className="flex justify-between text-cadio-muted">
+                    <span>Print Velocity</span>
+                    <span className="text-white">{printSettings.slicer.print_speed_mm_s} mm/s</span>
+                  </div>
+                  <div className="flex justify-between text-cadio-muted">
+                    <span>Infill Density</span>
+                    <span className="text-white">{printSettings.slicer.infill_percent}% ({printSettings.slicer.walls} Walls)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
+
+      {/* Export Footer */}
+      <div className="border-t border-cadio-border/50 p-6 bg-cadio-surface/30">
+        <div className="mb-4">
+          <label className="block">
+            <span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-cadio-muted">Output Format</span>
             <select
-              value={materialKey}
-              onChange={(e) => void patchAppearance({ material: e.target.value })}
-              className="w-full rounded-lg border border-[#333] bg-[#252526] px-3 py-2 text-sm text-white outline-none"
+              value={exportFormat}
+              onChange={(e) => setExportFormat(e.target.value)}
+              className="w-full rounded-lg border border-cadio-border bg-cadio-surface px-4 py-2.5 text-sm font-semibold text-white outline-none focus:border-cadio-accent"
             >
-              {materialEntries.map(([key, material]) => (
-                <option value={key} key={key}>
-                  {material.label}
+              {EXPORT_FORMATS.map((format) => (
+                <option value={format.value} key={format.value}>
+                  {format.label} • {format.hint}
                 </option>
               ))}
             </select>
-            {materials[materialKey] && (
-              <span className="mt-1 block text-[11px] text-[#898989]">
-                {tempRange(materials[materialKey].nozzle_temp_c)} nozzle, {tempRange(materials[materialKey].bed_temp_c)} bed
-              </span>
-            )}
           </label>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-[#b9b9b9]">Model color</span>
-            <label className="flex items-center gap-2 rounded-lg bg-[#2a2a2b] px-3 py-2">
-              <input
-                type="color"
-                value={color}
-                onChange={(e) => void patchAppearance({ color: e.target.value })}
-                className="h-5 w-5 rounded-full border-0 bg-transparent p-0"
-              />
-              <span className="font-mono text-xs uppercase text-white">{color}</span>
-            </label>
-          </div>
-        </section>
-
-        {printSettings && (
-          <section className="border-t border-[#303033] py-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Print setup</h3>
-              <span className="text-[10px] text-[#858585]">{printSettings.material_label}</span>
-            </div>
-
-            <div className="mb-4 grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg bg-[#242425] px-3 py-2">
-                <div className="text-[#8f8f8f]">Recommended scale</div>
-                <div className="mt-1 text-base font-semibold text-white">
-                  {printSettings.scale.recommended_scale_percent.toFixed(1)}%
-                </div>
-                <div className="text-[10px] text-[#9a9a9a]">
-                  fit max {printSettings.scale.fit_scale_percent.toFixed(1)}%
-                </div>
-              </div>
-              <div className="rounded-lg bg-[#242425] px-3 py-2">
-                <div className="text-[#8f8f8f]">Layer</div>
-                <div className="mt-1 text-base font-semibold text-white">
-                  {printSettings.slicer.layer_height_mm} mm
-                </div>
-                <div className="text-[10px] text-[#9a9a9a]">
-                  first {printSettings.slicer.first_layer_height_mm} mm
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-4 rounded-lg border border-[#303033] bg-[#202021] p-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs text-[#8f8f8f]">Model scaling</div>
-                  <div className="mt-0.5 text-[10px] text-[#9a9a9a]">Type 98,3% and press Enter</div>
-                </div>
-                <ScalePercentInput
-                  value={selectedScalePercent}
-                  onCommit={(percent) => void setSelectedScalePercent(percent)}
-                  disabled={!selectedObject}
-                  className="w-28"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2 text-xs text-[#cfcfcf]">
-              <div className="flex justify-between gap-3">
-                <span className="text-[#8f8f8f]">Nozzle</span>
-                <span>{tempRange(printSettings.slicer.nozzle_temp_c)}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-[#8f8f8f]">Bed</span>
-                <span>{tempRange(printSettings.slicer.bed_temp_c)}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-[#8f8f8f]">Speed</span>
-                <span>{printSettings.slicer.print_speed_mm_s} mm/s</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-[#8f8f8f]">Infill / walls</span>
-                <span>{printSettings.slicer.infill_percent}% / {printSettings.slicer.walls}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-[#8f8f8f]">Supports</span>
-                <span className="text-right">{printSettings.slicer.support}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-[#8f8f8f]">Adhesion</span>
-                <span>{printSettings.slicer.adhesion}</span>
-              </div>
-            </div>
-
-            {printSettings.slicer.source_overrides.length > 0 && (
-              <p className="mt-3 rounded-lg bg-[#14333a] px-3 py-2 text-xs text-[#b7f3ff]">
-                Using creator values for: {printSettings.slicer.source_overrides.join(", ")}
-              </p>
-            )}
-            {printSettings.warnings.map((warning) => (
-              <p key={warning} className="mt-2 rounded-lg bg-[#3b2525] px-3 py-2 text-xs text-[#ffb5b5]">{warning}</p>
-            ))}
-          </section>
-        )}
-
-        {sourceSettings?.has_creator_settings && (
-          <section className="border-t border-[#303033] py-5">
-            <div className="mb-3">
-              <h3 className="text-sm font-semibold">Creator settings</h3>
-              <p className="mt-1 text-[11px] text-[#898989]">
-                {sourceSettings.title || "Printables model"}
-                {sourceSettings.author ? ` by ${sourceSettings.author}` : ""}
-              </p>
-            </div>
-            {sourceRows.length > 0 && (
-              <div className="space-y-2 text-xs">
-                {sourceRows.map(([key, value]) => (
-                  <div key={key} className="flex justify-between gap-3">
-                    <span className="capitalize text-[#8f8f8f]">{key.replace(/_/g, " ")}</span>
-                    <span className="max-w-[150px] text-right text-[#ededed]">{settingValue(value)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {(sourceSettings.notes ?? []).slice(0, 2).map((note) => (
-              <p key={note} className="mt-3 text-xs leading-relaxed text-[#bdbdbd]">{note}</p>
-            ))}
-          </section>
-        )}
-
-        <section className="border-t border-[#303033] py-5 text-xs text-[#9f9f9f]">
-          <p>Bounds: {bounds.x?.toFixed(1)} x {bounds.y?.toFixed(1)} x {bounds.z?.toFixed(1)} mm</p>
-          <p>Parts: {objects.length}</p>
-        </section>
-      </div>
-
-      <div className="border-t border-[#303033] p-5">
-        <label className="mb-3 block">
-          <span className="mb-2 block text-xs text-[#a9a9a9]">Download format</span>
-          <select
-            value={exportFormat}
-            onChange={(e) => setExportFormat(e.target.value)}
-            className="w-full rounded-lg border border-[#333] bg-[#252526] px-3 py-2 text-sm text-white outline-none"
-          >
-            {EXPORT_FORMATS.map((format) => (
-              <option value={format.value} key={format.value}>
-                {format.label} - {format.hint}
-              </option>
-            ))}
-          </select>
-        </label>
+        </div>
+        
         {exportError && (
-          <p className="mb-3 rounded-lg border border-[#6b2d2d] bg-[#2a1717] px-3 py-2 text-xs text-[#ffb3b3]">
+          <div className="mb-4 rounded-lg bg-cadio-danger/10 border border-cadio-danger/20 p-3 text-[11px] font-medium text-cadio-danger">
             {exportError}
-          </p>
+          </div>
         )}
+        
         <button
           type="button"
           onClick={() => void handleDownload()}
           disabled={!sessionId || downloadBusy}
-          className={`flex h-12 w-full items-center justify-center rounded-lg text-sm font-semibold ${
-            sessionId ? "bg-[#e8e8e8] text-[#171717] hover:bg-white" : "bg-[#333] text-[#777]"
-          }`}
+          className="relative group w-full h-12 overflow-hidden rounded-xl bg-white font-bold text-cadio-bg transition-all hover:bg-cadio-text disabled:opacity-20 active:scale-95 shadow-lg"
         >
-          <span>{downloadBusy ? "Preparing..." : `Download ${exportFormat.toUpperCase()}`}</span>
+          <div className="relative z-10 flex items-center justify-center gap-2">
+            {downloadBusy ? (
+              <>
+                <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                Processing
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Export {exportFormat.toUpperCase()}
+              </>
+            )}
+          </div>
         </button>
       </div>
     </div>

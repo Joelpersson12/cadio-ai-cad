@@ -8,7 +8,6 @@ real source mesh before falling back to generated CAD.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
@@ -128,15 +127,10 @@ class DesignProvider(ABC):
 _SEARCH_CACHE: dict[tuple[str, str, int], tuple[float, list[ExampleDesign]]] = {}
 _FILE_CACHE: dict[str, tuple[float, list[SourceModelFile]]] = {}
 _MODEL_META_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
-_NEGATIVE_SEARCH_CACHE: dict[tuple[str, str], float] = {}
 _CACHE_TTL_SECONDS = 600.0
-_NEGATIVE_CACHE_TTL_SECONDS = 120.0
-_SEARCH_TOTAL_BUDGET_SECONDS = 4.2
-_SEARCH_WORKERS = 10
-_SEARCH_EARLY_RETURN_SECONDS = 1.6
 
 
-def _fetch_text(url: str, timeout: float = 2.8) -> str:
+def _fetch_text(url: str, timeout: float = 8.0) -> str:
     req = Request(
         url,
         headers={
@@ -380,17 +374,14 @@ _SOURCE_WEIGHTS = {
     "yeggi": 9,
     "makerworld": 18,
     "thangs": 14,
-}
-
-_PROVIDER_PRIORITY = {
-    "printables": 100,
-    "thingiverse": 76,
-    "makerworld": 72,
-    "stlfinder": 66,
-    "yeggi": 64,
-    "cults3d": 58,
-    "myminifactory": 56,
-    "thangs": 52,
+    "cgtrader": 12,
+    "grabcad": 12,
+    "pinshape": 13,
+    "youmagine": 12,
+    "crealitycloud": 12,
+    "nih3d": 13,
+    "stlrepo": 8,
+    "3dprintsearch": 8,
 }
 
 _BAD_TITLE_WORDS = {
@@ -440,108 +431,10 @@ _QUERY_STOP_WORDS = {
     "den",
 }
 
-_VEHICLE_BRANDS = {
-    "honda",
-    "yamaha",
-    "kawasaki",
-    "suzuki",
-    "ktm",
-    "husqvarna",
-    "gasgas",
-    "beta",
-    "sherco",
-    "bmw",
-    "toyota",
-    "volvo",
-    "ford",
-    "tesla",
-    "audi",
-    "vw",
-    "volkswagen",
-}
-
-_POWER_TOOL_BRANDS = {
-    "dewalt",
-    "makita",
-    "milwaukee",
-    "ryobi",
-    "bosch",
-    "metabo",
-    "festool",
-    "hilti",
-    "ridgid",
-}
-
-_VEHICLE_WORDS = {
-    "dirtbike",
-    "motocross",
-    "motorcycle",
-    "bike",
-    "atv",
-    "quad",
-    "scooter",
-    "moped",
-    "car",
-    "truck",
-}
-
-_PART_WORDS = {
-    "chain",
-    "guide",
-    "fork",
-    "seal",
-    "swingarm",
-    "brake",
-    "caliper",
-    "axle",
-    "wheel",
-    "bearing",
-    "spacer",
-    "bushing",
-    "guard",
-    "cover",
-    "bracket",
-    "mount",
-    "adapter",
-    "holder",
-    "clip",
-    "tool",
-    "tools",
-    "jig",
-    "fixture",
-    "accessory",
-    "accessories",
-}
-
-_MODEL_TOKEN_RE = re.compile(r"^[a-z]{1,5}\d{2,4}[a-z0-9]*$")
-
-
-def _vehicle_context_words(core_words: list[str]) -> list[str]:
-    contextual: list[str] = []
-    for word in core_words:
-        if (
-            word in _VEHICLE_BRANDS
-            or word in _VEHICLE_WORDS
-            or word in _PART_WORDS
-            or _MODEL_TOKEN_RE.match(word)
-            or re.fullmatch(r"(?:19|20)\d{2}", word)
-        ):
-            contextual.append(word)
-    return contextual
-
 
 def _clean_title(text: str) -> str:
     title = re.sub(r"<[^>]+>", " ", html.unescape(text))
-    title = re.sub(r'^(?:painting|image|img)#loaded.*?/\>\s*', "", title, flags=re.I)
-    title = re.sub(r'^[^A-Za-z0-9]{0,8}(?:painting|image|img)[^A-Za-z0-9]+', "", title, flags=re.I)
     title = re.sub(r"\s+", " ", title).strip()
-    if "painting#loaded" in title.lower() and "/>" in title:
-        title = title.rsplit("/>", 1)[-1].strip()
-    title = re.sub(r'^.*?painting#error"\s*>\s*', "", title, flags=re.I).strip()
-    title = re.sub(r'^.*?(?:painting|image|img)#loaded.*?(?:">\s*|>\s*)', "", title, flags=re.I).strip()
-    title = re.sub(r'^.*?src=""\s*/?>\s*', "", title, flags=re.I).strip()
-    title = re.sub(r"^(?:loaded|loading|image|picture)\s+", "", title, flags=re.I).strip()
-    title = re.sub(r"\s+(?:SEK|USD|EUR|GBP)\s*kr?\s*[\d.,]+.*$", "", title, flags=re.I).strip()
     title = re.sub(r"^(free|download|3d model)\s+", "", title, flags=re.I).strip()
     return title
 
@@ -561,6 +454,22 @@ def _looks_like_model_url(source: str, url: str, title: str) -> bool:
         return "/3d-model/" in lower_url or "/en/model/" in lower_url
     if source == "myminifactory":
         return "/object/3d-print-" in lower_url or "/objects/3d-print-" in lower_url
+    if source == "cgtrader":
+        return "/3d-print-models/" in lower_url or "/3d-models/" in lower_url
+    if source == "grabcad":
+        return "/library/" in lower_url
+    if source == "pinshape":
+        return "/items/" in lower_url or "/3d-printing/" in lower_url
+    if source == "youmagine":
+        return "/designs/" in lower_url
+    if source == "crealitycloud":
+        return "/model-detail/" in lower_url or "/model/" in lower_url
+    if source == "nih3d":
+        return "/3d-print/" in lower_url or "/discover/" in lower_url or "/model/" in lower_url
+    if source == "stlrepo":
+        return any(fragment in lower_url for fragment in ("/models/", "/model/", "/3d-model/"))
+    if source == "3dprintsearch":
+        return any(fragment in lower_url for fragment in ("/model/", "/models/"))
     if source == "stlfinder":
         return any(fragment in lower_url for fragment in ("/3dmodels/", "/model/", "/thing:", "/thing/"))
     if source == "yeggi":
@@ -584,49 +493,23 @@ def _query_words(query: str) -> list[str]:
         "headphone": ["headset", "headphones"],
         "battery": ["batteries", "pack"],
         "batteries": ["battery", "pack"],
-        "holder": ["mount", "bracket", "rack", "hanger", "hook"],
-        "hanger": ["holder", "hook", "rack"],
-        "hook": ["hanger", "holder", "mount"],
-        "mount": ["holder", "bracket", "adapter"],
-        "bracket": ["mount", "holder", "adapter"],
-        "rack": ["holder", "organizer", "shelf"],
-        "shelf": ["rack", "holder"],
+        "holder": ["mount", "bracket", "rack"],
+        "mount": ["holder", "bracket"],
+        "tool": ["tools", "workshop"],
+        "tools": ["tool", "workshop"],
+        "drill": ["bit", "tool"],
+        "screwdriver": ["tool", "bit"],
+        "wrench": ["spanner", "tool"],
+        "pliers": ["tool"],
         "desk": ["clamp"],
         "table": ["desk"],
         "wall": ["mount"],
-        "garage": ["workshop", "wall"],
-        "workshop": ["garage", "wall"],
-        "wardrobe": ["closet", "organizer"],
-        "closet": ["wardrobe", "organizer"],
-        "bicycle": ["bike", "handlebar"],
-        "bike": ["bicycle", "handlebar"],
         "dewalt": ["power", "tool"],
         "stand": ["holder", "dock"],
         "clip": ["clamp", "holder"],
         "organizer": ["holder", "storage"],
         "case": ["box", "cover"],
         "box": ["case", "enclosure"],
-        "dirtbike": ["motocross", "motorcycle"],
-        "motocross": ["dirtbike", "motorcycle"],
-        "motorcycle": ["dirtbike", "motocross"],
-        "fork": ["suspension"],
-        "chain": ["chainguide", "guide"],
-        "guide": ["guard", "slider"],
-        "powerwasher": ["pressure", "washer"],
-        "pressure": ["powerwasher"],
-        "washer": ["powerwasher"],
-        "accessory": ["adapter", "nozzle", "holder"],
-        "accessories": ["adapter", "nozzle", "holders"],
-        "tool": ["jig", "fixture", "wrench"],
-        "tools": ["jig", "fixture", "wrench"],
-        "clothes": ["coat", "jacket", "hanger"],
-        "helmet": ["helmets"],
-        "belt": ["belts", "strap"],
-        "snus": ["can", "tin"],
-        "can": ["tin", "container"],
-        "replacement": ["spare", "part"],
-        "spare": ["replacement", "part"],
-        "part": ["replacement", "spare"],
     }
     words: list[str] = []
     for word in base:
@@ -655,133 +538,11 @@ def _query_variants(query: str) -> list[str]:
             variants.append(value)
 
     add(cleaned)
-    vehicle_context = _vehicle_context_words(core_words)
-    vehicle_phrase = " ".join(vehicle_context)
-    brand_words = [word for word in core_words if word in _VEHICLE_BRANDS]
-    model_words = [word for word in core_words if _MODEL_TOKEN_RE.match(word)]
-    year_words = [word for word in core_words if re.fullmatch(r"(?:19|20)\d{2}", word)]
-    part_words = [word for word in core_words if word in _PART_WORDS]
-    identity_words = brand_words + model_words + year_words
-    product_phrase = " ".join(identity_words + part_words).strip() if identity_words else ""
-
-    if _POWER_TOOL_BRANDS & words or {"battery", "batteries"} & words:
-        brand = next((word for word in core_words if word in _POWER_TOOL_BRANDS), "power tool")
+    if {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch"} & words:
+        brand = next((word for word in ("dewalt", "makita", "milwaukee", "ryobi", "bosch") if word in words), "power tool")
         add(f"{brand} battery holder wall mount")
         add(f"{brand} battery holder slide rail")
         add("power tool battery holder printable")
-    if {"dirtbike", "motocross", "motorcycle"} & words or brand_words or model_words:
-        seed = product_phrase or vehicle_phrase or cleaned or "dirtbike tool"
-        add(f"{seed} 3d print")
-        add(f"{seed} stl")
-        add(f"{seed} printable")
-        add(f"{seed} holder")
-        add(f"{seed} bracket")
-        if {"tool", "tools", "jig", "fixture"} & words:
-            tool_seed = seed if re.search(r"\btools?\b", seed) else f"{seed} tool"
-            add(tool_seed)
-            if not re.search(r"\b(?:dirtbike|dirt bike|motocross|motorcycle)\b", tool_seed):
-                add(f"dirt bike {tool_seed}")
-                add(f"motorcycle {tool_seed} 3d print")
-            else:
-                add(f"{tool_seed} 3d print")
-        if "fork" in words:
-            add(seed if "fork" in seed and "tool" in seed else f"{seed} fork tool")
-            add("dirt bike fork seal driver")
-            add("motorcycle fork cap tool 3d print")
-            add("fork seal bullet tool stl")
-        if "chain" in words or "guide" in words or "guard" in words:
-            model_seed = " ".join(brand_words + model_words + year_words).strip()
-            add(f"{model_seed} chain guide" if model_seed else "dirt bike chain guide")
-            add(f"{model_seed} chain guide stl" if model_seed else "motocross chain guide stl")
-            add("dirt bike chain slider guide 3d print")
-    if {"pressure", "powerwasher", "washer"} & words and {"accessory", "accessories", "adapter", "nozzle", "holder", "mount"} & words:
-        add("pressure washer accessories 3d print")
-        add("pressure washer nozzle holder stl")
-        add("pressure washer adapter 3d print")
-        add("power washer hose holder printable")
-        add("pressure washer wand holder wall mount")
-    if {"cup", "mug", "drink", "bottle", "tumbler"} & words and {"holder", "mount", "stand", "clamp", "desk", "wall"} & words:
-        add("cup holder 3d print")
-        add("mug holder printable")
-        add("desk cup holder clamp 3d print")
-        add("wall mounted cup holder stl")
-        if "desk" in words or "clamp" in words:
-            add("clamp on desk cup holder")
-            add("desk mount mug holder stl")
-    if {"tool", "tools", "drill", "screwdriver", "wrench", "pliers", "bit", "bits"} & words and {"holder", "rack", "organizer", "pegboard", "skadis", "gridfinity", "wall", "garage", "workshop"} & words:
-        object_words = [
-            word
-            for word in core_words
-            if word not in {"holder", "rack", "organizer", "wall", "mounted", "garage", "workshop"}
-        ]
-        object_phrase = " ".join(object_words) or "tool"
-        add(f"{object_phrase} holder 3d print")
-        add(f"{object_phrase} wall mount holder")
-        add(f"{object_phrase} pegboard holder stl")
-        add(f"{object_phrase} skadis holder")
-        add(f"gridfinity {object_phrase} holder")
-    if {"helmet", "helmets"} & words and {"holder", "hanger", "mount", "wall", "garage"} & words:
-        add("helmet holder wall mount 3d print")
-        add("helmet hanger printable")
-        add("garage helmet holder stl")
-    if {"belt", "belts", "clothes", "coat", "jacket", "hanger", "wardrobe", "closet"} & words:
-        add("belt holder closet organizer 3d print")
-        add("wardrobe hanger organizer printable")
-        add("coat hanger wall hook stl")
-        add("closet belt rack 3d print")
-    if {"snus", "tin"} & words or ({"can"} & words and {"holder", "mount", "bike", "bicycle", "car"} & words):
-        add("snus can holder 3d print")
-        add("round can holder printable")
-        add("tin holder stl")
-        if "bike" in words or "bicycle" in words:
-            add("bike mounted can holder 3d print")
-    if {"holder", "hanger", "hook", "mount", "bracket", "rack", "stand", "clip", "organizer"} & words:
-        utility_words = {
-            "holder",
-            "hanger",
-            "hook",
-            "mount",
-            "mounted",
-            "bracket",
-            "rack",
-            "stand",
-            "clip",
-            "organizer",
-            "wall",
-            "garage",
-            "workshop",
-            "wardrobe",
-            "closet",
-            "bicycle",
-            "bike",
-            "handlebar",
-            "pegboard",
-            "skadis",
-            "gridfinity",
-            "magnetic",
-            "desk",
-            "table",
-            "clamp",
-        }
-        object_words = [word for word in core_words if word not in utility_words]
-        object_phrase = " ".join(object_words) or cleaned or normalized
-        if "garage" in words or "workshop" in words:
-            add(f"garage {object_phrase} holder")
-            add(f"workshop {object_phrase} holder")
-            add(f"wall mounted {object_phrase} holder")
-            add(f"{object_phrase} garage wall mount")
-        if "wardrobe" in words or "closet" in words:
-            add(f"closet {object_phrase} holder")
-            add(f"wardrobe {object_phrase} hanger")
-            add(f"{object_phrase} closet organizer")
-        if "bicycle" in words or "bike" in words or "handlebar" in words:
-            add(f"bicycle {object_phrase} holder")
-            add(f"bike mounted {object_phrase} holder")
-            add(f"handlebar {object_phrase} holder")
-        if "pegboard" in words or "skadis" in words:
-            add(f"pegboard {object_phrase} holder")
-            add(f"skadis {object_phrase} holder")
-            add(f"{object_phrase} pegboard mount")
     if "desk" in words and {"holder", "mount", "bracket", "rack", "clamp"} & words:
         object_words = [
             word
@@ -810,14 +571,29 @@ def _query_variants(query: str) -> list[str]:
     if {"headset", "headphone", "headphones"} & words:
         add("headphone stand 3d print")
         add("headset holder printable")
+    if "tool" in words or "tools" in words or {"drill", "screwdriver", "wrench", "pliers", "bit"} & words:
+        add("tool holder wall mount")
+        add("tool rack wall mount 3d print")
+        add("pegboard tool holder 3d print")
+        add("workshop tool organizer stl")
+        add("gridfinity tool holder")
+        if "drill" in words or "bit" in words:
+            add("drill bit holder stl")
+            add("hex bit holder 3d print")
+        if "screwdriver" in words:
+            add("screwdriver holder wall mount")
+        if "wrench" in words:
+            add("wrench holder wall mount")
+        if "pliers" in words:
+            add("pliers holder wall mount")
     if {"cdi", "ecu", "ecm", "ignition", "module"} & words:
         add("electronics module bracket 3d print")
         add("cdi box holder bracket")
-    if {"holder", "hanger", "hook", "mount", "bracket", "rack", "stand", "clip", "organizer", "case", "box", "enclosure"} & words:
+    if {"holder", "mount", "bracket", "rack", "stand", "clip", "organizer", "case", "box", "enclosure"} & words:
         object_words = [
             word
             for word in core_words
-            if word not in {"holder", "hanger", "hook", "mount", "bracket", "rack", "stand", "clip", "organizer", "case", "box", "enclosure", "wall", "mounted", "gridfinity", "pegboard", "skadis", "magnetic", "garage", "workshop", "wardrobe", "closet", "bicycle", "bike", "handlebar"}
+            if word not in {"holder", "mount", "bracket", "rack", "stand", "clip", "organizer", "case", "box", "enclosure", "wall", "mounted", "gridfinity", "pegboard", "magnetic"}
         ]
         object_phrase = " ".join(object_words) or normalized
         if "gridfinity" in words:
@@ -843,7 +619,7 @@ def _query_variants(query: str) -> list[str]:
         add(f"{normalized} stl")
         add(f"{normalized} printable")
 
-    return variants[:24]
+    return variants[:12]
 
 
 def _design_score(query: str, design: ExampleDesign) -> float:
@@ -896,41 +672,22 @@ def _query_token_matches_title(word: str, title: str, tags: list[str]) -> bool:
         "phone": {"phone", "mobile", "smartphone", "iphone"},
         "cup": {"cup", "mug", "tumbler"},
         "mug": {"mug", "cup", "tumbler"},
-        "holder": {"holder", "hold", "mount", "stand", "dock", "rack", "hanger", "hook"},
-        "hanger": {"hanger", "hook", "holder", "rack"},
-        "hook": {"hook", "hanger", "holder", "mount"},
+        "holder": {"holder", "hold", "mount", "stand", "dock", "rack"},
         "stand": {"stand", "holder", "dock", "mount"},
-        "mount": {"mount", "mounted", "clamp", "clip", "bracket", "holder", "hook"},
+        "mount": {"mount", "mounted", "clamp", "clip", "bracket", "holder"},
+        "tool": {"tool", "tools", "workshop"},
+        "tools": {"tool", "tools", "workshop"},
+        "drill": {"drill", "bit", "bits"},
+        "screwdriver": {"screwdriver", "driver", "drivers"},
+        "wrench": {"wrench", "spanner"},
+        "pliers": {"pliers", "plier"},
+        "pegboard": {"pegboard", "skadis", "wall"},
+        "gridfinity": {"gridfinity", "grid", "bin"},
         "desk": {"desk", "table", "desktop", "clamp"},
-        "garage": {"garage", "workshop", "wall", "mounted"},
-        "workshop": {"workshop", "garage", "wall", "mounted"},
-        "wardrobe": {"wardrobe", "closet", "organizer", "hanger"},
-        "closet": {"closet", "wardrobe", "organizer", "hanger"},
-        "bicycle": {"bicycle", "bike", "handlebar", "cycle"},
-        "bike": {"bicycle", "bike", "handlebar", "cycle"},
-        "handlebar": {"handlebar", "bike", "bicycle"},
         "case": {"case", "box", "enclosure", "cover"},
         "box": {"box", "case", "enclosure"},
         "organizer": {"organizer", "holder", "storage", "rack"},
         "clip": {"clip", "clamp", "holder"},
-        "dirtbike": {"dirtbike", "dirt", "bike", "motorcycle", "motocross", "mx"},
-        "motocross": {"dirtbike", "dirt", "bike", "motorcycle", "motocross", "mx"},
-        "motorcycle": {"dirtbike", "dirt", "bike", "motorcycle", "motocross", "mx"},
-        "fork": {"fork", "suspension", "seal", "driver", "cap"},
-        "chain": {"chain", "chainguide", "guide", "slider"},
-        "guide": {"guide", "guard", "slider", "chainguide"},
-        "tool": {"tool", "tools", "jig", "fixture", "wrench", "driver"},
-        "tools": {"tool", "tools", "jig", "fixture", "wrench", "driver"},
-        "pressure": {"pressure", "powerwasher", "washer", "wash", "nozzle", "wand"},
-        "washer": {"pressure", "powerwasher", "washer", "wash"},
-        "powerwasher": {"pressure", "powerwasher", "washer", "wash"},
-        "accessory": {"accessory", "accessories", "adapter", "mount", "holder", "nozzle"},
-        "accessories": {"accessory", "accessories", "adapter", "mount", "holder", "nozzle"},
-        "clothes": {"clothes", "coat", "jacket", "hanger"},
-        "helmet": {"helmet", "helmets", "motorcycle", "bike"},
-        "belt": {"belt", "belts", "strap"},
-        "snus": {"snus", "can", "tin"},
-        "can": {"can", "tin", "container"},
     }
     return bool((equivalents.get(word, {word}) & haystack) or any(term in title for term in equivalents.get(word, {word})))
 
@@ -1470,6 +1227,39 @@ class YeggiProvider(DesignProvider):
         return "Yeggi"
 
 
+class GenericSearchProvider(DesignProvider):
+    """Defensive HTML search provider for model platforms without stable public APIs."""
+
+    def __init__(self, key: str, name: str, search_url: str, base_url: str):
+        self.key = key
+        self.name = name
+        self.search_url = search_url
+        self.base_url = base_url
+
+    def search(self, query: str, limit: int = 5) -> list[ExampleDesign]:
+        cache_key = (self.key, query.strip().lower(), limit)
+        cached = _SEARCH_CACHE.get(cache_key)
+        if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+            return list(cached[1])
+        try:
+            page = _fetch_text(self.search_url.format(query=quote_plus(query)))
+        except Exception:
+            return []
+        results = _generic_link_results(page, self.key, self.base_url, limit)
+        _SEARCH_CACHE[cache_key] = (time.time(), results)
+        return list(results)
+
+    def get_popular(self, category: str, limit: int = 5) -> list[ExampleDesign]:
+        return self.search(category, limit)
+
+    def is_available(self) -> bool:
+        return True
+
+    @property
+    def provider_name(self) -> str:
+        return self.name
+
+
 class ProviderRegistry:
     """Central registry for design providers."""
     
@@ -1483,6 +1273,54 @@ class ProviderRegistry:
             "thangs": ThangsProvider(),
             "stlfinder": StlFinderProvider(),
             "yeggi": YeggiProvider(),
+            "cgtrader": GenericSearchProvider(
+                "cgtrader",
+                "CGTrader",
+                "https://www.cgtrader.com/3d-print-models?keywords={query}",
+                "https://www.cgtrader.com",
+            ),
+            "grabcad": GenericSearchProvider(
+                "grabcad",
+                "GrabCAD",
+                "https://grabcad.com/library?query={query}",
+                "https://grabcad.com",
+            ),
+            "pinshape": GenericSearchProvider(
+                "pinshape",
+                "Pinshape",
+                "https://pinshape.com/search/designs?q={query}",
+                "https://pinshape.com",
+            ),
+            "youmagine": GenericSearchProvider(
+                "youmagine",
+                "YouMagine",
+                "https://www.youmagine.com/search?q={query}",
+                "https://www.youmagine.com",
+            ),
+            "crealitycloud": GenericSearchProvider(
+                "crealitycloud",
+                "Creality Cloud",
+                "https://www.crealitycloud.com/search/model?keyword={query}",
+                "https://www.crealitycloud.com",
+            ),
+            "nih3d": GenericSearchProvider(
+                "nih3d",
+                "NIH 3D",
+                "https://3d.nih.gov/search?search={query}",
+                "https://3d.nih.gov",
+            ),
+            "stlrepo": GenericSearchProvider(
+                "stlrepo",
+                "STLRepo",
+                "https://stlrepo.com/search?q={query}",
+                "https://stlrepo.com",
+            ),
+            "3dprintsearch": GenericSearchProvider(
+                "3dprintsearch",
+                "3DPrintSearch",
+                "https://www.3dprintsearch.com/search?q={query}",
+                "https://www.3dprintsearch.com",
+            ),
         }
     
     def search_all(self, query: str, limit: int = 5) -> list[ExampleDesign]:
@@ -1490,65 +1328,18 @@ class ProviderRegistry:
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
         search_query = normalize_source_query(query) or query
         variants = _query_variants(search_query) or [search_query]
-        variants = variants[:8]
-        per_query_limit = max(5, min(limit * 2, 10))
-        provider_items = sorted(
-            (
-                (name, provider)
-                for name, provider in self.providers.items()
-                if provider.is_available()
-            ),
-            key=lambda item: _PROVIDER_PRIORITY.get(item[0], 40),
-            reverse=True,
-        )
-        tasks: list[tuple[str, DesignProvider, str]] = []
-        now = time.time()
-        for name, provider in provider_items:
-            variant_limit = 5 if name == "printables" else 3 if name in {"thingiverse", "stlfinder", "yeggi"} else 2
-            for variant in variants[:variant_limit]:
-                negative_key = (name, variant)
-                if now - _NEGATIVE_SEARCH_CACHE.get(negative_key, 0.0) < _NEGATIVE_CACHE_TTL_SECONDS:
-                    continue
-                tasks.append((name, provider, variant))
-
-        def run_task(task: tuple[str, DesignProvider, str]) -> tuple[str, str, list[ExampleDesign]]:
-            name, provider, variant = task
-            try:
-                return name, variant, provider.search(variant, per_query_limit)
-            except Exception:
-                return name, variant, []
-
-        if tasks:
-            started = time.time()
-            enough_results = max(4, min(limit, 5))
-            max_workers = min(_SEARCH_WORKERS, len(tasks))
-            executor = ThreadPoolExecutor(max_workers=max_workers)
-            futures = {executor.submit(run_task, task): task for task in tasks}
-            try:
-                for future in as_completed(futures, timeout=_SEARCH_TOTAL_BUDGET_SECONDS):
-                    provider_name, variant, designs = future.result()
-                    if not designs:
-                        _NEGATIVE_SEARCH_CACHE[(provider_name, variant)] = time.time()
+        per_query_limit = max(limit * 2, 10)
+        for provider in self.providers.values():
+            if not provider.is_available():
+                continue
+            for variant in variants:
+                for design in provider.search(variant, per_query_limit):
+                    score = _design_score(search_query, design)
+                    if score <= 0:
                         continue
-                    for design in designs:
-                        score = _design_score(search_query, design)
-                        if score <= 0:
-                            continue
-                        existing = ranked.get(design.url)
-                        if existing is None or score > existing[0]:
-                            ranked[design.url] = (score, design)
-                    if len(ranked) >= enough_results and time.time() - started >= _SEARCH_EARLY_RETURN_SECONDS:
-                        has_primary_source = any(
-                            design.source in {"printables", "makerworld", "cults3d"}
-                            for _score, design in ranked.values()
-                        )
-                        if has_primary_source:
-                            break
-            except FuturesTimeoutError:
-                for future in futures:
-                    future.cancel()
-            finally:
-                executor.shutdown(wait=False, cancel_futures=True)
+                    existing = ranked.get(design.url)
+                    if existing is None or score > existing[0]:
+                        ranked[design.url] = (score, design)
 
         results = list(ranked.values())
         results.sort(key=lambda item: item[0], reverse=True)

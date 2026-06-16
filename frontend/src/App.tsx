@@ -84,44 +84,16 @@ const FEEDBACK_MAILTO = "mailto:support@cadio.net?subject=Cadio%20Feedback";
 const DEFAULT_TITLE = "Cadio - AI CAD for 3D Printing";
 const DEFAULT_DESCRIPTION = "Search, remix, edit, and generate printable 3D models with AI.";
 const CANONICAL_DOMAIN = "https://cadio.net";
-const BUILDER_STARTER_PROMPTS = [
-  "Gridfinity storage bin with labels",
-  "IKEA Skadis cable organizer",
-  "Wall mounted tool holder for pegboard",
-  "Foldable phone stand with cable cutout",
-];
 
-type StaticPage = "terms" | "privacy" | "contact";
+type StaticPage = "terms" | "privacy" | "cookies" | "contact";
 
-type StaticRoute = {
-  page: StaticPage;
-  canonicalPath: string;
-  section?: string;
-};
-
-function staticPageFromPath(pathname: string): StaticRoute | null {
+function staticPageFromPath(pathname: string): StaticPage | null {
   const path = pathname.replace(/\/+$/, "") || "/";
-  if (path === "/terms") return { page: "terms", canonicalPath: "/terms" };
-  if (path === "/privacy") return { page: "privacy", canonicalPath: "/privacy" };
-  if (path === "/cookies") return { page: "privacy", canonicalPath: "/privacy", section: "cookies" };
-  if (path === "/contact") return { page: "contact", canonicalPath: "/contact" };
+  if (path === "/terms") return "terms";
+  if (path === "/privacy") return "privacy";
+  if (path === "/cookies") return "cookies";
+  if (path === "/contact") return "contact";
   return null;
-}
-
-function staticPageFromHash(hash: string): StaticRoute | null {
-  const rawRoute = hash.startsWith("#/") ? hash.slice(1) : "";
-  const route = rawRoute.replace(/\/+$/, "") || "/";
-  if (route === "/terms") return { page: "terms", canonicalPath: "/terms" };
-  if (route === "/privacy") return { page: "privacy", canonicalPath: "/privacy" };
-  if (route === "/privacy/cookies" || route === "/cookies") {
-    return { page: "privacy", canonicalPath: "/privacy", section: "cookies" };
-  }
-  if (route === "/contact") return { page: "contact", canonicalPath: "/contact" };
-  return null;
-}
-
-function staticPageFromLocation(pathname: string, hash: string): StaticRoute | null {
-  return staticPageFromHash(hash) ?? staticPageFromPath(pathname);
 }
 
 function setOrCreateMeta(selector: string, create: () => HTMLMetaElement | HTMLLinkElement, value: string) {
@@ -137,15 +109,15 @@ function setOrCreateMeta(selector: string, create: () => HTMLMetaElement | HTMLL
   }
 }
 
-function updatePageMetadata(pathname: string, hash: string, showBuilder: boolean) {
-  const route = staticPageFromLocation(pathname, hash);
-  const page = route?.page ?? null;
+function updatePageMetadata(pathname: string, showBuilder: boolean) {
+  const page = staticPageFromPath(pathname);
   const titleByPage: Record<StaticPage, string> = {
     terms: "Terms of Service - Cadio",
     privacy: "Privacy Policy - Cadio",
+    cookies: "Cookie Policy - Cadio",
     contact: "Contact Cadio",
   };
-  const path = route?.canonicalPath ?? "/";
+  const path = page ? pathname.replace(/\/+$/, "") : "/";
   const canonical = `${CANONICAL_DOMAIN}${path === "/" ? "/" : path}`;
   document.title = page ? titleByPage[page] : showBuilder ? "Cadio Workspace - AI CAD for 3D Printing" : DEFAULT_TITLE;
   setOrCreateMeta("meta[name='description']", () => {
@@ -452,34 +424,22 @@ function isModelBusyStatus(status: string) {
 
 function ModelLoadingOverlay({ status }: { status: string }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-[#111]/25 backdrop-blur-[1px]">
-      <div className="relative flex h-52 w-52 items-center justify-center">
-        <div className="absolute inset-0 rounded-full border border-[#28c7df]/20 bg-[radial-gradient(circle,rgba(40,199,223,0.14),rgba(17,17,17,0)_64%)] blur-[1px]" />
-        <div className="absolute inset-2 animate-spin rounded-full border border-dashed border-[#28c7df]/70 shadow-[0_0_34px_rgba(40,199,223,0.2)]" />
+    <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-cadio-bg/40 backdrop-blur-md">
+      <div className="relative flex h-64 w-64 items-center justify-center">
+        <div className="absolute inset-0 rounded-full border border-cadio-accent/20 bg-[radial-gradient(circle,rgba(59,130,246,0.15),transparent_70%)]" />
+        <div className="absolute inset-4 animate-spin rounded-full border border-dashed border-cadio-accent/40 shadow-[0_0_40px_rgba(59,130,246,0.1)]" />
         <div
-          className="absolute inset-8 rounded-[26px] border border-[#facc15]/40 bg-[#facc15]/5"
-          style={{ animation: "spin 2.8s linear infinite reverse" }}
+          className="absolute inset-12 rounded-[32px] border border-white/10 bg-white/5"
+          style={{ animation: "spin 3s linear infinite reverse" }}
         />
-        <div className="absolute h-24 w-24 rotate-45 animate-spin rounded-2xl border border-[#28c7df]/75 bg-[linear-gradient(135deg,rgba(40,199,223,0.34),rgba(250,204,21,0.08))] shadow-[0_0_46px_rgba(40,199,223,0.28)]" />
-        <div
-          className="absolute h-14 w-14 rounded-xl border border-white/35 bg-[#1b1b1c]/90 shadow-[inset_0_0_24px_rgba(40,199,223,0.18),0_0_26px_rgba(250,204,21,0.12)]"
-          style={{ transform: "rotateX(62deg) rotateZ(45deg)" }}
-        />
-        <div className="absolute flex h-32 w-32 items-center justify-center">
-          {[0, 1, 2, 3].map((index) => (
-            <span
-              key={index}
-              className="absolute h-2.5 w-2.5 rounded-full bg-[#28c7df] shadow-[0_0_16px_rgba(40,199,223,0.85)]"
-              style={{
-                transform: `rotate(${index * 90}deg) translateY(-62px)`,
-                opacity: 0.4 + index * 0.16,
-                animation: `pulse 1.2s ease-in-out ${index * 0.16}s infinite`,
-              }}
-            />
-          ))}
-        </div>
-        <div className="absolute -bottom-8 rounded-full border border-[#28c7df]/30 bg-[#181819]/95 px-4 py-2 text-xs font-semibold text-white shadow-[0_0_28px_rgba(40,199,223,0.18)]">
-          {status || "Building model..."}
+        <div className="absolute h-28 w-28 rotate-45 animate-pulse rounded-2xl border border-cadio-accent bg-cadio-accent/5 shadow-[0_0_50px_rgba(59,130,246,0.3)]" />
+        
+        <div className="absolute -bottom-12 flex flex-col items-center gap-3">
+          <div className="px-6 py-2.5 rounded-full border border-cadio-border/50 bg-cadio-surface/90 shadow-2xl backdrop-blur-xl">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white animate-pulse">
+              {status || "Engineering Geometry..."}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -497,7 +457,6 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     printers,
     printer,
     status,
-    notice,
     isBusy,
     expertMode,
     expertTool,
@@ -508,7 +467,6 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     loadPrinters,
     applyScenePayload,
     onSelectObject,
-    clearSelection,
     onTransformCommit,
     setTransformMode,
     setExpertMode,
@@ -524,7 +482,6 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     snapSelectedObjects,
     setPrinter,
     runPrompt,
-    dismissNotice,
   } = useCadStore();
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
@@ -535,10 +492,10 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
   const [showMeasurements, setShowMeasurements] = useState(false);
   const [workspacePanelOpen, setWorkspacePanelOpen] = useState(true);
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(true);
-  const [parametersPanelOpen, setParametersPanelOpen] = useState(false);
-  const [workspacePanelWidth, setWorkspacePanelWidth] = useState(292);
-  const [assistantPanelWidth, setAssistantPanelWidth] = useState(380);
-  const [parametersPanelWidth, setParametersPanelWidth] = useState(330);
+  const [parametersPanelOpen, setParametersPanelOpen] = useState(true);
+  const [workspacePanelWidth, setWorkspacePanelWidth] = useState(260);
+  const [assistantPanelWidth, setAssistantPanelWidth] = useState(360);
+  const [parametersPanelWidth, setParametersPanelWidth] = useState(320);
   const desktopLayoutRef = useRef<HTMLDivElement>(null);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
@@ -567,14 +524,6 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     void runPrompt(shared.prompt);
   }, [runPrompt, setPrinter]);
 
-  useEffect(() => {
-    if (objects.length > 0) {
-      setParametersPanelOpen(true);
-    } else {
-      setParametersPanelOpen(false);
-    }
-  }, [objects.length]);
-
   useWebSocket(sessionId || null, applyScenePayload);
 
   // Get printer build volume
@@ -589,19 +538,13 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
   const latestPrompt = promptFromHistory(editHistory[editHistory.length - 1]);
   const projectTitle = creationName(latestPrompt);
-  const creations = editHistory
-    .slice(-5)
-    .reverse()
-    .map((item, index) => ({
-      id: `${index}-${promptFromHistory(item)}`,
-      title: creationName(promptFromHistory(item)),
-    }));
   const selectedCount = selectedObjectIds.length || (selectedObjectId ? 1 : 0);
   const modelBusy = isBusy || isModelBusyStatus(status);
-  const workspaceTrackWidth = workspacePanelOpen ? workspacePanelWidth : 52;
-  const assistantTrackWidth = assistantPanelOpen ? assistantPanelWidth : 52;
-  const parametersTrackWidth = parametersPanelOpen ? parametersPanelWidth : 52;
-  const desktopGridColumns = `${workspaceTrackWidth}px 6px ${assistantTrackWidth}px 6px minmax(0,1fr) 6px ${parametersTrackWidth}px`;
+  const workspaceTrackWidth = workspacePanelOpen ? workspacePanelWidth : 56;
+  const assistantTrackWidth = assistantPanelOpen ? assistantPanelWidth : 56;
+  const parametersTrackWidth = parametersPanelOpen ? parametersPanelWidth : 56;
+  const desktopGridColumns = `${workspaceTrackWidth}px 4px ${assistantTrackWidth}px 4px minmax(0,1fr) 4px ${parametersTrackWidth}px`;
+  
   const startPanelResize = (
     panel: "workspace" | "assistant" | "parameters",
     event: ReactMouseEvent<HTMLDivElement>,
@@ -616,12 +559,12 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
     const onMove = (moveEvent: MouseEvent) => {
       if (panel === "workspace") {
-        setWorkspacePanelWidth(clamp(moveEvent.clientX - rect.left, 72, 460));
+        setWorkspacePanelWidth(clamp(moveEvent.clientX - rect.left, 80, 400));
       } else if (panel === "assistant") {
-        const leftWidth = workspacePanelOpen ? workspacePanelWidth : 52;
-        setAssistantPanelWidth(clamp(moveEvent.clientX - rect.left - leftWidth - 6, 72, 520));
+        const leftWidth = workspacePanelOpen ? workspacePanelWidth : 56;
+        setAssistantPanelWidth(clamp(moveEvent.clientX - rect.left - leftWidth - 4, 80, 480));
       } else {
-        setParametersPanelWidth(clamp(rect.right - moveEvent.clientX, 72, 480));
+        setParametersPanelWidth(clamp(rect.right - moveEvent.clientX, 80, 440));
       }
     };
     const onUp = () => {
@@ -633,348 +576,215 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
   };
 
   return (
-    <div className="w-full h-full relative bg-cadio-bg text-cadio-text">
-      {notice && (
-        <div className="fixed left-1/2 top-20 z-[90] w-[min(92vw,430px)] -translate-x-1/2 rounded-2xl border border-[#28c7df]/45 bg-[#151515]/96 p-4 text-white shadow-[0_22px_70px_rgba(0,0,0,0.42),0_0_34px_rgba(40,199,223,0.12)] backdrop-blur md:left-auto md:right-6 md:top-6 md:translate-x-0">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#69d9f5]">Search notice</div>
-          <p className="whitespace-pre-line text-sm leading-6 text-[#e8e8e8]">{notice}</p>
-          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[#a7a7aa]">
-            <span>Try more context or use filters.</span>
-            <button
-              type="button"
-              onClick={dismissNotice}
-              className="rounded-lg border border-[#343436] bg-[#242426] px-3 py-2 font-semibold text-white hover:border-[#555]"
-            >
-              OK
-            </button>
-          </div>
-        </div>
-      )}
+    <div className="w-full h-[100dvh] relative bg-cadio-bg text-cadio-text font-sans overflow-hidden">
       {/* Desktop layout */}
       <div
         ref={desktopLayoutRef}
-        className="hidden h-full w-full overflow-hidden bg-[#171717] text-white transition-[grid-template-columns] duration-300 ease-out md:grid"
+        className="hidden h-full w-full md:grid"
         style={{ gridTemplateColumns: desktopGridColumns }}
       >
-        <aside className={`flex min-h-0 flex-col border-r border-[#272729] bg-[#181818] ${workspacePanelOpen ? "px-5 py-5" : "items-center px-2 py-3"}`}>
+        {/* Workspace Panel */}
+        <aside className={`flex min-h-0 flex-col border-r border-cadio-border/50 bg-cadio-surface transition-all ${workspacePanelOpen ? "px-5 py-6" : "items-center px-2 py-6"}`}>
           {workspacePanelOpen ? (
             <>
-          <div className="mb-5 rounded-xl border border-[#2d2d2f] bg-[#202020] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <CadioLogo onClick={onHome} />
-              <button
-                onClick={() => setWorkspacePanelOpen(false)}
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-[#333] bg-[#171717] text-xs font-semibold text-[#bdbdbd] hover:border-[#555] hover:text-white"
-                title="Collapse workspace panel"
-              >
-                {"<"}
-              </button>
-            </div>
+          <div className="mb-8 flex items-center justify-between">
+            <CadioLogo subtitle="" onClick={onHome} />
+            <button
+              onClick={() => setWorkspacePanelOpen(false)}
+              className="p-1.5 rounded-md hover:bg-cadio-border/50 text-cadio-muted transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
+            </button>
           </div>
-          <button
-            onClick={startBlankCreation}
-            className="mb-5 flex h-10 items-center justify-center gap-2 rounded-lg border border-[#303033] bg-[#222] px-4 text-sm font-semibold text-[#e6e6e6] hover:border-[#28c7df] hover:text-white"
-            title="Start with an empty build plate"
-          >
-            <span className="grid h-5 w-5 place-items-center rounded border border-[#555] text-[10px]">□</span>
-            Blank workspace
-          </button>
-          <button
-            onClick={() => setShowMeasurements((value) => !value)}
-            className={`mb-5 flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold ${
-              showMeasurements
-                ? "border-[#facc15] bg-[#3a3214] text-[#ffe58a]"
-                : "border-[#303033] bg-[#222] text-[#e6e6e6] hover:border-[#facc15] hover:text-white"
-            }`}
-            title="Show real model measurements"
-          >
-            <span className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[11px]">mm</span>
-            Measure
-          </button>
-          <div className="mb-5">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#858585]">Mode</div>
-            <div className="grid grid-cols-2 gap-1 rounded-lg border border-[#333] bg-[#202020] p-1">
+          
+          <div className="space-y-2 mb-8">
+            <button
+              onClick={startBlankCreation}
+              className="w-full flex h-11 items-center gap-3 rounded-lg border border-cadio-border bg-cadio-bg/50 px-4 text-xs font-bold text-white transition-all hover:bg-cadio-bg hover:border-cadio-accent/50 group"
+            >
+              <svg className="w-4 h-4 text-cadio-accent group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
+              New Workspace
+            </button>
+            <button
+              onClick={() => setShowMeasurements((v) => !value)}
+              className={`w-full flex h-11 items-center gap-3 rounded-lg border px-4 text-xs font-bold transition-all ${
+                showMeasurements
+                  ? "border-cadio-accent bg-cadio-accent/10 text-cadio-accent shadow-[0_0_15px_rgba(59,130,246,0.1)]"
+                  : "border-cadio-border bg-cadio-bg/50 text-cadio-muted hover:bg-cadio-bg hover:text-white"
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
+              Precision Measure
+            </button>
+          </div>
+
+          <div className="mb-8">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted mb-4 px-1">Editor Mode</div>
+            <div className="flex p-1 gap-1 rounded-xl bg-cadio-bg/80 border border-cadio-border/50">
               <button
                 onClick={() => setExpertMode(false)}
-                className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
-                  !expertMode ? "bg-[#e5e5e5] text-[#181818]" : "text-[#a8a8a8] hover:bg-[#2d2d2f] hover:text-white"
+                className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                  !expertMode ? "bg-white text-cadio-bg shadow-sm" : "text-cadio-muted hover:text-white"
                 }`}
               >
                 Easy
               </button>
               <button
                 onClick={() => setExpertMode(true)}
-                className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
-                  expertMode ? "bg-[#28c7df] text-[#101010]" : "text-[#a8a8a8] hover:bg-[#2d2d2f] hover:text-white"
+                className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                  expertMode ? "bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20" : "text-cadio-muted hover:text-white"
                 }`}
               >
                 Expert
               </button>
             </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-[#878787]">
-              {expertMode
-                ? "Manual sketching, edge selection, transforms, and CAD operations."
-                : "Guided edits for quick printable changes without manual CAD tools."}
-            </p>
           </div>
 
-          {!expertMode ? (
-            <details className="mb-5 rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
-              <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
-                <span>Easy edits</span>
-                <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">{EASY_ACTIONS.length}</span>
-              </summary>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {EASY_ACTIONS.map((action) => (
-                  <button
-                    key={action.label}
-                    onClick={() => void runPrompt(action.prompt)}
-                    className="rounded-lg border border-[#303033] bg-[#222] px-3 py-2 text-left text-xs font-semibold text-[#e6e6e6] hover:border-[#28c7df] hover:text-white"
-                  >
-                    {action.label}
-                  </button>
-                ))}
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-6 scrollbar-none">
+            {expertMode && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-left-2 duration-300">
+                <section>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted mb-3 px-1">Active Selection</div>
+                  <div className="grid grid-cols-3 gap-1 rounded-lg border border-cadio-border/50 bg-cadio-bg/50 p-1">
+                    {SELECTION_MODES.map((mode) => (
+                      <button
+                        key={mode.id}
+                        onClick={() => setSelectionMode(mode.id)}
+                        className={`py-1.5 rounded-md text-[9px] font-bold uppercase transition-all ${
+                          selectionMode === mode.id ? "bg-cadio-surface text-white shadow-sm border border-cadio-border" : "text-cadio-muted hover:text-white"
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+                
+                <section>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted mb-3 px-1">Transform Mode</div>
+                  <div className="grid grid-cols-4 gap-1 rounded-lg border border-cadio-border/50 bg-cadio-bg/50 p-1">
+                    {TRANSFORM_MODES.map((mode) => (
+                      <button
+                        key={mode.id}
+                        onClick={() => setTransformMode(mode.id)}
+                        className={`py-1.5 rounded-md text-[9px] font-bold uppercase transition-all ${
+                          transformMode === mode.id ? "bg-cadio-accent text-white" : "text-cadio-muted hover:text-white"
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
               </div>
-            </details>
-          ) : (
-            <div className="mb-5 space-y-3">
-              <details className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
-                <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
-                  <span>Sketch tools</span>
-                  <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">{expertTool}</span>
-                </summary>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {EXPERT_TOOLS.map((tool) => (
-                    <button
-                      key={tool.id}
-                      onClick={() => setExpertTool(tool.id)}
-                      className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold ${
-                        expertTool === tool.id
-                          ? "border-[#28c7df] bg-[#213940] text-white"
-                          : "border-[#303033] bg-[#222] text-[#a8a8a8] hover:text-white"
-                      }`}
-                    >
-                      {tool.label}
-                    </button>
-                  ))}
-                </div>
-              </details>
-              <details className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
-                <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
-                  <span>Selection</span>
-                  <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">{selectionMode}</span>
-                </summary>
-                <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg border border-[#333] bg-[#202020] p-1">
-                  {SELECTION_MODES.map((mode) => (
-                    <button
-                      key={mode.id}
-                      onClick={() => setSelectionMode(mode.id)}
-                      className={`rounded-md px-2 py-2 text-xs font-semibold ${
-                        selectionMode === mode.id ? "bg-[#e5e5e5] text-[#181818]" : "text-[#9f9f9f] hover:bg-[#2d2d2f] hover:text-white"
-                      }`}
-                    >
-                      {mode.label}
-                    </button>
-                  ))}
-                </div>
-              </details>
-              <details className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
-                <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
-                  <span>Transform</span>
-                  <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">{transformMode}</span>
-                </summary>
-                <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg border border-[#333] bg-[#202020] p-1">
-                  {TRANSFORM_MODES.map((mode) => (
-                    <button
-                      key={mode.id}
-                      onClick={() => setTransformMode(mode.id)}
-                      className={`rounded-md px-2 py-2 text-[11px] font-semibold ${
-                        transformMode === mode.id ? "bg-[#28c7df] text-[#101010]" : "text-[#9f9f9f] hover:bg-[#2d2d2f] hover:text-white"
-                      }`}
-                    >
-                      {mode.label}
-                    </button>
-                  ))}
-                </div>
-              </details>
-              <details className="rounded-lg border border-[#2d2d2f] bg-[#151515] p-3">
-                <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-[#cfcfcf] [&::-webkit-details-marker]:hidden">
-                  <span>CAD operations</span>
-                  <span className="rounded bg-[#242426] px-2 py-1 text-[10px] tracking-normal text-[#8f8f8f]">{operationAmount} mm</span>
-                </summary>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <label className="text-[11px] uppercase tracking-[0.16em] text-[#858585]">
-                    New part height
-                    <input
-                      type="number"
-                      min={0.5}
-                      step={0.5}
-                      value={sketchHeight}
-                      onChange={(e) => setSketchHeight(Number(e.target.value))}
-                      className="mt-1 h-9 w-full rounded-lg border border-[#303033] bg-[#111827] px-3 text-xs text-white outline-none"
-                    />
-                  </label>
-                  <label className="text-[11px] uppercase tracking-[0.16em] text-[#858585]">
-                    Operation size
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={operationAmount}
-                      onChange={(e) => setOperationAmount(Number(e.target.value))}
-                      className="mt-1 h-9 w-full rounded-lg border border-[#303033] bg-[#111827] px-3 text-xs text-white outline-none"
-                    />
-                  </label>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {["extrude", "fillet", "chamfer", "shell"].map((operation) => (
-                    <button
-                      key={operation}
-                      onClick={() => void applyExpertOperation(operation)}
-                      disabled={!selectedObjectId}
-                      className="rounded-lg border border-[#303033] bg-[#222] px-3 py-2 text-left text-xs font-semibold capitalize text-[#e6e6e6] hover:border-[#28c7df] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-                    >
-                      {operation}
-                    </button>
-                  ))}
-                </div>
-              </details>
-            </div>
-          )}
+            )}
 
-          <SavedModelsPanel
-            title={projectTitle}
-            prompt={latestPrompt}
-            sessionId={sessionId}
-            printer={printer}
-            objects={objects}
-            onOpenPrompt={(savedPrompt) => void runPrompt(savedPrompt)}
-          />
+            <SavedModelsPanel
+              title={projectTitle}
+              prompt={latestPrompt}
+              sessionId={sessionId}
+              printer={printer}
+              objects={objects}
+              onOpenPrompt={(savedPrompt) => void runPrompt(savedPrompt)}
+            />
+          </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mb-3 flex items-center gap-2 text-sm text-[#858585] [&>span:first-child]:hidden">
-              <span className="text-lg">▦</span>
-              Workspace
+          <div className="mt-8 pt-6 border-t border-cadio-border/30">
+            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-cadio-muted px-1 mb-4">
+              <span>Selection</span>
+              <span>{selectedCount} Active</span>
             </div>
-            <div className="space-y-1">
-              {(creations.length ? creations : [{ id: "empty", title: "Start with a prompt" }]).map((creation) => (
-                <button
-                  key={creation.id}
-                  className="block w-full truncate rounded-lg px-3 py-2 text-left text-xs text-[#9d9d9d] hover:bg-[#222] hover:text-white"
-                >
-                  {creation.title}
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={selectAllObjects} className="h-9 rounded-lg border border-cadio-border bg-cadio-bg/50 text-[10px] font-bold text-white hover:bg-cadio-bg transition-colors">Select All</button>
+              <button onClick={() => void onDeleteObject()} disabled={!selectedObjectId} className="h-9 rounded-lg border border-red-500/20 bg-red-500/5 text-[10px] font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-20 transition-colors">Delete</button>
             </div>
-          </div>
-          <div className="mt-5 rounded-xl border border-[#2d2d2f] bg-[#202020] p-3">
-            <div className="flex items-center justify-between text-xs text-[#a8a8a8]">
-              <span>{selectedCount ? `${selectedCount} selected` : "Nothing selected"}</span>
-              <button onClick={selectAllObjects} className="font-semibold text-[#28c7df] hover:text-white">
-                Select all
-              </button>
-            </div>
-            <div className="mt-3">
-              <button onClick={() => void onDeleteObject()} disabled={!selectedObjectId} className="w-full rounded-lg bg-[#2a2a2c] px-2 py-2 text-xs font-semibold text-[#ff8b8b] hover:bg-[#343436] disabled:opacity-35">Delete selected</button>
-            </div>
-          </div>
-          <div className="mt-4">
-            <SiteFooter compact />
           </div>
             </>
           ) : (
-            <div className="flex h-full flex-col items-center gap-3">
-              <button
-                onClick={onHome}
-                className="grid h-9 w-9 place-items-center rounded-lg bg-[#28c7df] text-sm font-black text-[#101010] shadow-[0_0_18px_rgba(40,199,223,0.18)]"
-                title="Go to Cadio home"
-              >
-                C
-              </button>
-              <button
-                onClick={() => setWorkspacePanelOpen(true)}
-                className="grid h-9 w-9 place-items-center rounded-lg border border-[#333] bg-[#202020] text-xs font-semibold text-[#e6e6e6] hover:border-[#28c7df]"
-                title="Open tools"
-              >
-                T
+            <div className="flex h-full flex-col items-center gap-4">
+              <button onClick={onHome} className="h-10 w-10 flex items-center justify-center rounded-xl bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20">C</button>
+              <div className="w-full h-px bg-cadio-border/50" />
+              <button onClick={() => setWorkspacePanelOpen(true)} className="p-2.5 rounded-lg hover:bg-cadio-border/50 text-cadio-muted transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
               </button>
             </div>
           )}
         </aside>
+        
+        {/* Resize Handle */}
         <div
-          className="group relative z-20 cursor-col-resize border-r border-[#242426] bg-[#111]/70"
+          className="group relative z-20 cursor-col-resize bg-cadio-bg transition-all hover:bg-cadio-accent/20"
           onMouseDown={(event) => startPanelResize("workspace", event)}
-          title="Drag to resize workspace panel"
         >
-          <div className="absolute left-1/2 top-1/2 h-12 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#3d3d40] transition-colors group-hover:bg-[#28c7df]" />
+          <div className="absolute left-1/2 top-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cadio-border group-hover:bg-cadio-accent transition-colors" />
         </div>
 
-        <section className={`${assistantPanelOpen ? "grid grid-rows-[56px_1fr]" : "flex items-start justify-center px-2 py-3"} min-h-0 border-r border-[#252527] bg-[#202020]`}>
+        {/* AI Assistant Panel */}
+        <section className={`${assistantPanelOpen ? "grid grid-rows-[64px_1fr]" : "flex items-start justify-center px-2 py-6"} min-h-0 border-r border-cadio-border/50 bg-cadio-surface transition-all`}>
           {assistantPanelOpen ? (
             <>
-          <header className="flex items-center justify-between px-5 [&>button:nth-child(2)]:hidden">
-            <button
-              onClick={() => setAssistantPanelOpen(false)}
-              className="grid h-8 w-8 place-items-center rounded-lg text-xs font-semibold text-[#aaa] hover:bg-[#2b2b2c]"
-              title="Collapse AI panel"
-            >
-              {"<"}
-            </button>
-            <button className="grid h-8 w-8 place-items-center rounded-lg text-[#aaa] hover:bg-[#2b2b2c]">◫</button>
-            <div className="min-w-0 px-4 text-center text-sm font-semibold">
-              <div className="truncate">{projectTitle}</div>
-              <div className="text-[11px] text-[#858585]">{objects.length} parts</div>
+          <header className="flex items-center justify-between px-6 border-b border-cadio-border/30">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setAssistantPanelOpen(false)}
+                className="p-1.5 rounded-md hover:bg-cadio-border/50 text-cadio-muted transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-bold text-white tracking-tight">{projectTitle}</div>
+                <div className="text-[10px] font-medium text-cadio-muted">{objects.length} components generated</div>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <a href={FEEDBACK_MAILTO} className="text-sm font-semibold text-[#bdbdbd] hover:text-[#18a8ff]">Feedback</a>
-              <button onClick={() => setShareOpen(true)} className="text-sm font-semibold hover:text-[#18a8ff]">Share</button>
-              <button onClick={() => setExportOpen(true)} className="text-sm font-semibold hover:text-[#18a8ff]">Export</button>
+            <div className="flex items-center gap-4">
+              <button onClick={() => setShareOpen(true)} className="text-[11px] font-bold text-cadio-muted hover:text-white transition-colors uppercase tracking-widest">Share</button>
+              <button onClick={() => setExportOpen(true)} className="px-4 py-1.5 rounded-lg bg-white text-cadio-bg text-[11px] font-black uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98]">Export</button>
             </div>
           </header>
-          <div className="min-h-0 overflow-y-auto px-4 pb-4">
+          <div className="min-h-0 overflow-y-auto">
             <AiPanel />
           </div>
             </>
           ) : (
             <button
               onClick={() => setAssistantPanelOpen(true)}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[#333] bg-[#202020] text-xs font-semibold text-[#e6e6e6] hover:border-[#28c7df]"
-              title="Open AI panel"
+              className="p-2.5 rounded-lg border border-cadio-border bg-cadio-surface text-[10px] font-bold text-cadio-muted transition-all hover:border-cadio-accent hover:text-white"
             >
               AI
             </button>
           )}
         </section>
+        
         <div
-          className="group relative z-20 cursor-col-resize border-r border-[#242426] bg-[#111]/70"
+          className="group relative z-20 cursor-col-resize bg-cadio-bg transition-all hover:bg-cadio-accent/20"
           onMouseDown={(event) => startPanelResize("assistant", event)}
-          title="Drag to resize AI panel"
         >
-          <div className="absolute left-1/2 top-1/2 h-12 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#3d3d40] transition-colors group-hover:bg-[#28c7df]" />
+          <div className="absolute left-1/2 top-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cadio-border group-hover:bg-cadio-accent transition-colors" />
         </div>
 
-        <main className="relative min-h-0 overflow-hidden bg-[#3a3a3a]">
-          <div className="absolute right-4 top-3 z-10 flex items-center gap-2 text-xs text-white/90">
-            <span>{printerProfile?.name ?? "Choose printer"}</span>
-            {printerProfile && (
-              <span className="rounded bg-[#2c2c2d] px-2 py-1">
-                {printerVolume[0]} x {printerVolume[1]} x {printerVolume[2]} mm
-              </span>
-            )}
-            <span className="rounded bg-[#2c2c2d] px-2 py-1 text-[#67d6f5]">{status || "Ready"}</span>
+        {/* Viewport View */}
+        <main className="relative min-h-0 overflow-hidden bg-cadio-bg">
+          {/* Viewport Overlays */}
+          <div className="absolute right-6 top-6 z-10 flex items-center gap-3">
+             <div className="px-4 py-2 rounded-xl border border-cadio-border/50 bg-cadio-surface/80 backdrop-blur-xl shadow-2xl flex items-center gap-3">
+               <div className="flex flex-col">
+                 <span className="text-[9px] font-black text-cadio-muted uppercase tracking-tighter leading-none mb-1">Active Printer</span>
+                 <span className="text-xs font-bold text-white leading-none">{printerProfile?.name ?? "Standard"}</span>
+               </div>
+               <div className="h-4 w-px bg-cadio-border" />
+               <span className="text-[10px] font-black text-cadio-accent uppercase tracking-widest animate-pulse">{status || "Ready"}</span>
+             </div>
           </div>
-          <div className="absolute left-4 top-3 z-10 rounded-lg border border-[#4b4b4d] bg-[#252525]/90 px-3 py-2 text-xs shadow-xl backdrop-blur">
-            <div className="font-semibold text-white">{expertMode ? "Expert CAD" : "Easy Edit"}</div>
-            <div className="text-[11px] text-[#a7a7a7]">
-              {expertMode ? `${expertTool} / ${selectionMode} / ${transformMode}` : "AI-guided printable edits"}
-            </div>
+          
+          <div className="absolute left-6 top-6 z-10 rounded-xl border border-cadio-border/50 bg-cadio-surface/80 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-xl shadow-2xl">
+            {expertMode ? "Manual CAD Mode" : "AI Assisted Design"}
           </div>
+
           <CadViewport
             objects={objects}
             selectedObjectId={selectedObjectId}
             selectedObjectIds={selectedObjectIds}
             onSelectObject={(id) => void onSelectObject(id)}
-            onDeselectObject={clearSelection}
             transformMode={transformMode}
             onTransformCommit={(id, t) => void onTransformCommit(id, t)}
             printerVolume={printerVolume}
@@ -993,175 +803,97 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             onCreatePrimitive={(payload) => void createPrimitive(payload)}
             showMeasurements={showMeasurements}
           />
-          {!objects.length && !modelBusy && status !== "Blank workspace" && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6">
-              <div className="pointer-events-auto w-full max-w-xl rounded-2xl border border-white/10 bg-[#181819]/88 p-5 text-white shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-md">
-                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#69d9f5]">Start workspace</div>
-                <h2 className="mt-3 text-2xl font-semibold">What should Cadio find or build?</h2>
-                <p className="mt-2 text-sm leading-6 text-[#bdbdc1]">
-                  Describe a printable model in any supported language, choose a quick idea, or open a blank plate for manual CAD.
-                </p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  {BUILDER_STARTER_PROMPTS.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => void runPrompt(item)}
-                      className="rounded-xl border border-[#333] bg-[#242426] px-3 py-2 text-left text-xs font-semibold text-[#e8e8e8] hover:border-[#28c7df] hover:text-white"
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={startBlankCreation}
-                  className="mt-4 h-10 rounded-xl border border-white/15 px-4 text-sm font-semibold text-[#e8e8e8] hover:border-[#28c7df] hover:text-white"
-                >
-                  Blank workspace
-                </button>
-              </div>
-            </div>
-          )}
           {modelBusy && <ModelLoadingOverlay status={status} />}
         </main>
+
         <div
-          className="group relative z-20 cursor-col-resize border-l border-[#242426] bg-[#111]/70"
+          className="group relative z-20 cursor-col-resize bg-cadio-bg transition-all hover:bg-cadio-accent/20"
           onMouseDown={(event) => startPanelResize("parameters", event)}
-          title="Drag to resize parameters panel"
         >
-          <div className="absolute left-1/2 top-1/2 h-12 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#3d3d40] transition-colors group-hover:bg-[#28c7df]" />
+          <div className="absolute left-1/2 top-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cadio-border group-hover:bg-cadio-accent transition-colors" />
         </div>
 
-        <aside className={`${parametersPanelOpen ? "relative" : "flex items-start justify-center px-2 py-3"} min-h-0 overflow-hidden border-l border-[#303033] bg-[#1d1d1e]`}>
+        {/* Inspector Panel */}
+        <aside className={`${parametersPanelOpen ? "relative" : "flex items-start justify-center px-2 py-6"} min-h-0 overflow-hidden bg-cadio-surface transition-all`}>
           {parametersPanelOpen ? (
             <>
               <button
                 onClick={() => setParametersPanelOpen(false)}
-                className="absolute right-3 top-3 z-30 grid h-7 w-7 place-items-center rounded-md border border-[#333] bg-[#171717] text-xs font-semibold text-[#bdbdbd] hover:border-[#555] hover:text-white"
-                title="Collapse parameters panel"
+                className="absolute left-3 top-3 z-30 p-1.5 rounded-md hover:bg-cadio-border/50 text-cadio-muted transition-colors"
               >
-                {">"}
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" /></svg>
               </button>
               <ObjectInspector />
             </>
           ) : (
             <button
               onClick={() => setParametersPanelOpen(true)}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[#333] bg-[#202020] text-[10px] font-semibold text-[#e6e6e6] hover:border-[#28c7df]"
-              title="Open parameters panel"
+              className="p-2.5 rounded-lg border border-cadio-border bg-cadio-surface text-[10px] font-bold text-cadio-muted transition-all hover:border-cadio-accent hover:text-white"
             >
-              P
+              PROPS
             </button>
           )}
         </aside>
       </div>
 
       {/* Mobile layout */}
-      <div className="md:hidden flex h-[100dvh] w-full flex-col bg-[#202022]">
+      <div className="md:hidden flex h-[100dvh] w-full flex-col bg-cadio-bg overflow-hidden">
         {/* Top bar */}
-        <div className="flex items-center justify-between border-b border-cadio-border bg-cadio-panel/95 px-4 py-2 backdrop-blur-sm">
-          <button type="button" onClick={onHome} className="min-w-0 text-left">
-            <span className="block text-sm font-bold tracking-widest text-cadio-text">CADIO</span>
-            <span className="block truncate text-[11px] text-cadio-muted">{projectTitle}</span>
+        <div className="flex items-center justify-between border-b border-cadio-border/50 bg-cadio-surface/95 px-4 py-3 backdrop-blur-xl">
+          <button type="button" onClick={onHome} className="flex items-center gap-3 min-w-0 text-left group">
+            <div className="h-8 w-8 flex items-center justify-center rounded-lg bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20">C</div>
+            <div className="min-w-0">
+              <span className="block text-[10px] font-black tracking-widest text-cadio-muted uppercase leading-none mb-1">Cadio</span>
+              <span className="block truncate text-xs font-bold text-white leading-none">{projectTitle}</span>
+            </div>
           </button>
-          <div className="flex shrink-0 gap-1.5">
-            <button
-              onClick={() => setMobileExamplesOpen(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-[#1a2535] text-cadio-accent text-xs font-semibold hover:bg-[#243048]"
-            >
-              Ideas
-            </button>
-            <button
-              onClick={() => setShareOpen(true)}
-              className="rounded-lg bg-[#2b2b2d] px-2.5 py-1.5 text-xs font-semibold text-cadio-text"
-            >
-              Share
-            </button>
+          <div className="flex shrink-0 gap-2">
             <button
               onClick={() => setMobileExportOpen(true)}
-              className="rounded-lg bg-[#2b2b2d] px-2.5 py-1.5 text-xs font-semibold text-cadio-text"
+              className="px-4 py-2 rounded-lg bg-white text-cadio-bg text-[10px] font-black uppercase tracking-wider shadow-lg"
             >
               Export
             </button>
-            <a
-              href={FEEDBACK_MAILTO}
-              className="rounded-lg bg-[#2b2b2d] px-2.5 py-1.5 text-xs font-semibold text-cadio-text"
+            <button
+              onClick={() => setMobileEditOpen(true)}
+              className="p-2 rounded-lg border border-cadio-border bg-cadio-surface text-cadio-muted"
             >
-              Feedback
-            </a>
-            {objects.length > 0 && (
-              <button
-                onClick={() => setMobileEditOpen(true)}
-                className="px-2.5 py-1.5 rounded-lg bg-cadio-accent text-[#081225] text-xs font-semibold"
-              >
-                Edit
-              </button>
-            )}
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+            </button>
           </div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto border-b border-cadio-border bg-[#1f1f20]/95 px-3 py-2">
+        {/* Quick Toolbar */}
+        <div className="flex gap-2 overflow-x-auto border-b border-cadio-border/30 bg-cadio-bg/95 px-4 py-2.5 scrollbar-none">
           {TRANSFORM_MODES.map((mode) => (
             <button
               key={mode.id}
               onClick={() => setTransformMode(mode.id)}
-              className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold ${
-                transformMode === mode.id ? "bg-cadio-accent text-[#101010]" : "bg-[#2b2b2d] text-cadio-text"
+              className={`shrink-0 h-9 rounded-lg px-4 text-[10px] font-bold uppercase tracking-wider transition-all ${
+                transformMode === mode.id ? "bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20" : "bg-cadio-surface border border-cadio-border text-cadio-muted"
               }`}
             >
               {mode.label}
             </button>
           ))}
-          {objects.length > 0 && (
-            <button
-              onClick={selectAllObjects}
-              className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text"
-            >
-              Select all
-            </button>
-          )}
+          <div className="w-px bg-cadio-border/50 mx-1" />
           <button
-            onClick={() => setShowMeasurements((value) => !value)}
-            className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold ${
-              showMeasurements ? "bg-[#facc15] text-[#171717]" : "bg-[#2b2b2d] text-cadio-text"
+            onClick={() => setShowMeasurements((v) => !v)}
+            className={`shrink-0 h-9 rounded-lg px-4 text-[10px] font-bold uppercase tracking-wider transition-all ${
+              showMeasurements ? "bg-white text-cadio-bg" : "bg-cadio-surface border border-cadio-border text-cadio-muted"
             }`}
           >
-            mm
+            Measure
           </button>
-          {objects.length > 0 && (
-            <>
-              <button
-                onClick={() => void snapSelectedObjects("on_plate")}
-                className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text"
-              >
-                On plate
-              </button>
-              <button
-                onClick={() => void snapSelectedObjects("center_on_plate")}
-                className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-cadio-text"
-              >
-                Center
-              </button>
-              <button
-                onClick={() => void onDeleteObject()}
-                disabled={!selectedObjectId}
-                className="shrink-0 rounded-lg bg-[#2b2b2d] px-3 py-2 text-xs font-semibold text-[#ff8b8b] disabled:opacity-35"
-              >
-                Delete
-              </button>
-            </>
-          )}
         </div>
 
-        {/* Viewport - takes most space */}
+        {/* Viewport */}
         <div className="relative flex-1 min-h-0">
           <CadViewport
             objects={objects}
             selectedObjectId={selectedObjectId}
             selectedObjectIds={selectedObjectIds}
             onSelectObject={(id) => void onSelectObject(id)}
-            onDeselectObject={clearSelection}
             transformMode={transformMode}
             onTransformCommit={(id, t) => void onTransformCommit(id, t)}
             printerVolume={printerVolume}
@@ -1174,8 +906,9 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         </div>
 
         <MobileModelVariantBar />
+        
         {/* Bottom AI input bar */}
-        <div className="border-t border-cadio-border bg-cadio-panel/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur-sm">
+        <div className="border-t border-cadio-border/50 bg-cadio-surface/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl">
           <MobileAiBar />
         </div>
       </div>
@@ -1317,7 +1050,6 @@ function AuthRequiredDialog({
 export default function App() {
   const [showBuilder, setShowBuilder] = useState(() => window.location.hash.startsWith("#builder"));
   const [pathname, setPathname] = useState(() => window.location.pathname);
-  const [hash, setHash] = useState(() => window.location.hash);
 
   useEffect(() => {
     initAnalytics();
@@ -1327,7 +1059,6 @@ export default function App() {
     const syncLocation = () => {
       setShowBuilder(window.location.hash.startsWith("#builder"));
       setPathname(window.location.pathname);
-      setHash(window.location.hash);
     };
     const syncFromHash = syncLocation;
     window.addEventListener("hashchange", syncFromHash);
@@ -1339,16 +1070,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    updatePageMetadata(pathname, hash, showBuilder);
+    updatePageMetadata(pathname, showBuilder);
     trackPageView(window.location.pathname + window.location.hash);
-  }, [pathname, hash, showBuilder]);
+  }, [pathname, showBuilder]);
 
   const startBuilding = () => {
     if (window.location.pathname !== "/" || window.location.hash !== "#builder") {
       window.history.pushState(null, "", "/#builder");
     }
     setPathname("/");
-    setHash("#builder");
     setShowBuilder(true);
   };
 
@@ -1357,13 +1087,12 @@ export default function App() {
       window.history.pushState(null, "", "/");
     }
     setPathname("/");
-    setHash("");
     setShowBuilder(false);
   };
 
-  const staticRoute = staticPageFromLocation(pathname, hash);
-  if (staticRoute && !showBuilder) {
-    return <LegalPage page={staticRoute.page} initialSection={staticRoute.section} onStartBuilding={startBuilding} />;
+  const staticPage = staticPageFromPath(pathname);
+  if (staticPage && !showBuilder) {
+    return <LegalPage page={staticPage} onStartBuilding={startBuilding} />;
   }
 
   return (

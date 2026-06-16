@@ -347,12 +347,12 @@ DEFAULT_PARAMETERS: dict[str, float] = {
 }
 
 DEFAULT_FEATURE_TREE: list[dict[str, Any]] = [
-    {"id": "base_extrude", "name": "Base Extrude", "type": "base_extrude", "enabled": True},
-    {"id": "back_support", "name": "Back Support", "type": "back_support", "enabled": True},
-    {"id": "fillet_edges", "name": "Fillet Edges", "type": "fillet_edges", "enabled": False},
-    {"id": "chamfer_edges", "name": "Chamfer Edges", "type": "chamfer_edges", "enabled": False},
-    {"id": "mount_holes", "name": "Mount Holes", "type": "mount_holes", "enabled": False},
-    {"id": "mirror", "name": "Mirror", "type": "mirror", "enabled": False},
+    {"id": "base_extrude", "type": "base_extrude", "enabled": True},
+    {"id": "back_support", "type": "back_support", "enabled": True},
+    {"id": "fillet_edges", "type": "fillet_edges", "enabled": False},
+    {"id": "chamfer_edges", "type": "chamfer_edges", "enabled": False},
+    {"id": "mount_holes", "type": "mount_holes", "enabled": False},
+    {"id": "mirror", "type": "mirror", "enabled": False},
 ]
 
 

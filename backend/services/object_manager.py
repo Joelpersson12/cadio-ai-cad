@@ -207,28 +207,10 @@ def build_scene_payload(
         obj = session["objects"][oid]
         mesh = mesh_for_object(obj) if include_mesh else None
         t: Transform = obj["transform"]
-        source_model = obj.get("source_model") if isinstance(obj.get("source_model"), dict) else {}
-        matched_source = (
-            source_model.get("matched_example")
-            if isinstance(source_model.get("matched_example"), dict)
-            else {}
-        )
-        source_settings = None
-        if source_model or matched_source:
-            source_settings = {
-                "title": str(matched_source.get("title") or source_model.get("title") or ""),
-                "author": str(matched_source.get("author") or source_model.get("author") or ""),
-                "url": str(matched_source.get("url") or source_model.get("url") or ""),
-                "source": str(matched_source.get("source") or source_model.get("source") or ""),
-                "index": int(source_model.get("variant_index") or 0),
-                "total": int(source_model.get("variant_count") or 0),
-                "query": str(source_model.get("prompt") or matched_source.get("query") or ""),
-            }
         objects_out.append(
             CadObjectOut(
                 id=obj["id"],
                 name=obj["name"],
-                primitive=str(obj.get("primitive", "")),
                 parameters=obj["parameters"],
                 feature_tree=[
                     f if isinstance(f, Feature) else Feature(**f)
@@ -242,7 +224,6 @@ def build_scene_payload(
                 material=str(obj.get("material", "PLA")),
                 color=str(obj.get("color", "#a9aaad")),
                 mesh=mesh,
-                source_settings=source_settings,
             )
         )
 

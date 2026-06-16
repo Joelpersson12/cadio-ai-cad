@@ -39,7 +39,6 @@ from backend.services.export_service import (
     export_assembly,
     media_type_for,
 )
-from backend.services.image_to_3d import ImageTo3DError, build_image_model
 from backend.services.object_manager import (
     DEFAULT_PRINTER,
     PRINTERS,
@@ -55,7 +54,6 @@ from backend.services.account_store import (
     save_saved_library,
 )
 from backend.services.prompt_translation import normalize_source_query
-from backend.services.model_pipeline import build_model_source_context
 from backend.services.session_manager import (
     acquire_lock,
     add_history,
@@ -107,13 +105,9 @@ router = APIRouter()
 
 def normalize_printer(value: str) -> str:
     """Normalize a printer name string to a known printer key."""
-    if not (value or "").strip():
-        return "choose_printer"
     key = re.sub(
         r"_+", "_", re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower())
     ).strip("_")
-    if key in {"choose_printer", "choose", "set", "printer", "select_printer"}:
-        return "choose_printer"
     if key in PRINTERS:
         return key
     lookup: list[tuple[str, str]] = [
@@ -128,7 +122,7 @@ def normalize_printer(value: str) -> str:
     for fragment, printer_key in lookup:
         if fragment in key:
             return printer_key
-    return "choose_printer"
+    return DEFAULT_PRINTER
 
 
 def _error(status: int, message: str) -> JSONResponse:
@@ -223,7 +217,7 @@ def put_account_saved_models(
 def list_printers() -> dict[str, Any]:
     return {
         "status": "ok",
-        "default": "choose_printer",
+        "default": DEFAULT_PRINTER,
         "printers": PRINTERS,
         "materials": material_profiles_response(),
     }
@@ -239,9 +233,7 @@ async def update_printer(data: PrinterUpdateRequest) -> ScenePayload | JSONRespo
     try:
         lock = acquire_lock()
         with lock:
-            session = get_session(data.session_id)
-            if session is None:
-                return _error(404, "Session not found")
+            session = get_or_create_session(data.session_id)
             save_undo_snapshot(session)
             session["printer"] = normalize_printer(data.printer)
             bump_version(session)
@@ -286,37 +278,12 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
             save_undo_snapshot(session)
             session["printer"] = normalize_printer(data.printer)
             session["fit"] = bool(data.fit)
-            model_updated = True
 
             prompt = (data.prompt or "").strip().lower()
             command_prompt = f"{prompt} {normalize_source_query(data.prompt)}".strip().lower()
-            image_mode = data.mode in {"image", "hybrid"} or bool(data.image)
 
             # Special commands
-            if image_mode:
-                image_prompt = data.prompt.strip() or "Turn this image into a printable 3D model."
-                try:
-                    result = build_image_model(
-                        data.image,
-                        image_prompt,
-                        data.imageName or "uploaded image",
-                    )
-                except ImageTo3DError as exc:
-                    return _error(400, str(exc))
-                obj = prepare_generation_target(
-                    session,
-                    f"image_to_3d_{len(session['edit_history']) + 1}",
-                )
-                obj["shape"] = result.mesh
-                obj["parameters"] = result.parameters
-                obj["primitive"] = "image_to_3d"
-                obj["template_hint"] = None
-                obj["manual"] = True
-                obj["color"] = "#b8bcc4"
-                session["selected_object_id"] = obj["id"]
-                actions = result.actions
-                data.prompt = image_prompt
-            elif "duplicate" in command_prompt:
+            if "duplicate" in command_prompt:
                 duplicate_object(session)
                 actions = ["duplicate selected object"]
             elif "delete object" in command_prompt or "remove object" in command_prompt:
@@ -336,13 +303,12 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                 actions = add_text_label_from_prompt(session, data.prompt)
             elif is_structural_ai_edit_prompt(data.prompt):
                 if not session["object_order"]:
-                    actions = ["edit skipped: create or select a model before using model tools"]
-                    model_updated = False
-                else:
-                    actions = apply_structural_ai_edit_from_prompt(session, data.prompt)
-                    if not actions:
-                        actions = ["edit skipped: current model does not support that tool"]
-                        model_updated = False
+                    obj = create_object("part_1")
+                    add_object(session, obj)
+                    session["selected_object_id"] = obj["id"]
+                actions = apply_structural_ai_edit_from_prompt(session, data.prompt)
+                if not actions:
+                    actions = ["edit skipped: command was not specific enough"]
             else:
                 edit_only = is_edit_only_prompt(data.prompt)
                 if edit_only:
@@ -360,87 +326,53 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
                         session,
                         f"generated_{len(session['edit_history']) + 1}",
                     )
-                source_context = None if edit_only else build_model_source_context(data.prompt, limit=12)
-                source_actions = [] if edit_only else replace_object_with_source_model(
-                    session,
-                    obj,
-                    data.prompt,
-                    source_context.examples if source_context else None,
-                )
+                source_actions = [] if edit_only else replace_object_with_source_model(session, obj, data.prompt)
                 if source_actions:
                     actions = source_actions
                 else:
-                    parsed = parse_ai_command(
-                        data.prompt,
+                    parsed = parse_ai_command(data.prompt, session, obj)
+                    previous_parameters = dict(obj.get("parameters", {}))
+                    obj["parameters"] = parsed["parameters"]
+                    obj["feature_tree"] = parsed["feature_tree"]
+                    obj["transform"] = parsed["transform"]
+                    changed_keys = {
+                        key
+                        for key, value in parsed["parameters"].items()
+                        if previous_parameters.get(key) != value
+                    }
+                    if not update_imported_source_dimensions(obj, changed_keys):
+                        rebuild_object(obj)
+
+                    assembly_actions = replace_object_with_template_assembly(
                         session,
                         obj,
-                        source_context.research_brief if source_context else None,
+                        None if edit_only else parsed.get("template"),
+                        parsed["parameters"],
                     )
-                    research_brief = parsed.get("research_brief") if isinstance(parsed.get("research_brief"), dict) else {}
-                    source_examples = research_brief.get("source_examples") if isinstance(research_brief, dict) else []
-                    no_reliable_source = (
-                        not edit_only
-                        and not parsed.get("template")
-                        and isinstance(research_brief, dict)
-                        and str(research_brief.get("category") or "").lower() == "generic"
-                        and (
-                            not source_examples
-                            or float(research_brief.get("confidence") or 0.0) <= 0.38
-                        )
-                    )
-                    if no_reliable_source:
-                        remove_object(session, obj["id"])
-                        session["selected_object_id"] = ""
-                        translated = normalize_source_query(data.prompt)
-                        actions = [
-                            "model-not-found: Cadio could not find a reliable printable source model for that prompt yet.",
-                            f"searched-query: {translated}" if translated else "searched public model sources",
-                            "tip: Try adding object type, mount style, brand, dimensions, or filters like wall mounted, pegboard, bike mounted, foldable, or popular.",
-                        ]
-                        model_updated = False
-                    else:
-                        previous_parameters = dict(obj.get("parameters", {}))
-                        obj["parameters"] = parsed["parameters"]
-                        obj["feature_tree"] = parsed["feature_tree"]
-                        obj["transform"] = parsed["transform"]
-                        changed_keys = {
-                            key
-                            for key, value in parsed["parameters"].items()
-                            if previous_parameters.get(key) != value
-                        }
-                        if not update_imported_source_dimensions(obj, changed_keys):
-                            rebuild_object(obj)
-
-                        assembly_actions = replace_object_with_template_assembly(
+                    research_actions = []
+                    if not assembly_actions and not edit_only:
+                        research_actions = replace_object_with_research_assembly(
                             session,
                             obj,
-                            None if edit_only else parsed.get("template"),
+                            parsed.get("research_brief"),
                             parsed["parameters"],
                         )
-                        research_actions = []
-                        if not assembly_actions and not edit_only:
-                            research_actions = replace_object_with_research_assembly(
-                                session,
-                                obj,
-                                parsed.get("research_brief"),
-                                parsed["parameters"],
-                            )
-                        if assembly_actions or research_actions:
-                            actions = parsed["actions"] + assembly_actions + research_actions
+                    if assembly_actions or research_actions:
+                        actions = parsed["actions"] + assembly_actions + research_actions
+                    else:
+                        # Validate generated geometry
+                        validation = GeometryValidator.validate(obj["shape"])
+                        if not validation.is_valid:
+                            logger.warning(f"Generated model failed validation: {validation.issues}")
+                            # Add validation info to actions
+                            actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
                         else:
-                            # Validate generated geometry
-                            validation = GeometryValidator.validate(obj["shape"])
-                            if not validation.is_valid:
-                                logger.warning(f"Generated model failed validation: {validation.issues}")
-                                # Add validation info to actions
-                                actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
-                            else:
-                                actions = parsed["actions"]
-                                if validation.warnings:
-                                    actions += [f"Note: {w}" for w in validation.warnings]
+                            actions = parsed["actions"]
+                            if validation.warnings:
+                                actions += [f"Note: {w}" for w in validation.warnings]
 
-                            # Store validation metrics
-                            obj["validation"] = validation.to_dict()
+                        # Store validation metrics
+                        obj["validation"] = validation.to_dict()
 
                 if not edit_only and obj.get("id") in session["objects"]:
                     session["selected_object_id"] = ""
@@ -451,7 +383,7 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
             bump_version(session)
             add_history(session, data.prompt, actions)
             payload = build_scene_payload(
-                session, include_mesh=True, model_updated=model_updated
+                session, include_mesh=True, model_updated=True
             )
 
         # Broadcast outside lock
