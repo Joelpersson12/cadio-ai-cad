@@ -9,6 +9,7 @@ const pages: Record<
     title: string;
     eyebrow: string;
     updated: string;
+    icon: string;
     sections: Array<{ heading: string; body: string[] }>;
   }
 > = {
@@ -16,6 +17,7 @@ const pages: Record<
     title: "Terms of Service",
     eyebrow: "Cadio legal",
     updated: "Effective June 7, 2026",
+    icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
     sections: [
       {
         heading: "What Cadio Is",
@@ -55,6 +57,7 @@ const pages: Record<
     title: "Privacy Policy",
     eyebrow: "Cadio privacy",
     updated: "Effective June 7, 2026",
+    icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
     sections: [
       {
         heading: "Data Cadio May Process",
@@ -86,6 +89,7 @@ const pages: Record<
     title: "Cookie Policy",
     eyebrow: "Cadio cookies",
     updated: "Effective June 8, 2026",
+    icon: "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z",
     sections: [
       {
         heading: "How Cadio Uses Cookies",
@@ -117,6 +121,7 @@ const pages: Record<
     title: "Contact Cadio",
     eyebrow: "Support and feedback",
     updated: "Cadio is currently in early development.",
+    icon: "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
     sections: [
       {
         heading: "Get In Touch",
@@ -135,57 +140,134 @@ const pages: Record<
   },
 };
 
+const navItems: Array<{ kind: LegalPageKind; label: string }> = [
+  { kind: "terms", label: "Terms" },
+  { kind: "privacy", label: "Privacy" },
+  { kind: "cookies", label: "Cookies" },
+  { kind: "contact", label: "Contact" },
+];
+
 export default function LegalPage({
   page,
   onStartBuilding,
+  onNavigate,
 }: {
   page: LegalPageKind;
   onStartBuilding: () => void;
+  onNavigate?: (page: LegalPageKind) => void;
 }) {
   const content = pages[page];
 
   return (
-    <div className="h-full overflow-y-auto bg-[#151515] text-white">
-      <header className="border-b border-white/10 bg-[#151515]/95">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
+    <div className="min-h-screen bg-[#050505] text-white">
+      {/* Header */}
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#050505]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <a href="/" className="flex items-center gap-3">
             <CadioLogo subtitle="" />
           </a>
           <button
             onClick={onStartBuilding}
-            className="h-9 rounded-lg bg-[#e8e8e8] px-4 text-sm font-semibold text-[#151515] hover:bg-white"
+            className="h-9 rounded-lg bg-[#00F0FF] px-4 text-sm font-semibold text-[#050505] hover:bg-[#00F0FF]/90 transition-colors"
           >
-            Start building
+            Start Building
           </button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#2bb8dc]">{content.eyebrow}</p>
-        <h1 className="mt-4 text-4xl font-semibold tracking-normal text-white sm:text-5xl">{content.title}</h1>
-        <p className="mt-3 text-sm text-[#a9a9ac]">{content.updated}</p>
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:flex lg:gap-16">
+        {/* Sidebar */}
+        <aside className="hidden lg:block w-56 shrink-0">
+          <div className="sticky top-24">
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-white/30">Legal</p>
+            <nav className="flex flex-col gap-1">
+              {navItems.map((item) => (
+                <button
+                  key={item.kind}
+                  onClick={() => onNavigate?.(item.kind)}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                    page === item.kind
+                      ? "border border-[#00F0FF]/20 bg-[#00F0FF]/10 text-[#00F0FF]"
+                      : "text-white/50 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d={pages[item.kind].icon} />
+                  </svg>
+                  {item.label}
+                </button>
+              ))}
+            </nav>
 
-        <div className="mt-10 space-y-8">
-          {content.sections.map((section) => (
-            <section key={section.heading} className="border-t border-white/10 pt-6">
-              <h2 className="text-xl font-semibold text-white">{section.heading}</h2>
-              <div className="mt-3 space-y-3 text-sm leading-7 text-[#c8c8cb]">
-                {section.body.map((paragraph) =>
-                  paragraph === "support@cadio.net" ? (
-                    <p key={paragraph}>
-                      <a className="font-semibold text-[#7ddff2] hover:text-white" href="mailto:support@cadio.net">
-                        support@cadio.net
-                      </a>
-                    </p>
-                  ) : (
-                    <p key={paragraph}>{paragraph}</p>
-                  ),
-                )}
-              </div>
-            </section>
-          ))}
-        </div>
-      </main>
+            <div className="mt-8 rounded-xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-semibold text-white/60 mb-2">Need help?</p>
+              <a
+                href="mailto:support@cadio.net"
+                className="text-xs text-[#00F0FF] hover:text-white transition-colors"
+              >
+                support@cadio.net
+              </a>
+            </div>
+          </div>
+        </aside>
+
+        {/* Content */}
+        <main className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#00F0FF]">{content.eyebrow}</p>
+          <h1 className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">{content.title}</h1>
+          <p className="mt-3 text-sm text-white/40">{content.updated}</p>
+
+          {/* Mobile nav */}
+          <div className="mt-6 flex flex-wrap gap-2 lg:hidden">
+            {navItems.map((item) => (
+              <button
+                key={item.kind}
+                onClick={() => onNavigate?.(item.kind)}
+                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
+                  page === item.kind
+                    ? "bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/20"
+                    : "bg-white/5 text-white/50 hover:text-white"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-10 space-y-10">
+            {content.sections.map((section) => (
+              <section key={section.heading} className="border-t border-white/10 pt-8">
+                <h2 className="text-xl font-semibold text-white">{section.heading}</h2>
+                <div className="mt-4 space-y-4 text-sm leading-7 text-white/60">
+                  {section.body.map((paragraph) =>
+                    paragraph === "support@cadio.net" ? (
+                      <p key={paragraph}>
+                        <a className="font-semibold text-[#00F0FF] hover:text-white transition-colors" href="mailto:support@cadio.net">
+                          support@cadio.net
+                        </a>
+                      </p>
+                    ) : (
+                      <p key={paragraph}>{paragraph}</p>
+                    ),
+                  )}
+                </div>
+              </section>
+            ))}
+          </div>
+
+          {/* CTA block */}
+          <div className="mt-16 rounded-2xl border border-[#00F0FF]/20 bg-[#00F0FF]/5 p-8 text-center">
+            <p className="text-lg font-semibold text-white">Ready to get started?</p>
+            <p className="mt-2 text-sm text-white/50">Cadio is free during early access.</p>
+            <button
+              onClick={onStartBuilding}
+              className="mt-6 rounded-lg bg-[#00F0FF] px-8 py-3 text-sm font-semibold text-[#050505] hover:bg-[#00F0FF]/90 transition-colors"
+            >
+              Start Building
+            </button>
+          </div>
+        </main>
+      </div>
 
       <SiteFooter />
     </div>

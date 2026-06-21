@@ -13,6 +13,16 @@ from backend.services.session_manager import CadObject, Session
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
+_openai_client: Any = None
+
+
+def _get_openai_client() -> Any:
+    global _openai_client
+    if _openai_client is None:
+        from openai import OpenAI
+        _openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    return _openai_client
+
 CREATE_PATTERNS = (
     r"\b(create|generate|build|design)\b",
     r"\bmake\s+(a|an|one)\b",
@@ -405,17 +415,28 @@ def _apply_research_brief(
     return list(brief.get("actions", []))
 
 
-def _parse_with_gpt(prompt: str, current_params: dict, current_transform: dict) -> dict:
+def _parse_with_gpt(
+    prompt: str,
+    current_params: dict,
+    current_transform: dict,
+    current_features: list | None = None,
+) -> dict:
     """Call GPT-4o to parse the prompt into CAD changes."""
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        client = _get_openai_client()
 
-        user_message = f"""Current parameters: {json.dumps(current_params)}
-Current transform: {json.dumps(current_transform)}
-User instruction: {prompt}
+        features_summary = ""
+        if current_features:
+            enabled = [f["type"] if isinstance(f, dict) else getattr(f, "type", str(f)) for f in current_features if (f.get("enabled") if isinstance(f, dict) else getattr(f, "enabled", True))]
+            disabled = [f["type"] if isinstance(f, dict) else getattr(f, "type", str(f)) for f in current_features if not (f.get("enabled") if isinstance(f, dict) else getattr(f, "enabled", True))]
+            features_summary = f"\nEnabled features: {enabled}\nDisabled features: {disabled}"
 
-Remember: return ONLY raw JSON, nothing else."""
+        user_message = (
+            f"Current parameters: {json.dumps(current_params)}"
+            f"{features_summary}"
+            f"\nCurrent transform: {json.dumps(current_transform)}"
+            f"\nUser instruction: {prompt}"
+        )
 
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -424,15 +445,16 @@ Remember: return ONLY raw JSON, nothing else."""
                 {"role": "user", "content": user_message},
             ],
             temperature=0.1,
-            max_tokens=800,
+            max_tokens=1000,
+            response_format={"type": "json_object"},
+            timeout=20,
         )
 
         raw = response.choices[0].message.content or "{}"
-        raw = re.sub(r"```json|```", "", raw).strip()
         return json.loads(raw)
 
     except Exception as e:
-        print(f"GPT error: {e}")
+        print(f"[cadio] GPT error: {e}")
         return {
             "parameters": current_params,
             "features": [],
@@ -505,7 +527,7 @@ def parse_ai_command(
     if quick_actions or inference_actions or brief_actions:
         actions = brief_actions + quick_actions + inference_actions
     elif not template or "modify" in _prompt_match_text(prompt) or "change" in _prompt_match_text(prompt):
-        result = _parse_with_gpt(prompt, params, current_transform)
+        result = _parse_with_gpt(prompt, params, current_transform, features)
         
         # Apply parameter changes
         new_params = result.get("parameters", {})

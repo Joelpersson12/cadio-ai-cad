@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { loginCadioAccount } from "../utils/auth";
 import CadioLogo from "./CadioLogo";
@@ -436,121 +436,112 @@ const copy = {
   },
 };
 
-const practicalDetails: Partial<Record<Language, {
-  title: string;
-  body: string;
-  items: Array<[string, string]>;
-}>> = {
-  en: {
-    title: "Made for the messy middle between idea and slicer",
-    body:
-      "Most print projects need more than a generated shape. Cadio keeps model variants, measurements, print settings, and manual edits close together so you can make a part feel usable before exporting it.",
-    items: [
-      ["Variant control", "Move between model options when the first result is not the right one."],
-      ["Real dimensions", "Check bounds and scale before the file reaches your printer profile."],
-      ["Editable workflow", "Start with AI, then adjust details by hand when precision matters."],
-    ],
-  },
-  sv: {
-    title: "Byggd för mellanläget mellan idé och slicer",
-    body:
-      "De flesta printprojekt behöver mer än en genererad form. Cadio håller modellvarianter, mått, printinställningar och manuella ändringar nära varandra så modellen känns användbar innan export.",
-    items: [
-      ["Variantkontroll", "Byt modellförslag när första resultatet inte passar."],
-      ["Verkliga mått", "Kontrollera mått och skala innan filen hamnar i skrivarprofilen."],
-      ["Redigerbart flöde", "Börja med AI och finjustera sedan för hand när precision spelar roll."],
-    ],
-  },
-};
+// ─── Three.js components ───────────────────────────────────────────────────
 
-function HeroModel() {
-  const groupRef = useRef<THREE.Group>(null);
-  
-  // V2 Material: Opaque, solid engineering grey
-  const bodyMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#94a3b8",
-        roughness: 0.35,
-        metalness: 0.1,
-      }),
-    [],
-  );
-  
-  const accentMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#3b82f6",
-        emissive: "#3b82f6",
-        emissiveIntensity: 0.2,
-        roughness: 0.2,
-        metalness: 0.5,
-      }),
-    [],
-  );
-
+function PhoneStand() {
+  const ref = useRef<THREE.Group>(null);
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#00F0FF", roughness: 0.3, metalness: 0.6, emissive: "#00F0FF", emissiveIntensity: 0.08 }), []);
+  const grey = useMemo(() => new THREE.MeshStandardMaterial({ color: "#1a2a3a", roughness: 0.5, metalness: 0.4 }), []);
   useFrame(({ clock }) => {
-    if (!groupRef.current) return;
-    groupRef.current.rotation.y = -0.3 + Math.sin(clock.elapsedTime * 0.15) * 0.05;
-    groupRef.current.rotation.x = 0.2 + Math.sin(clock.elapsedTime * 0.1) * 0.02;
+    if (!ref.current) return;
+    ref.current.rotation.y = Math.sin(clock.elapsedTime * 0.4) * 0.3;
+    ref.current.position.y = Math.sin(clock.elapsedTime * 0.6) * 0.12;
   });
-
   return (
-    <group ref={groupRef} position={[0, -0.5, 0]}>
-      <group position={[0, 0.8, 0]}>
-        {/* Main Body */}
-        <mesh material={bodyMaterial} position={[0, 0, 0]} castShadow receiveShadow>
-          <boxGeometry args={[4, 0.5, 3]} />
-        </mesh>
-        
-        {/* Support Structure */}
-        <mesh material={bodyMaterial} position={[0, 1, -1.2]} castShadow receiveShadow>
-          <boxGeometry args={[3.8, 2, 0.4]} />
-        </mesh>
-        
-        {/* Engineering Accents */}
-        <mesh material={accentMaterial} position={[1.5, 0.3, 1]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.2, 0.2, 0.1, 32]} />
-        </mesh>
-        <mesh material={accentMaterial} position={[-1.5, 0.3, 1]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.2, 0.2, 0.1, 32]} />
-        </mesh>
-      </group>
-      <gridHelper args={[10, 20, "#1f2937", "#111827"]} position={[0, -0.01, 0]} />
+    <group ref={ref} position={[-2, 0, 0]} scale={0.7}>
+      <mesh material={grey} castShadow><boxGeometry args={[1.6, 0.3, 1.2]} /></mesh>
+      <mesh material={grey} position={[0, 1, -0.4]} castShadow><boxGeometry args={[1.4, 1.8, 0.25]} /></mesh>
+      <mesh material={mat} position={[0.55, 0.15, 0.55]} castShadow><cylinderGeometry args={[0.1, 0.1, 0.05, 16]} /></mesh>
+      <mesh material={mat} position={[-0.55, 0.15, 0.55]} castShadow><cylinderGeometry args={[0.1, 0.1, 0.05, 16]} /></mesh>
     </group>
   );
 }
+
+function Bracket() {
+  const ref = useRef<THREE.Group>(null);
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#FF007A", roughness: 0.25, metalness: 0.7, emissive: "#FF007A", emissiveIntensity: 0.06 }), []);
+  const grey = useMemo(() => new THREE.MeshStandardMaterial({ color: "#1f1a2e", roughness: 0.4, metalness: 0.5 }), []);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.rotation.y = -Math.sin(clock.elapsedTime * 0.35 + 1) * 0.35;
+    ref.current.position.y = Math.sin(clock.elapsedTime * 0.5 + 2) * 0.15;
+  });
+  return (
+    <group ref={ref} position={[2, 0, 0]} scale={0.7}>
+      <mesh material={grey} castShadow><boxGeometry args={[2, 0.25, 0.25]} /></mesh>
+      <mesh material={grey} position={[-0.875, 0.75, 0]} castShadow><boxGeometry args={[0.25, 1.5, 0.25]} /></mesh>
+      <mesh material={grey} position={[0.875, 0.75, 0]} castShadow><boxGeometry args={[0.25, 1.5, 0.25]} /></mesh>
+      <mesh material={mat} position={[-0.875, 1.55, 0]} castShadow><boxGeometry args={[0.25, 0.15, 0.5]} /></mesh>
+      <mesh material={mat} position={[0.875, 1.55, 0]} castShadow><boxGeometry args={[0.25, 0.15, 0.5]} /></mesh>
+    </group>
+  );
+}
+
+function HexPlate() {
+  const ref = useRef<THREE.Group>(null);
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#8A2BE2", roughness: 0.2, metalness: 0.8, emissive: "#8A2BE2", emissiveIntensity: 0.1 }), []);
+  const grey = useMemo(() => new THREE.MeshStandardMaterial({ color: "#12121c", roughness: 0.6, metalness: 0.3 }), []);
+  const hexGeo = useMemo(() => {
+    const shape = new THREE.Shape();
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i - Math.PI / 6;
+      const x = Math.cos(angle) * 0.9;
+      const y = Math.sin(angle) * 0.9;
+      if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+    }
+    shape.closePath();
+    return new THREE.ExtrudeGeometry(shape, { depth: 0.18, bevelEnabled: false });
+  }, []);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.rotation.y = clock.elapsedTime * 0.25;
+    ref.current.position.y = Math.sin(clock.elapsedTime * 0.45 + 3) * 0.1;
+  });
+  return (
+    <group ref={ref} position={[0, 0.5, 1]} scale={0.65}>
+      <mesh geometry={hexGeo} material={grey} castShadow />
+      <mesh geometry={hexGeo} material={mat} position={[0, 0, 0.19]} castShadow />
+    </group>
+  );
+}
+
 function HeroScene() {
   return (
-    <div className="absolute inset-0 bg-[#0b0f14]">
-      <Canvas
-        dpr={[1, 2]}
-        shadows
-        camera={{ position: [6, 6, 8], fov: 35 }}
-        gl={{ antialias: true, alpha: true }}
-      >
-        <color attach="background" args={["#0b0f14"]} />
-        <fog attach="fog" args={["#0b0f14", 8, 20]} />
-        
-        {/* Premium Lighting */}
-        <ambientLight intensity={0.4} />
-        <spotLight
-          position={[10, 15, 10]}
-          angle={0.15}
-          penumbra={1}
-          intensity={2}
-          castShadow
-          shadow-mapSize={[1024, 1024]}
-        />
-        <pointLight position={[-10, 5, -10]} intensity={0.5} color="#3b82f6" />
-        
-        <HeroModel />
+    <div className="absolute inset-0">
+      <Canvas dpr={[1, 1.5]} shadows camera={{ position: [0, 2, 6], fov: 50 }} gl={{ antialias: true, alpha: true }}>
+        <color attach="background" args={["#050505"]} />
+        <ambientLight intensity={0.5} />
+        <spotLight position={[5, 10, 5]} angle={0.2} penumbra={1} intensity={3} castShadow shadow-mapSize={[1024, 1024]} />
+        <pointLight position={[-6, 4, -4]} intensity={1.5} color="#00F0FF" />
+        <pointLight position={[6, 4, -4]} intensity={1} color="#FF007A" />
+        <pointLight position={[0, 6, 2]} intensity={0.8} color="#8A2BE2" />
+        <PhoneStand />
+        <Bracket />
+        <HexPlate />
+        <gridHelper args={[14, 28, "#0a1a2a", "#071018"]} position={[0, -1.2, 0]} />
       </Canvas>
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0b0f14] via-[#0b0f14]/80 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-[#0b0f14] to-transparent" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/60 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#050505] to-transparent" />
     </div>
   );
 }
+
+// ─── Scroll reveal hook ────────────────────────────────────────────────────
+
+function useReveal() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } }, { threshold: 0.15 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  return { ref, visible };
+}
+
+// ─── Auth dialog ───────────────────────────────────────────────────────────
 
 function AuthDialog({
   mode,
@@ -565,26 +556,20 @@ function AuthDialog({
 }) {
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
-
   if (!mode) return null;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-[#343436] bg-[#1f1f20] p-5 shadow-2xl">
-        <div className="mb-5 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0e0e0e] p-6 shadow-2xl">
+        <div className="mb-6 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-white">
             {mode === "login" ? text.auth.loginTitle : text.auth.signupTitle}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid h-9 w-9 place-items-center rounded-lg bg-[#2b2b2d] text-sm text-[#bdbdbd] hover:text-white"
-            aria-label="Close"
-          >
-            x
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-white/40 hover:text-white hover:bg-white/10 transition-colors">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
         <form
-          className="space-y-3"
+          className="flex flex-col gap-4"
           onSubmit={async (event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
@@ -605,238 +590,291 @@ function AuthDialog({
           }}
         >
           {mode === "signup" && (
-            <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#8f8f92]">
+            <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/50">
               {text.auth.name}
-              <input name="name" className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]" />
+              <input name="name" className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#00F0FF]/50 focus:ring-1 focus:ring-[#00F0FF]/30 transition-colors" />
             </label>
           )}
-          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#8f8f92]">
+          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/50">
             {text.auth.email}
-            <input
-              name="email"
-              type="email"
-              required
-              className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]"
-            />
+            <input name="email" type="email" required className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#00F0FF]/50 focus:ring-1 focus:ring-[#00F0FF]/30 transition-colors" />
           </label>
-          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#8f8f92]">
+          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/50">
             {text.auth.password}
-            <input
-              name="password"
-              type="password"
-              minLength={4}
-              required
-              className="mt-2 h-11 w-full rounded-lg border border-[#343436] bg-[#111] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#2bb8dc]"
-            />
+            <input name="password" type="password" minLength={4} required className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#00F0FF]/50 focus:ring-1 focus:ring-[#00F0FF]/30 transition-colors" />
           </label>
           {authError && (
-            <p className="rounded-lg border border-[#6b2d2d] bg-[#2a1717] px-3 py-2 text-xs text-[#ffb3b3]">
-              {authError}
-            </p>
+            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{authError}</p>
           )}
           <button
             disabled={authBusy}
-            className="h-11 w-full rounded-lg bg-[#e8e8e8] text-sm font-semibold text-[#151515] hover:bg-white disabled:cursor-wait disabled:opacity-60"
+            className="h-11 w-full rounded-lg bg-[#00F0FF] text-sm font-semibold text-[#050505] hover:bg-[#00F0FF]/90 disabled:cursor-wait disabled:opacity-60 transition-colors mt-1"
           >
-            {authBusy ? (text === copy.sv ? "Loggar in..." : "Signing in...") : text.auth.continue}
+            {authBusy ? "..." : text.auth.continue}
           </button>
         </form>
-        <p className="mt-4 text-xs leading-relaxed text-[#8f8f92]">{text.auth.hint}</p>
+        <p className="mt-4 text-xs leading-relaxed text-white/30">{text.auth.hint}</p>
       </div>
     </div>
   );
 }
 
+// ─── Main export ───────────────────────────────────────────────────────────
+
 export default function LandingPage({ onStartBuilding }: { onStartBuilding: () => void }) {
   const [language, setLanguage] = useState<Language>("en");
-  const [betaOpen, setBetaOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>(null);
+  const [scrolled, setScrolled] = useState(false);
   const text = copy[language];
-  const details = practicalDetails[language] ?? practicalDetails.en!;
 
-  const openPricing = () => {
-    document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handler = () => setScrolled(el.scrollTop > 48);
+    el.addEventListener("scroll", handler, { passive: true });
+    return () => el.removeEventListener("scroll", handler);
+  }, []);
+
+  const product = useReveal();
+  const workflow = useReveal();
+  const pricing = useReveal();
+
+  const marqueeItems = ["STL", "3MF", "STEP", "OBJ", "AMF", "AI CAD", "Parametric", "FDM", "SLA", "MSLA", "3D Print"];
 
   return (
-    <div className="h-full overflow-y-auto bg-cadio-bg text-cadio-text font-sans">
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-cadio-border/50 bg-cadio-bg/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8">
-          <CadioLogo
-            subtitle=""
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          />
-          <nav className="hidden items-center gap-8 text-sm font-medium text-cadio-muted md:flex">
-            <a href="#product" className="hover:text-cadio-text transition-colors">{text.nav.product}</a>
-            <a href="#workflow" className="hover:text-cadio-text transition-colors">{text.nav.workflow}</a>
-            <a href="#pricing" className="hover:text-cadio-text transition-colors">{text.nav.pricing}</a>
-          </nav>
-          <div className="flex items-center gap-4">
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value as Language)}
-              className="h-9 rounded-md border border-cadio-border bg-cadio-surface px-2 text-xs text-cadio-text outline-none focus:ring-1 focus:ring-cadio-accent"
-              aria-label="Language"
-            >
-              {languageOptions.map((option) => (
-                <option value={option.value} key={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={onStartBuilding}
-              className="h-9 rounded-md bg-cadio-accent px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-cadio-accent-hover hover:scale-[1.02] active:scale-[0.98]"
-            >
-              {text.nav.start}
-            </button>
-          </div>
-        </div>
-      </header>
+    <>
+      <style>{`
+        @keyframes marquee { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+        .marquee-track { animation: marquee 24s linear infinite; }
+      `}</style>
 
-      <main>
-        {/* Hero Section */}
-        <section className="relative min-h-[85vh] overflow-hidden pt-16 flex flex-col justify-center">
-          <HeroScene />
-          <div className="relative z-10 mx-auto w-full max-w-7xl px-6 lg:px-8 py-24">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-cadio-accent/30 bg-cadio-accent/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-cadio-accent mb-8">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cadio-accent opacity-75"></span>
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-cadio-accent"></span>
-                </span>
-                {text.hero.eyebrow}
-              </div>
-              <h1 className="text-6xl font-extrabold tracking-tight text-white sm:text-7xl lg:text-8xl mb-8 leading-[0.9]">
-                {text.hero.title}
-              </h1>
-              <p className="max-w-xl text-lg sm:text-xl leading-relaxed text-cadio-muted mb-10">
-                {text.hero.body}
-              </p>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                <button
-                  onClick={onStartBuilding}
-                  className="w-full sm:w-auto h-12 rounded-lg bg-white px-8 text-base font-bold text-cadio-bg shadow-lg transition-all hover:bg-cadio-text hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  {text.hero.primary}
-                </button>
-                <button 
-                  onClick={openPricing}
-                  className="w-full sm:w-auto h-12 rounded-lg border border-cadio-border bg-cadio-surface/50 px-8 text-base font-semibold text-cadio-text backdrop-blur-sm transition-all hover:bg-cadio-surface"
-                >
-                  {text.hero.secondary}
-                </button>
-              </div>
+      <div id="landing-scroll" ref={scrollRef} className="h-full overflow-y-auto bg-[#050505] text-white"
+        style={{ backgroundImage: "radial-gradient(circle at 50% 0%, rgba(0,240,255,0.04) 0%, transparent 60%)" }}>
+
+        {/* Navbar */}
+        <header className={`fixed inset-x-0 top-0 z-40 transition-all duration-300 ${scrolled ? "border-b border-white/10 bg-[#050505]/90 backdrop-blur-xl shadow-lg" : "bg-transparent"}`}>
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8">
+            <CadioLogo subtitle="" onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })} />
+            <nav className="hidden items-center gap-8 text-sm font-medium text-white/60 md:flex">
+              <a href="#product" className="hover:text-white transition-colors">{text.nav.product}</a>
+              <a href="#workflow" className="hover:text-white transition-colors">{text.nav.workflow}</a>
+              <a href="#pricing" className="hover:text-white transition-colors">{text.nav.pricing}</a>
+            </nav>
+            <div className="flex items-center gap-3">
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as Language)}
+                className="h-9 rounded-md border border-white/10 bg-white/5 px-2 text-xs text-white/70 outline-none focus:ring-1 focus:ring-[#00F0FF]/50 backdrop-blur"
+                aria-label="Language"
+              >
+                {languageOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+              </select>
+              <button
+                onClick={() => setAuthMode("login")}
+                className="hidden h-9 rounded-lg border border-white/15 bg-white/5 px-4 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors sm:block"
+              >
+                {text.nav.login}
+              </button>
+              <button
+                onClick={onStartBuilding}
+                className="h-9 rounded-lg bg-[#00F0FF] px-5 text-sm font-bold text-[#050505] hover:bg-[#00F0FF]/90 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_20px_rgba(0,240,255,0.25)]"
+              >
+                {text.nav.start}
+              </button>
             </div>
           </div>
-          
-          {/* Stats Bar */}
-          <div className="relative z-10 border-y border-cadio-border bg-cadio-surface/30 backdrop-blur-md">
-            <div className="mx-auto max-w-7xl grid grid-cols-1 divide-y divide-cadio-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        </header>
+
+        <main>
+          {/* ── Hero ── */}
+          <section className="relative min-h-screen overflow-hidden pt-16 flex flex-col justify-center">
+            <HeroScene />
+            <div className="relative z-10 mx-auto w-full max-w-7xl px-6 lg:px-8 py-32">
+              <div className="max-w-2xl">
+                <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-[#00F0FF]/30 bg-[#00F0FF]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-[#00F0FF]">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00F0FF] opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00F0FF]" />
+                  </span>
+                  {text.hero.eyebrow}
+                </div>
+                <h1 className="text-6xl font-extrabold leading-[0.88] tracking-tight text-white sm:text-7xl lg:text-8xl mb-8">
+                  {text.hero.title}
+                </h1>
+                <p className="max-w-lg text-lg leading-relaxed text-white/60 mb-10">
+                  {text.hero.body}
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button
+                    onClick={onStartBuilding}
+                    className="h-12 rounded-xl bg-white px-8 text-base font-bold text-[#050505] hover:bg-white/90 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_4px_32px_rgba(255,255,255,0.12)]"
+                  >
+                    {text.hero.primary}
+                  </button>
+                  <button
+                    onClick={() => setAuthMode("signup")}
+                    className="h-12 rounded-xl border border-white/15 bg-white/5 px-8 text-base font-semibold text-white/80 hover:bg-white/10 hover:text-white backdrop-blur transition-colors"
+                  >
+                    {text.hero.secondary}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Marquee band ── */}
+          <div className="border-y border-white/8 bg-white/[0.03] py-4 overflow-hidden">
+            <div className="flex marquee-track whitespace-nowrap">
+              {[...marqueeItems, ...marqueeItems].map((item, i) => (
+                <span key={i} className="mx-8 text-xs font-bold uppercase tracking-[0.24em] text-white/25">{item}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Stats ── */}
+          <section className="mx-auto max-w-7xl px-6 lg:px-8 py-20">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               {text.stats.map(([title, body]) => (
-                <div key={title} className="px-8 py-8 transition-colors hover:bg-cadio-surface/40">
-                  <div className="text-sm font-bold text-white mb-2">{title}</div>
-                  <div className="text-xs leading-relaxed text-cadio-muted">{body}</div>
+                <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 hover:border-[#00F0FF]/20 hover:bg-[#00F0FF]/5 transition-all group">
+                  <div className="mb-3 h-1 w-8 rounded-full bg-[#00F0FF] group-hover:w-12 transition-all duration-300" />
+                  <p className="text-base font-semibold text-white mb-2">{title}</p>
+                  <p className="text-sm text-white/50 leading-relaxed">{body}</p>
                 </div>
               ))}
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Product Grid */}
-        <section id="product" className="mx-auto max-w-7xl px-6 lg:px-8 py-32">
-          <div className="mb-20">
-            <h2 className="text-4xl font-bold text-white mb-6">{text.product.title}</h2>
-            <p className="max-w-2xl text-lg text-cadio-muted leading-relaxed">{text.product.body}</p>
-          </div>
-          <div className="grid gap-6 md:grid-cols-3">
-            {text.cards.map(([title, body]) => (
-              <article key={title} className="group rounded-2xl border border-cadio-border bg-cadio-surface p-8 transition-all hover:border-cadio-accent/50 hover:shadow-2xl hover:shadow-cadio-accent/5">
-                <div className="mb-6 h-1 w-12 rounded-full bg-cadio-accent group-hover:w-20 transition-all duration-300" />
-                <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
-                <p className="text-sm leading-relaxed text-cadio-muted">{body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        {/* Workflow Section */}
-        <section id="workflow" className="bg-cadio-surface/30 border-y border-cadio-border">
-          <div className="mx-auto max-w-7xl px-6 lg:px-8 py-32">
-            <h2 className="text-4xl font-bold text-white mb-20 text-center">{text.workflow.title}</h2>
-            <div className="grid gap-8 md:grid-cols-4">
-              {text.workflow.steps.map(([number, title, body]) => (
-                <div key={number} className="relative group">
-                  <div className="absolute -top-6 -left-4 text-8xl font-black text-cadio-accent/5 select-none transition-colors group-hover:text-cadio-accent/10">
-                    {number}
-                  </div>
-                  <div className="relative pt-4">
-                    <h3 className="text-lg font-bold text-white mb-4">{title}</h3>
-                    <p className="text-sm leading-relaxed text-cadio-muted">{body}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Pricing Section */}
-        <section id="pricing" className="mx-auto max-w-7xl px-6 lg:px-8 py-32">
-          <div className="rounded-3xl border border-cadio-accent/20 bg-gradient-to-br from-cadio-surface to-cadio-bg p-12 lg:p-16 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 text-cadio-accent/10 pointer-events-none">
-              <svg className="w-64 h-64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <div className="relative z-10 grid lg:grid-cols-2 gap-16 items-center">
-              <div>
-                <h2 className="text-4xl font-bold text-white mb-6">{text.pricingTitle}</h2>
-                <p className="text-lg text-cadio-muted mb-10 leading-relaxed">
-                  {text.pricingBody}
-                </p>
-                <ul className="space-y-4 mb-10">
-                  {["Unlimited AI Search", "Parametric Geometry Engine", "Commercial Use Exports", "Cloud Sync (Beta)"].map(item => (
-                    <li key={item} className="flex items-center gap-3 text-sm text-cadio-muted">
-                      <svg className="w-5 h-5 text-cadio-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={onStartBuilding}
-                  className="h-12 rounded-lg bg-cadio-accent px-10 text-base font-bold text-white shadow-lg transition-all hover:bg-cadio-accent-hover"
-                >
-                  Join the Beta
-                </button>
-              </div>
-              <div className="rounded-2xl bg-cadio-bg/50 border border-cadio-border p-8 backdrop-blur-sm">
-                <div className="text-cadio-accent font-bold mb-4 uppercase tracking-widest text-xs">Early Access</div>
-                <div className="text-5xl font-black text-white mb-4">$0 <span className="text-xl font-normal text-cadio-muted">/ mo</span></div>
-                <p className="text-sm text-cadio-muted leading-relaxed">
-                  Help us shape the future of 3D design. Beta users get exclusive early-bird benefits and grandfathered pricing.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Final CTA */}
-        <section className="mx-auto max-w-7xl px-6 lg:px-8 pb-32">
-          <div className="text-center">
-            <h2 className="text-5xl font-extrabold text-white mb-8">{text.cta.title}</h2>
-            <p className="max-w-xl mx-auto text-lg text-cadio-muted mb-12">{text.cta.body}</p>
-            <button
-              onClick={onStartBuilding}
-              className="h-14 rounded-xl bg-white px-12 text-lg font-bold text-cadio-bg shadow-xl transition-all hover:bg-cadio-text hover:scale-105 active:scale-95"
+          {/* ── Product ── */}
+          <section id="product" className="mx-auto max-w-7xl px-6 lg:px-8 py-20">
+            <div
+              ref={product.ref}
+              className={`transition-all duration-700 ${product.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
             >
-              {text.cta.button}
-            </button>
-          </div>
-        </section>
-      </main>
+              <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.24em] text-[#00F0FF]">Product</p>
+              <h2 className="max-w-2xl text-4xl font-bold tracking-tight text-white sm:text-5xl mb-6">{text.product.title}</h2>
+              <p className="max-w-xl text-lg text-white/50 leading-relaxed mb-14">{text.product.body}</p>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                {text.cards.map(([title, body], i) => (
+                  <div
+                    key={title}
+                    style={{ transitionDelay: `${i * 100}ms` }}
+                    className={`rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.05] to-transparent p-8 transition-all duration-700 ${product.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
+                  >
+                    <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-[#00F0FF]/10 border border-[#00F0FF]/20">
+                      <svg className="h-5 w-5 text-[#00F0FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={i === 0 ? "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" : i === 1 ? "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" : "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"} />
+                      </svg>
+                    </div>
+                    <p className="text-base font-semibold text-white mb-2">{title}</p>
+                    <p className="text-sm text-white/50 leading-relaxed">{body}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
 
-      <SiteFooter />
-    </div>
+          {/* ── Workflow ── */}
+          <section id="workflow" className="bg-white/[0.02] border-y border-white/8 py-24">
+            <div
+              ref={workflow.ref}
+              className={`mx-auto max-w-7xl px-6 lg:px-8 transition-all duration-700 ${workflow.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
+            >
+              <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.24em] text-[#FF007A]">Workflow</p>
+              <h2 className="max-w-2xl text-4xl font-bold tracking-tight text-white sm:text-5xl mb-14">{text.workflow.title}</h2>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {text.workflow.steps.map(([num, title, body], i) => (
+                  <div
+                    key={num}
+                    style={{ transitionDelay: `${i * 80}ms` }}
+                    className={`relative rounded-2xl border border-white/10 bg-white/[0.03] p-7 transition-all duration-700 ${workflow.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
+                  >
+                    <span className="mb-6 block text-5xl font-black text-white/[0.07]">{num}</span>
+                    <p className="text-base font-semibold text-white mb-2">{title}</p>
+                    <p className="text-sm text-white/50 leading-relaxed">{body}</p>
+                    {i < text.workflow.steps.length - 1 && (
+                      <div className="absolute -right-3 top-1/2 hidden h-px w-6 bg-white/20 lg:block" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ── Pricing ── */}
+          <section id="pricing" className="mx-auto max-w-7xl px-6 lg:px-8 py-24">
+            <div
+              ref={pricing.ref}
+              className={`transition-all duration-700 ${pricing.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
+            >
+              <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.24em] text-[#8A2BE2]">Pricing</p>
+              <h2 className="max-w-xl text-4xl font-bold tracking-tight text-white sm:text-5xl mb-4">{text.pricingTitle}</h2>
+              <p className="max-w-lg text-white/50 leading-relaxed mb-14">{text.pricingBody}</p>
+
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 max-w-2xl">
+                {/* Free card */}
+                <div className="rounded-2xl border border-[#00F0FF]/25 bg-[#00F0FF]/5 p-8 shadow-[0_0_40px_rgba(0,240,255,0.08)]">
+                  <p className="text-sm font-bold uppercase tracking-widest text-[#00F0FF] mb-4">Free</p>
+                  <p className="text-5xl font-black text-white mb-2">$0<span className="text-lg font-normal text-white/40">/mo</span></p>
+                  <p className="text-sm text-white/50 mb-8">During early access</p>
+                  <ul className="space-y-3 mb-8 text-sm text-white/70">
+                    {["AI model generation", "Export STL & 3MF", "Manual CAD tools", "Unlimited sessions"].map((f) => (
+                      <li key={f} className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#00F0FF] shrink-0" />{f}
+                      </li>
+                    ))}
+                  </ul>
+                  <button onClick={onStartBuilding} className="w-full h-11 rounded-xl bg-[#00F0FF] text-sm font-bold text-[#050505] hover:bg-[#00F0FF]/90 transition-colors">
+                    Start Building
+                  </button>
+                </div>
+                {/* Pro card */}
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none" />
+                  <p className="text-sm font-bold uppercase tracking-widest text-white/40 mb-4">Pro</p>
+                  <p className="text-5xl font-black text-white/20 mb-2">$?<span className="text-lg font-normal">/mo</span></p>
+                  <p className="text-sm text-white/30 mb-8">Coming soon</p>
+                  <ul className="space-y-3 mb-8 text-sm text-white/30">
+                    {["Everything in Free", "Priority AI processing", "STEP export", "Team workspaces"].map((f) => (
+                      <li key={f} className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-white/20 shrink-0" />{f}
+                      </li>
+                    ))}
+                  </ul>
+                  <button disabled className="w-full h-11 rounded-xl border border-white/10 text-sm font-bold text-white/20 cursor-not-allowed">
+                    Coming Soon
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── CTA ── */}
+          <section className="mx-auto max-w-7xl px-6 lg:px-8 pb-24">
+            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#00F0FF]/8 via-transparent to-[#8A2BE2]/8 p-16 text-center">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(0,240,255,0.1),transparent_70%)]" />
+              <h2 className="relative text-4xl font-bold tracking-tight text-white sm:text-5xl mb-4">{text.cta.title}</h2>
+              <p className="relative text-lg text-white/50 mb-10 max-w-md mx-auto">{text.cta.body}</p>
+              <button
+                onClick={onStartBuilding}
+                className="relative h-12 rounded-xl bg-white px-10 text-base font-bold text-[#050505] hover:bg-white/90 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_4px_40px_rgba(255,255,255,0.15)]"
+              >
+                {text.cta.button}
+              </button>
+            </div>
+          </section>
+        </main>
+
+        <SiteFooter />
+      </div>
+
+      <AuthDialog
+        mode={authMode}
+        text={text}
+        onClose={() => setAuthMode(null)}
+        onStartBuilding={() => { setAuthMode(null); onStartBuilding(); }}
+      />
+    </>
   );
 }

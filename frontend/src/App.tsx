@@ -1085,7 +1085,7 @@ export default function App() {
 
   const staticPage = staticPageFromPath(pathname);
   if (staticPage && !showBuilder) {
-    return <LegalPage page={staticPage} onStartBuilding={startBuilding} />;
+    return <LegalPage page={staticPage} onStartBuilding={startBuilding} onNavigate={(p) => { window.history.pushState({}, "", `/${p}`); setPathname(`/${p}`); }} />;
   }
 
   return (
