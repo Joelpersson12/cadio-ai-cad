@@ -1,4 +1,4 @@
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { loginCadioAccount } from "../utils/auth";
@@ -22,642 +22,496 @@ const heroPrompt = "Precision Phone Stand with 15° Tilt";
 
 const copy = {
   en: {
-    nav: {
-      product: "Product",
-      workflow: "Workflow",
-      pricing: "Pricing",
-      login: "Sign In",
-      signup: "Join Beta",
-      start: "Start Building",
-    },
-    hero: {
-      eyebrow: "Early Access Beta",
-      title: "Find. Remix. Print.",
-      body:
-        "Search real printable models, customize them with AI, and export exactly what you need.",
-      prompt: heroPrompt,
-      primary: "Start Building",
-      secondary: "See Examples",
-    },
-    stats: [
-      ["Engineering Grade", "Built for precision and printable geometry"],
-      ["Professional Tools", "AI speed combined with expert CAD control"],
-      ["Production Ready", "Direct export to STL, 3MF, and STEP"],
-    ],
-    product: {
-      title: "Serious CAD for AI native designers",
-      body:
-        "Describe what you want to build. Our AI engine generates valid parametric geometry that you can refine with manual sketches, transforms, and edge operations.",
-    },
+    nav: { product: "Product", workflow: "Workflow", pricing: "Pricing", login: "Sign In", signup: "Join Beta", start: "Start Building" },
+    hero: { eyebrow: "Early Access Beta", headline1: "Design.", headline2: "Generate.", headline3: "Print.", body: "The AI CAD workspace that transforms ideas into precision geometry — ready for your 3D printer.", primary: "Start Building Free", secondary: "Watch Demo" },
+    stats: [["Parametric AI", "From natural language to real geometry"], ["Professional Tools", "Manual CAD control at every step"], ["Print Ready", "STL · 3MF · STEP export"]],
+    product: { label: "Product", title: "Engineering precision meets AI speed", body: "Describe what you want to build. Cadio's AI generates valid parametric geometry that you can refine with professional CAD tools — edges, extrusions, fillets, and transforms." },
     cards: [
-      ["AI Search", "Find printable starting points using natural language."],
-      ["Direct Edit", "Select edges, extrude faces, and apply fillets manually."],
-      ["Smart Export", "Optimized files for FDM, SLA, and industrial printing."],
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "AI Search", body: "Find printable starting points from the world's largest 3D model libraries." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Direct Edit", body: "Select edges, extrude faces, apply fillets and chamfers with precision control." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Smart Export", body: "Optimized files for FDM, SLA and industrial 3D printing workflows." },
     ],
-    workflow: {
-      title: "A faster path from idea to object",
-      steps: [
-        ["1", "Search", "Find an existing design or describe a new one from scratch."],
-        ["2", "Remix", "Adjust dimensions and features with real-time AI assistance."],
-        ["3", "Edit", "Refine the geometry using professional-grade CAD tools."],
-        ["4", "Export", "Download production-ready files for your 3D printer."],
-      ],
-    },
-    pricingTitle: "Simple pricing, eventually",
-    pricingBody: "Cadio is currently free during our early access phase. We're building the future of CAD together.",
-    auth: {
-      loginTitle: "Welcome back",
-      signupTitle: "Start building today",
-      email: "Email address",
-      password: "Password",
-      name: "Full name",
-      continue: "Enter Workspace",
-      hint: "By continuing, you agree to our terms and privacy policy.",
-    },
-    cta: {
-      title: "Ready to build?",
-      body: "Join the thousands of engineers and makers building with Cadio.",
-      button: "Start Building",
-    },
+    workflow: { label: "Workflow", title: "From idea to object in four steps", steps: [["Search", "Describe what you need or find an existing design to remix."], ["Generate", "AI creates valid parametric geometry with real-world dimensions."], ["Refine", "Professional CAD tools for precise edge and surface control."], ["Export", "Production-ready files for your exact printer and material."]] },
+    pricingTitle: "Simple pricing, always",
+    pricingBody: "Free during early access. Help us build the future of AI-assisted CAD.",
+    auth: { loginTitle: "Welcome back", signupTitle: "Start building today", email: "Email address", password: "Password", name: "Full name", continue: "Enter Workspace", hint: "By continuing you agree to our terms and privacy policy." },
+    cta: { title: "Start building today", body: "Join engineers and makers who build faster with Cadio.", button: "Open Workspace" },
   },
   sv: {
-    nav: {
-      product: "Produkt",
-      workflow: "Arbetsflöde",
-      pricing: "Priser",
-      login: "Logga in",
-      signup: "Gå med i Beta",
-      start: "Börja Bygga",
-    },
-    hero: {
-      eyebrow: "Early Access Beta",
-      title: "Sök. Remix. Print.",
-      body:
-        "Sök efter riktiga utskrivbara modeller, anpassa dem med AI och exportera exakt det du behöver.",
-      prompt: heroPrompt,
-      primary: "Börja Bygga",
-      secondary: "Se Exempel",
-    },
-    stats: [
-      ["Engineering Grade", "Byggd för precision och utskrivbar geometri"],
-      ["Professionella Verktyg", "AI-hastighet kombinerat med expert CAD-kontroll"],
-      ["Produktionsklar", "Direkt export till STL, 3MF och STEP"],
-    ],
-    product: {
-      title: "Seriös CAD för AI-infödda designers",
-      body:
-        "Beskriv vad du vill bygga. Vår AI-motor genererar giltig parametrisk geometri som du kan förfina med manuella skisser, transformeringar och kantoperationer.",
-    },
+    nav: { product: "Produkt", workflow: "Arbetsflöde", pricing: "Priser", login: "Logga in", signup: "Gå med", start: "Börja Bygga" },
+    hero: { eyebrow: "Early Access Beta", headline1: "Designa.", headline2: "Generera.", headline3: "Printa.", body: "AI CAD-workspace som omvandlar idéer till precisionsgometri — redo för din 3D-skrivare.", primary: "Börja Gratis", secondary: "Se Demo" },
+    stats: [["Parametrisk AI", "Från naturligt språk till riktig geometri"], ["Professionella Verktyg", "Manuell CAD-kontroll i varje steg"], ["Printklart", "STL · 3MF · STEP export"]],
+    product: { label: "Produkt", title: "Ingenjörsprecision möter AI-hastighet", body: "Beskriv vad du vill bygga. Cadios AI genererar giltig parametrisk geometri som du kan förfina med professionella CAD-verktyg." },
     cards: [
-      ["AI-Sök", "Hitta utskrivbara startpunkter med naturligt språk."],
-      ["Direktredigering", "Markera kanter, extrudera ytor och applicera avrundningar manuellt."],
-      ["Smart Export", "Optimerade filer för FDM, SLA och industriell utskrift."],
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "AI-sökning", body: "Hitta utskrivbara startpunkter från världens största 3D-modellbibliotek." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Direkt redigering", body: "Välj kanter, extrudera ytor, applicera avrundningar med precisionskontroll." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Smart export", body: "Optimerade filer för FDM, SLA och industriell 3D-utskrift." },
     ],
-    workflow: {
-      title: "En snabbare väg från idé till objekt",
-      steps: [
-        ["1", "Sök", "Hitta en befintlig design eller beskriv en ny från grunden."],
-        ["2", "Remix", "Justera dimensioner och funktioner med AI-stöd i realtid."],
-        ["3", "Redigera", "Förfina geometrin med CAD-verktyg av professionell klass."],
-        ["4", "Exportera", "Ladda ner produktionsklara filer för din 3D-skrivare."],
-      ],
-    },
-    pricingTitle: "Enkel prissättning, så småningom",
-    pricingBody: "Cadio är för närvarande gratis under vår tidiga access-fas. Vi bygger framtidens CAD tillsammans.",
-    auth: {
-      loginTitle: "Välkommen tillbaka",
-      signupTitle: "Börja bygga idag",
-      email: "E-postadress",
-      password: "Lösenord",
-      name: "Fullständigt namn",
-      continue: "Gå till Workspace",
-      hint: "Genom att fortsätta godkänner du våra villkor och integritetspolicy.",
-    },
-    cta: {
-      title: "Redo att bygga?",
-      body: "Gå med i tusentals ingenjörer och makers som bygger med Cadio.",
-      button: "Börja Bygga",
-    },
+    workflow: { label: "Arbetsflöde", title: "Från idé till objekt i fyra steg", steps: [["Sök", "Beskriv vad du behöver eller hitta en befintlig design."], ["Generera", "AI skapar giltig parametrisk geometri med verkliga mått."], ["Förfina", "Professionella CAD-verktyg för exakt kant- och ytkontroll."], ["Exportera", "Produktionsklara filer för din skrivare och material."]] },
+    pricingTitle: "Enkel prissättning, alltid",
+    pricingBody: "Gratis under early access. Hjälp oss bygga framtidens AI-assisterade CAD.",
+    auth: { loginTitle: "Välkommen tillbaka", signupTitle: "Börja bygga idag", email: "E-postadress", password: "Lösenord", name: "Fullständigt namn", continue: "Gå till Workspace", hint: "Genom att fortsätta godkänner du våra villkor och integritetspolicy." },
+    cta: { title: "Börja bygga idag", body: "Gå med ingenjörer och makers som bygger snabbare med Cadio.", button: "Öppna Workspace" },
   },
   es: {
-    nav: {
-      product: "Producto",
-      workflow: "Flujo",
-      pricing: "Beta",
-      login: "Iniciar sesion",
-      signup: "Crear cuenta",
-      start: "Start building",
-    },
-    hero: {
-      eyebrow: "CAD con IA para impresion 3D real",
-      title: "Describe el modelo. Edita como en CAD. Imprime con el perfil correcto.",
-      body:
-        "Cadio combina busqueda con IA, modelos parametricos y un espacio CAD limpio para makers, talleres e ideas de producto.",
-      prompt: heroPrompt,
-      primary: "Start building",
-      secondary: "Ver precios",
-    },
-    stats: [
-      ["Source aware", "Usa senales de Printables y fuentes populares de modelos 3D"],
-      ["Easy + Expert", "Ediciones rapidas con IA o control CAD manual"],
-      ["Print ready", "Impresora, material, escala y formatos de exportacion en un flujo"],
-    ],
-    product: {
-      title: "Un constructor CAD para todos los niveles",
-      body:
-        "Easy mode te ayuda a describir lo que quieres. Expert mode te da control sobre bocetos, piezas, transformaciones, bordes y operaciones CAD.",
-    },
+    nav: { product: "Producto", workflow: "Flujo", pricing: "Precios", login: "Iniciar", signup: "Unirse", start: "Empezar" },
+    hero: { eyebrow: "Beta Early Access", headline1: "Diseña.", headline2: "Genera.", headline3: "Imprime.", body: "El workspace CAD con IA que transforma ideas en geometría de precisión — lista para tu impresora 3D.", primary: "Empezar gratis", secondary: "Ver demo" },
+    stats: [["IA Paramétrica", "De lenguaje natural a geometría real"], ["Herramientas Pro", "Control CAD manual en cada paso"], ["Listo para imprimir", "STL · 3MF · STEP"]],
+    product: { label: "Producto", title: "Precisión de ingeniería con velocidad IA", body: "Describe lo que quieres construir. La IA de Cadio genera geometría paramétrica válida." },
     cards: [
-      ["AI model search", "Escribe lo que quieres construir y Cadio crea un modelo a partir de senales de disenos imprimibles populares."],
-      ["Manual CAD", "Dibuja, selecciona piezas, mueve, rota y refina el modelo cuando quieras control directo."],
-      ["Printer profiles", "Elige impresora, material y formato de exportacion antes de llevar el modelo al slicer."],
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Búsqueda IA", body: "Encuentra puntos de partida imprimibles de las mayores bibliotecas de modelos 3D." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Edición directa", body: "Selecciona aristas, extruye caras, aplica filetes con control de precisión." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Exportación inteligente", body: "Archivos optimizados para FDM, SLA e impresión 3D industrial." },
     ],
-    workflow: {
-      title: "De idea a STL sin cambiar de herramienta",
-      steps: [
-        ["1", "Escribe un prompt", "Ejemplo: cup holder with desk mount, phone stand o un soporte de repuesto."],
-        ["2", "Elige una variante", "Cambia entre opciones populares con Next y Previous hasta que la forma sea correcta."],
-        ["3", "Ajusta detalles", "Cambia dimensiones, material, color, posicion y detalles CAD."],
-        ["4", "Exporta", "Descarga STL, 3MF, OBJ o AMF con ajustes de impresion recomendados."],
-      ],
-    },
-    pricingTitle: "Pricing coming soon",
-    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
-    auth: {
-      loginTitle: "Iniciar sesion",
-      signupTitle: "Crear cuenta",
-      email: "Email",
-      password: "Contrasena",
-      name: "Nombre",
-      continue: "Continuar al workspace",
-      hint: "Los modelos guardados son privados para el email que uses aqui.",
-    },
-    cta: {
-      title: "Listo para construir?",
-      body: "Abre el workspace de Cadio y crea el primer modelo directamente.",
-      button: "Start building",
-    },
+    workflow: { label: "Flujo de trabajo", title: "De idea a objeto en cuatro pasos", steps: [["Busca", "Describe lo que necesitas o encuentra un diseño existente."], ["Genera", "La IA crea geometría paramétrica válida."], ["Refina", "Herramientas CAD profesionales para control preciso."], ["Exporta", "Archivos listos para tu impresora y material."]] },
+    pricingTitle: "Precio simple, siempre",
+    pricingBody: "Gratis durante early access.",
+    auth: { loginTitle: "Bienvenido de nuevo", signupTitle: "Empieza a construir hoy", email: "Correo electrónico", password: "Contraseña", name: "Nombre completo", continue: "Entrar al Workspace", hint: "Al continuar aceptas nuestros términos y política de privacidad." },
+    cta: { title: "Empieza a construir hoy", body: "Únete a ingenieros y makers que construyen más rápido.", button: "Abrir Workspace" },
   },
   fr: {
-    nav: {
-      product: "Produit",
-      workflow: "Flux",
-      pricing: "Beta",
-      login: "Connexion",
-      signup: "Creer un compte",
-      start: "Start building",
-    },
-    hero: {
-      eyebrow: "CAO IA pour impression 3D reelle",
-      title: "Decrivez le modele. Modifiez comme en CAO. Imprimez avec le bon profil.",
-      body:
-        "Cadio combine recherche IA, modeles parametriques et espace CAO clair pour makers, ateliers et idees produit.",
-      prompt: heroPrompt,
-      primary: "Start building",
-      secondary: "Voir les tarifs",
-    },
-    stats: [
-      ["Source aware", "Utilise les signaux de Printables et de sources populaires de modeles 3D"],
-      ["Easy + Expert", "Editions rapides par IA ou controle CAO manuel"],
-      ["Print ready", "Imprimante, materiau, echelle et formats d'export dans un seul flux"],
-    ],
-    product: {
-      title: "Un constructeur CAO pour chaque niveau",
-      body:
-        "Easy mode vous aide a decrire ce que vous voulez. Expert mode donne le controle des esquisses, pieces, transformations, aretes et operations CAO.",
-    },
+    nav: { product: "Produit", workflow: "Flux", pricing: "Tarifs", login: "Connexion", signup: "Rejoindre", start: "Commencer" },
+    hero: { eyebrow: "Beta Accès anticipé", headline1: "Dessinez.", headline2: "Générez.", headline3: "Imprimez.", body: "L'espace de travail CAO IA qui transforme les idées en géométrie de précision — prêt pour votre imprimante 3D.", primary: "Commencer gratuitement", secondary: "Voir la démo" },
+    stats: [["IA Paramétrique", "Du langage naturel à la vraie géométrie"], ["Outils Pro", "Contrôle CAO manuel à chaque étape"], ["Prêt à imprimer", "STL · 3MF · STEP"]],
+    product: { label: "Produit", title: "Précision ingénierie, vitesse IA", body: "Décrivez ce que vous voulez construire. L'IA de Cadio génère une géométrie paramétrique valide." },
     cards: [
-      ["AI model search", "Tapez ce que vous voulez construire et Cadio cree un modele a partir de signaux de designs imprimables populaires."],
-      ["Manual CAD", "Dessinez, selectionnez des pieces, deplacez, pivotez et affinez le modele avec un controle direct."],
-      ["Printer profiles", "Choisissez imprimante, materiau et format d'export avant le slicer."],
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Recherche IA", body: "Trouvez des points de départ imprimables dans les plus grandes bibliothèques de modèles 3D." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Édition directe", body: "Sélectionnez les arêtes, extrudez les faces, appliquez des congés." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Export intelligent", body: "Fichiers optimisés pour FDM, SLA et impression 3D industrielle." },
     ],
-    workflow: {
-      title: "De l'idee au STL sans changer d'outil",
-      steps: [
-        ["1", "Ecrivez un prompt", "Exemple: cup holder with desk mount, phone stand ou support de remplacement."],
-        ["2", "Choisissez une variante", "Passez entre options populaires avec Next et Previous jusqu'a la bonne forme."],
-        ["3", "Ajustez", "Modifiez dimensions, materiau, couleur, placement et details CAO."],
-        ["4", "Exportez", "Telechargez STL, 3MF, OBJ ou AMF avec les reglages d'impression recommandes."],
-      ],
-    },
-    pricingTitle: "Pricing coming soon",
-    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
-    auth: {
-      loginTitle: "Connexion",
-      signupTitle: "Creer un compte",
-      email: "Email",
-      password: "Mot de passe",
-      name: "Nom",
-      continue: "Continuer vers le workspace",
-      hint: "Les modeles enregistres restent prives pour l'email utilise ici.",
-    },
-    cta: {
-      title: "Pret a construire?",
-      body: "Ouvrez le workspace Cadio et creez le premier modele directement.",
-      button: "Start building",
-    },
+    workflow: { label: "Flux de travail", title: "De l'idée à l'objet en quatre étapes", steps: [["Cherchez", "Décrivez ce dont vous avez besoin ou trouvez un design existant."], ["Générez", "L'IA crée une géométrie paramétrique valide."], ["Affinez", "Outils CAO professionnels pour un contrôle précis."], ["Exportez", "Fichiers prêts pour votre imprimante et matériau."]] },
+    pricingTitle: "Tarification simple, toujours",
+    pricingBody: "Gratuit pendant l'accès anticipé.",
+    auth: { loginTitle: "Bienvenue", signupTitle: "Commencez à construire", email: "Adresse e-mail", password: "Mot de passe", name: "Nom complet", continue: "Entrer dans le Workspace", hint: "En continuant, vous acceptez nos conditions et politique de confidentialité." },
+    cta: { title: "Commencez à construire", body: "Rejoignez les ingénieurs et makers qui construisent plus vite.", button: "Ouvrir le Workspace" },
   },
   it: {
-    nav: {
-      product: "Prodotto",
-      workflow: "Flusso",
-      pricing: "Beta",
-      login: "Accedi",
-      signup: "Registrati",
-      start: "Start building",
-    },
-    hero: {
-      eyebrow: "CAD AI per vera stampa 3D",
-      title: "Descrivi il modello. Modifica come in CAD. Stampa con il profilo giusto.",
-      body:
-        "Cadio combina ricerca AI, modelli parametrici e un workspace CAD pulito per maker, officine e idee prodotto.",
-      prompt: heroPrompt,
-      primary: "Start building",
-      secondary: "Vedi prezzi",
-    },
-    stats: [
-      ["Source aware", "Usa segnali da Printables e fonti popolari di modelli 3D"],
-      ["Easy + Expert", "Modifiche rapide con AI o controllo CAD manuale"],
-      ["Print ready", "Stampante, materiale, scala e formati export in un unico flusso"],
-    ],
-    product: {
-      title: "Un builder CAD per ogni livello",
-      body:
-        "Easy mode ti aiuta a descrivere cosa vuoi. Expert mode ti da controllo su schizzi, parti, trasformazioni, bordi e operazioni CAD.",
-    },
+    nav: { product: "Prodotto", workflow: "Flusso", pricing: "Prezzi", login: "Accedi", signup: "Iscriviti", start: "Inizia" },
+    hero: { eyebrow: "Beta Accesso anticipato", headline1: "Progetta.", headline2: "Genera.", headline3: "Stampa.", body: "Il workspace CAD AI che trasforma le idee in geometria di precisione — pronta per la tua stampante 3D.", primary: "Inizia gratis", secondary: "Guarda demo" },
+    stats: [["IA Parametrica", "Dal linguaggio naturale alla vera geometria"], ["Strumenti Pro", "Controllo CAD manuale ad ogni passo"], ["Pronto per la stampa", "STL · 3MF · STEP"]],
+    product: { label: "Prodotto", title: "Precisione ingegneristica, velocità IA", body: "Descrivi cosa vuoi costruire. L'IA di Cadio genera geometria parametrica valida." },
     cards: [
-      ["AI model search", "Scrivi cosa vuoi costruire e Cadio crea un modello da segnali di design stampabili popolari."],
-      ["Manual CAD", "Disegna, seleziona parti, sposta, ruota e rifinisci il modello quando vuoi controllo diretto."],
-      ["Printer profiles", "Scegli stampante, materiale e formato export prima del slicer."],
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Ricerca IA", body: "Trova punti di partenza stampabili dalle più grandi librerie di modelli 3D." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Modifica diretta", body: "Seleziona spigoli, estrudi facce, applica raccordi con controllo di precisione." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Export intelligente", body: "File ottimizzati per FDM, SLA e stampa 3D industriale." },
     ],
-    workflow: {
-      title: "Dall'idea allo STL senza cambiare strumento",
-      steps: [
-        ["1", "Scrivi un prompt", "Esempio: cup holder with desk mount, phone stand o supporto di ricambio."],
-        ["2", "Scegli una variante", "Passa tra opzioni popolari con Next e Previous finche la forma e corretta."],
-        ["3", "Rifinisci", "Modifica dimensioni, materiale, colore, posizione e dettagli CAD."],
-        ["4", "Esporta", "Scarica STL, 3MF, OBJ o AMF con impostazioni di stampa consigliate."],
-      ],
-    },
-    pricingTitle: "Pricing coming soon",
-    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
-    auth: {
-      loginTitle: "Accedi",
-      signupTitle: "Registrati",
-      email: "Email",
-      password: "Password",
-      name: "Nome",
-      continue: "Continua al workspace",
-      hint: "I modelli salvati sono privati per l'email usata qui.",
-    },
-    cta: {
-      title: "Pronto a costruire?",
-      body: "Apri il workspace Cadio e crea subito il primo modello.",
-      button: "Start building",
-    },
+    workflow: { label: "Flusso di lavoro", title: "Dall'idea all'oggetto in quattro passi", steps: [["Cerca", "Descrivi cosa ti serve o trova un design esistente."], ["Genera", "L'IA crea geometria parametrica valida."], ["Rifinisci", "Strumenti CAD professionali per controllo preciso."], ["Esporta", "File pronti per la tua stampante e materiale."]] },
+    pricingTitle: "Prezzi semplici, sempre",
+    pricingBody: "Gratis durante l'accesso anticipato.",
+    auth: { loginTitle: "Bentornato", signupTitle: "Inizia a costruire oggi", email: "Indirizzo email", password: "Password", name: "Nome completo", continue: "Entra nel Workspace", hint: "Continuando accetti i nostri termini e la politica sulla privacy." },
+    cta: { title: "Inizia a costruire oggi", body: "Unisciti a ingegneri e maker che costruiscono più velocemente.", button: "Apri Workspace" },
   },
   de: {
-    nav: {
-      product: "Produkt",
-      workflow: "Ablauf",
-      pricing: "Beta",
-      login: "Einloggen",
-      signup: "Registrieren",
-      start: "Start building",
-    },
-    hero: {
-      eyebrow: "AI CAD fur echten 3D-Druck",
-      title: "Beschreibe das Modell. Bearbeite wie im CAD. Drucke mit dem richtigen Profil.",
-      body:
-        "Cadio kombiniert KI-Suche, parametrische Modelle und einen klaren CAD-Workspace fur Maker, Werkstatten und Produktideen.",
-      prompt: heroPrompt,
-      primary: "Start building",
-      secondary: "Beta access",
-    },
-    stats: [
-      ["Source aware", "Nutzt Signale von Printables und beliebten 3D-Modellquellen"],
-      ["Easy + Expert", "Schnelle KI-Edits oder manuelle CAD-Kontrolle"],
-      ["Print ready", "Drucker, Material, Skalierung und Exportformate in einem Ablauf"],
-    ],
-    product: {
-      title: "Ein CAD-Builder fur jedes Level",
-      body:
-        "Easy mode hilft dir, dein Ziel zu beschreiben. Expert mode gibt Kontrolle uber Skizzen, Teile, Transformationen, Kanten und CAD-Operationen.",
-    },
+    nav: { product: "Produkt", workflow: "Ablauf", pricing: "Preise", login: "Anmelden", signup: "Beitreten", start: "Loslegen" },
+    hero: { eyebrow: "Beta Frühzugang", headline1: "Entwerfen.", headline2: "Generieren.", headline3: "Drucken.", body: "Der KI-CAD-Workspace der Ideen in Präzisionsgeometrie verwandelt — bereit für Ihren 3D-Drucker.", primary: "Kostenlos starten", secondary: "Demo ansehen" },
+    stats: [["Parametrische KI", "Von natürlicher Sprache zu echter Geometrie"], ["Profi-Werkzeuge", "Manuelles CAD bei jedem Schritt"], ["Druckbereit", "STL · 3MF · STEP"]],
+    product: { label: "Produkt", title: "Ingenieurspräzision trifft KI-Geschwindigkeit", body: "Beschreiben Sie was Sie bauen möchten. Cadios KI generiert gültige parametrische Geometrie." },
     cards: [
-      ["AI model search", "Tippe, was du bauen willst, und Cadio erstellt ein Modell aus beliebten druckbaren Designsignalen."],
-      ["Manual CAD", "Zeichne, wahle Teile, verschiebe, rotiere und verfeinere das Modell mit direkter Kontrolle."],
-      ["Printer profiles", "Wahle Drucker, Material und Exportformat, bevor das Modell in den Slicer geht."],
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "KI-Suche", body: "Druckbare Ausgangspunkte aus den größten 3D-Modellbibliotheken finden." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Direktbearbeitung", body: "Kanten auswählen, Flächen extrudieren, Verrundungen mit Präzision anwenden." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Intelligenter Export", body: "Optimierte Dateien für FDM, SLA und industriellen 3D-Druck." },
     ],
-    workflow: {
-      title: "Von der Idee zur STL ohne Toolwechsel",
-      steps: [
-        ["1", "Prompt schreiben", "Beispiel: cup holder with desk mount, phone stand oder Ersatzhalter."],
-        ["2", "Variante wahlen", "Wechsle mit Next und Previous durch beliebte Optionen, bis die Form passt."],
-        ["3", "Feinjustieren", "Passe Abmessungen, Material, Farbe, Position und CAD-Details an."],
-        ["4", "Exportieren", "Lade STL, 3MF, OBJ oder AMF mit empfohlenen Druckeinstellungen herunter."],
-      ],
-    },
-    pricingTitle: "Pricing coming soon",
-    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
-    auth: {
-      loginTitle: "Einloggen",
-      signupTitle: "Registrieren",
-      email: "Email",
-      password: "Passwort",
-      name: "Name",
-      continue: "Weiter zum Workspace",
-      hint: "Gespeicherte Modelle sind privat fur die hier genutzte E-Mail.",
-    },
-    cta: {
-      title: "Bereit zu bauen?",
-      body: "Offne den Cadio-Workspace und erstelle direkt dein erstes Modell.",
-      button: "Start building",
-    },
+    workflow: { label: "Arbeitsablauf", title: "Von der Idee zum Objekt in vier Schritten", steps: [["Suchen", "Beschreiben Sie was Sie brauchen oder finden Sie ein vorhandenes Design."], ["Generieren", "KI erstellt gültige parametrische Geometrie."], ["Verfeinern", "Professionelle CAD-Werkzeuge für präzise Kontrolle."], ["Exportieren", "Produktionsbereite Dateien für Drucker und Material."]] },
+    pricingTitle: "Einfache Preise, immer",
+    pricingBody: "Kostenlos während des Frühzugangs.",
+    auth: { loginTitle: "Willkommen zurück", signupTitle: "Heute loslegen", email: "E-Mail-Adresse", password: "Passwort", name: "Vollständiger Name", continue: "Workspace betreten", hint: "Mit dem Fortfahren stimmen Sie unseren Bedingungen und Datenschutzrichtlinien zu." },
+    cta: { title: "Heute loslegen", body: "Schließen Sie sich Ingenieuren und Makern an die schneller bauen.", button: "Workspace öffnen" },
   },
   pt: {
-    nav: {
-      product: "Produto",
-      workflow: "Fluxo",
-      pricing: "Beta",
-      login: "Entrar",
-      signup: "Criar conta",
-      start: "Start building",
-    },
-    hero: {
-      eyebrow: "CAD com IA para impressao 3D real",
-      title: "Descreva o modelo. Edite como CAD. Imprima com o perfil certo.",
-      body:
-        "Cadio combina busca com IA, modelos parametricos e um workspace CAD limpo para makers, oficinas e ideias de produto.",
-      prompt: heroPrompt,
-      primary: "Start building",
-      secondary: "Ver precos",
-    },
-    stats: [
-      ["Source aware", "Usa sinais do Printables e de fontes populares de modelos 3D"],
-      ["Easy + Expert", "Edicoes rapidas com IA ou controle CAD manual"],
-      ["Print ready", "Impressora, material, escala e formatos de exportacao em um fluxo"],
-    ],
-    product: {
-      title: "Um builder CAD para todos os niveis",
-      body:
-        "Easy mode ajuda voce a descrever o que quer. Expert mode da controle sobre sketches, pecas, transformacoes, bordas e operacoes CAD.",
-    },
+    nav: { product: "Produto", workflow: "Fluxo", pricing: "Preços", login: "Entrar", signup: "Juntar-se", start: "Começar" },
+    hero: { eyebrow: "Beta Acesso antecipado", headline1: "Projete.", headline2: "Gere.", headline3: "Imprima.", body: "O workspace CAD com IA que transforma ideias em geometria de precisão — pronta para sua impressora 3D.", primary: "Começar grátis", secondary: "Ver demo" },
+    stats: [["IA Paramétrica", "Da linguagem natural à geometria real"], ["Ferramentas Pro", "Controle CAD manual em cada etapa"], ["Pronto para imprimir", "STL · 3MF · STEP"]],
+    product: { label: "Produto", title: "Precisão de engenharia com velocidade IA", body: "Descreva o que quer construir. A IA da Cadio gera geometria paramétrica válida." },
     cards: [
-      ["AI model search", "Digite o que quer construir e Cadio cria um modelo com sinais de designs imprimiveis populares."],
-      ["Manual CAD", "Desenhe, selecione pecas, mova, rotacione e refine o modelo quando quiser controle direto."],
-      ["Printer profiles", "Escolha impressora, material e formato de exportacao antes do slicer."],
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Busca IA", body: "Encontre pontos de partida imprimíveis nas maiores bibliotecas de modelos 3D." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Edição direta", body: "Selecione arestas, extrude faces, aplique filetes com controle de precisão." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Exportação inteligente", body: "Arquivos otimizados para FDM, SLA e impressão 3D industrial." },
     ],
-    workflow: {
-      title: "Da ideia ao STL sem trocar de ferramenta",
-      steps: [
-        ["1", "Escreva um prompt", "Exemplo: cup holder with desk mount, phone stand ou suporte de reposicao."],
-        ["2", "Escolha uma variante", "Alterne entre opcoes populares com Next e Previous ate acertar a forma."],
-        ["3", "Ajuste fino", "Mude dimensoes, material, cor, posicao e detalhes CAD."],
-        ["4", "Exporte", "Baixe STL, 3MF, OBJ ou AMF com configuracoes de impressao recomendadas."],
-      ],
-    },
-    pricingTitle: "Pricing coming soon",
-    pricingBody: "For now, Cadio is free during Early Access Beta. Build, edit, and download while we improve the platform.",
-    auth: {
-      loginTitle: "Entrar",
-      signupTitle: "Criar conta",
-      email: "Email",
-      password: "Senha",
-      name: "Nome",
-      continue: "Continuar para o workspace",
-      hint: "Modelos salvos ficam privados para o email usado aqui.",
-    },
-    cta: {
-      title: "Pronto para construir?",
-      body: "Abra o workspace Cadio e crie o primeiro modelo diretamente.",
-      button: "Start building",
-    },
+    workflow: { label: "Fluxo de trabalho", title: "Da ideia ao objeto em quatro etapas", steps: [["Busque", "Descreva o que precisa ou encontre um design existente."], ["Gere", "IA cria geometria paramétrica válida."], ["Refine", "Ferramentas CAD profissionais para controle preciso."], ["Exporte", "Arquivos prontos para sua impressora e material."]] },
+    pricingTitle: "Preço simples, sempre",
+    pricingBody: "Grátis durante o acesso antecipado.",
+    auth: { loginTitle: "Bem-vindo de volta", signupTitle: "Comece a construir hoje", email: "Endereço de e-mail", password: "Senha", name: "Nome completo", continue: "Entrar no Workspace", hint: "Ao continuar você concorda com nossos termos e política de privacidade." },
+    cta: { title: "Comece a construir hoje", body: "Junte-se a engenheiros e makers que constroem mais rápido.", button: "Abrir Workspace" },
   },
 };
 
-// ─── Three.js components ───────────────────────────────────────────────────
+// ─── ADVANCED 3D SCENE ────────────────────────────────────────────────────
 
-function PhoneStand() {
-  const ref = useRef<THREE.Group>(null);
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#00F0FF", roughness: 0.3, metalness: 0.6, emissive: "#00F0FF", emissiveIntensity: 0.08 }), []);
-  const grey = useMemo(() => new THREE.MeshStandardMaterial({ color: "#1a2a3a", roughness: 0.5, metalness: 0.4 }), []);
+/** Geodesic sphere with glowing wireframe — parametric lattice shell */
+function LatticeSphere() {
+  const groupRef = useRef<THREE.Group>(null);
+  const wireRef = useRef<THREE.Mesh>(null);
+  const solidRef = useRef<THREE.Mesh>(null);
+
+  const geo = useMemo(() => new THREE.IcosahedronGeometry(1.8, 3), []);
+
+  const solidMat = useMemo(
+    () =>
+      new THREE.MeshPhysicalMaterial({
+        color: "#1a1a2e",
+        roughness: 0.05,
+        metalness: 0.9,
+        reflectivity: 1,
+        transmission: 0.15,
+        transparent: true,
+        opacity: 0.85,
+      }),
+    [],
+  );
+
+  const wireMat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: "#b8956a",
+        wireframe: true,
+        opacity: 0.55,
+        transparent: true,
+      }),
+    [],
+  );
+
   useFrame(({ clock }) => {
-    if (!ref.current) return;
-    ref.current.rotation.y = Math.sin(clock.elapsedTime * 0.4) * 0.3;
-    ref.current.position.y = Math.sin(clock.elapsedTime * 0.6) * 0.12;
+    if (!groupRef.current) return;
+    const t = clock.elapsedTime;
+    groupRef.current.rotation.y = t * 0.12;
+    groupRef.current.rotation.x = Math.sin(t * 0.07) * 0.18;
+    // Subtle breathe
+    const s = 1 + Math.sin(t * 0.4) * 0.015;
+    if (wireRef.current) { wireRef.current.scale.setScalar(s * 1.008); }
   });
+
   return (
-    <group ref={ref} position={[-2, 0, 0]} scale={0.7}>
-      <mesh material={grey} castShadow><boxGeometry args={[1.6, 0.3, 1.2]} /></mesh>
-      <mesh material={grey} position={[0, 1, -0.4]} castShadow><boxGeometry args={[1.4, 1.8, 0.25]} /></mesh>
-      <mesh material={mat} position={[0.55, 0.15, 0.55]} castShadow><cylinderGeometry args={[0.1, 0.1, 0.05, 16]} /></mesh>
-      <mesh material={mat} position={[-0.55, 0.15, 0.55]} castShadow><cylinderGeometry args={[0.1, 0.1, 0.05, 16]} /></mesh>
+    <group ref={groupRef}>
+      <mesh ref={solidRef} geometry={geo} material={solidMat} castShadow receiveShadow />
+      <mesh ref={wireRef} geometry={geo} material={wireMat} />
     </group>
   );
 }
 
-function Bracket() {
-  const ref = useRef<THREE.Group>(null);
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#FF007A", roughness: 0.25, metalness: 0.7, emissive: "#FF007A", emissiveIntensity: 0.06 }), []);
-  const grey = useMemo(() => new THREE.MeshStandardMaterial({ color: "#1f1a2e", roughness: 0.4, metalness: 0.5 }), []);
+/** Gyroscope — nested rotating rings */
+function Gyroscope() {
+  const outer = useRef<THREE.Group>(null);
+  const mid = useRef<THREE.Group>(null);
+  const inner = useRef<THREE.Group>(null);
+
+  const ringGold = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#c9a84c",
+        roughness: 0.15,
+        metalness: 0.95,
+        emissive: "#c9a84c",
+        emissiveIntensity: 0.06,
+      }),
+    [],
+  );
+  const ringSteel = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({ color: "#8899aa", roughness: 0.2, metalness: 0.9 }),
+    [],
+  );
+
+  const makeRing = (r: number, tube: number) =>
+    new THREE.TorusGeometry(r, tube, 20, 80);
+
+  const geo1 = useMemo(() => makeRing(1.6, 0.055), []);
+  const geo2 = useMemo(() => makeRing(1.2, 0.055), []);
+  const geo3 = useMemo(() => makeRing(0.8, 0.055), []);
+  const spGeo = useMemo(() => new THREE.SphereGeometry(0.22, 24, 24), []);
+
   useFrame(({ clock }) => {
-    if (!ref.current) return;
-    ref.current.rotation.y = -Math.sin(clock.elapsedTime * 0.35 + 1) * 0.35;
-    ref.current.position.y = Math.sin(clock.elapsedTime * 0.5 + 2) * 0.15;
+    const t = clock.elapsedTime;
+    if (outer.current) { outer.current.rotation.y = t * 0.28; outer.current.rotation.z = Math.sin(t * 0.11) * 0.3; }
+    if (mid.current) { mid.current.rotation.x = t * 0.45; mid.current.rotation.y = Math.sin(t * 0.17) * 0.2; }
+    if (inner.current) { inner.current.rotation.z = -t * 0.65; }
   });
+
   return (
-    <group ref={ref} position={[2, 0, 0]} scale={0.7}>
-      <mesh material={grey} castShadow><boxGeometry args={[2, 0.25, 0.25]} /></mesh>
-      <mesh material={grey} position={[-0.875, 0.75, 0]} castShadow><boxGeometry args={[0.25, 1.5, 0.25]} /></mesh>
-      <mesh material={grey} position={[0.875, 0.75, 0]} castShadow><boxGeometry args={[0.25, 1.5, 0.25]} /></mesh>
-      <mesh material={mat} position={[-0.875, 1.55, 0]} castShadow><boxGeometry args={[0.25, 0.15, 0.5]} /></mesh>
-      <mesh material={mat} position={[0.875, 1.55, 0]} castShadow><boxGeometry args={[0.25, 0.15, 0.5]} /></mesh>
+    <group position={[0, 0, 0]}>
+      <group ref={outer}>
+        <mesh geometry={geo1} material={ringGold} castShadow />
+        <group ref={mid}>
+          <mesh geometry={geo2} material={ringSteel} castShadow />
+          <group ref={inner}>
+            <mesh geometry={geo3} material={ringGold} castShadow />
+            <mesh geometry={spGeo} material={ringSteel} castShadow />
+          </group>
+        </group>
+      </group>
     </group>
   );
 }
 
-function HexPlate() {
-  const ref = useRef<THREE.Group>(null);
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#8A2BE2", roughness: 0.2, metalness: 0.8, emissive: "#8A2BE2", emissiveIntensity: 0.1 }), []);
-  const grey = useMemo(() => new THREE.MeshStandardMaterial({ color: "#12121c", roughness: 0.6, metalness: 0.3 }), []);
-  const hexGeo = useMemo(() => {
+/** Parametric shell — turbine/impeller style swept blades */
+function TurbineShell() {
+  const groupRef = useRef<THREE.Group>(null);
+
+  const bladeMat = useMemo(
+    () =>
+      new THREE.MeshPhysicalMaterial({
+        color: "#2a2a3a",
+        roughness: 0.08,
+        metalness: 0.95,
+        clearcoat: 1,
+        clearcoatRoughness: 0.1,
+      }),
+    [],
+  );
+
+  const bladeGeo = useMemo(() => {
     const shape = new THREE.Shape();
-    for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 3) * i - Math.PI / 6;
-      const x = Math.cos(angle) * 0.9;
-      const y = Math.sin(angle) * 0.9;
-      if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
-    }
-    shape.closePath();
-    return new THREE.ExtrudeGeometry(shape, { depth: 0.18, bevelEnabled: false });
+    shape.moveTo(0, 0);
+    shape.bezierCurveTo(0.05, 0.3, 0.25, 0.5, 0.1, 0.9);
+    shape.bezierCurveTo(0.0, 1.0, -0.1, 0.9, -0.05, 0.7);
+    shape.bezierCurveTo(-0.2, 0.4, -0.08, 0.15, 0, 0);
+    return new THREE.ExtrudeGeometry(shape, { depth: 0.06, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.012, bevelSegments: 3 });
   }, []);
+
+  const hubGeo = useMemo(() => new THREE.CylinderGeometry(0.18, 0.22, 0.12, 32), []);
+
   useFrame(({ clock }) => {
-    if (!ref.current) return;
-    ref.current.rotation.y = clock.elapsedTime * 0.25;
-    ref.current.position.y = Math.sin(clock.elapsedTime * 0.45 + 3) * 0.1;
+    if (!groupRef.current) return;
+    groupRef.current.rotation.z = clock.elapsedTime * 0.22;
+    groupRef.current.rotation.y = Math.sin(clock.elapsedTime * 0.09) * 0.25;
   });
+
+  const BLADES = 8;
   return (
-    <group ref={ref} position={[0, 0.5, 1]} scale={0.65}>
-      <mesh geometry={hexGeo} material={grey} castShadow />
-      <mesh geometry={hexGeo} material={mat} position={[0, 0, 0.19]} castShadow />
+    <group ref={groupRef} scale={1.3}>
+      {Array.from({ length: BLADES }, (_, i) => (
+        <mesh
+          key={i}
+          geometry={bladeGeo}
+          material={bladeMat}
+          rotation={[Math.PI / 2, 0, (Math.PI * 2 * i) / BLADES]}
+          castShadow
+        />
+      ))}
+      <mesh geometry={hubGeo} material={bladeMat} castShadow />
     </group>
   );
 }
 
-function HeroScene() {
+/** Camera dolly animation — slow push-in on load */
+function CameraRig() {
+  const { camera } = useThree();
+  const t = useRef(0);
+  useFrame((_, delta) => {
+    t.current = Math.min(t.current + delta * 0.18, 1);
+    const ease = 1 - Math.pow(1 - t.current, 3);
+    camera.position.z = THREE.MathUtils.lerp(9, 6, ease);
+    camera.position.y = THREE.MathUtils.lerp(2.5, 1.2, ease);
+    camera.lookAt(0, 0, 0);
+  });
+  return null;
+}
+
+/** Floating particle field */
+function ParticleField() {
+  const ref = useRef<THREE.Points>(null);
+  const positions = useMemo(() => {
+    const arr = new Float32Array(600 * 3);
+    for (let i = 0; i < 600; i++) {
+      arr[i * 3] = (Math.random() - 0.5) * 14;
+      arr[i * 3 + 1] = (Math.random() - 0.5) * 10;
+      arr[i * 3 + 2] = (Math.random() - 0.5) * 8;
+    }
+    return arr;
+  }, []);
+
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.rotation.y = clock.elapsedTime * 0.018;
+  });
+
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial size={0.022} color="#c9a84c" sizeAttenuation transparent opacity={0.45} />
+    </points>
+  );
+}
+
+function HeroScene({ activeModel }: { activeModel: number }) {
   return (
     <div className="absolute inset-0">
-      <Canvas dpr={[1, 1.5]} shadows camera={{ position: [0, 2, 6], fov: 50 }} gl={{ antialias: true, alpha: true }}>
-        <color attach="background" args={["#050505"]} />
-        <ambientLight intensity={0.5} />
-        <spotLight position={[5, 10, 5]} angle={0.2} penumbra={1} intensity={3} castShadow shadow-mapSize={[1024, 1024]} />
-        <pointLight position={[-6, 4, -4]} intensity={1.5} color="#00F0FF" />
-        <pointLight position={[6, 4, -4]} intensity={1} color="#FF007A" />
-        <pointLight position={[0, 6, 2]} intensity={0.8} color="#8A2BE2" />
-        <PhoneStand />
-        <Bracket />
-        <HexPlate />
-        <gridHelper args={[14, 28, "#0a1a2a", "#071018"]} position={[0, -1.2, 0]} />
+      <Canvas
+        dpr={[1, 1.5]}
+        shadows
+        camera={{ position: [0, 1.2, 9], fov: 42 }}
+        gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
+      >
+        <color attach="background" args={["#080810"]} />
+        <fog attach="fog" args={["#080810", 10, 22]} />
+
+        <ambientLight intensity={0.35} />
+        <directionalLight position={[5, 8, 4]} intensity={1.8} castShadow shadow-mapSize={[2048, 2048]} color="#fff8f0" />
+        <pointLight position={[-5, 3, -3]} intensity={2.5} color="#c9a84c" />
+        <pointLight position={[4, -2, 5]} intensity={1.2} color="#4488cc" />
+        <spotLight position={[0, 6, 0]} angle={0.5} penumbra={0.8} intensity={1.5} color="#ffffff" />
+
+        <ParticleField />
+        {activeModel === 0 && <LatticeSphere />}
+        {activeModel === 1 && <Gyroscope />}
+        {activeModel === 2 && <TurbineShell />}
+
+        <CameraRig />
       </Canvas>
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/60 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#050505] to-transparent" />
+
+      {/* Vignette + gradient overlays */}
+      <div className="pointer-events-none absolute inset-0"
+        style={{ background: "radial-gradient(ellipse at 70% 50%, transparent 30%, #080810 80%)" }} />
+      <div className="pointer-events-none absolute inset-0"
+        style={{ background: "linear-gradient(to bottom, #080810 0%, transparent 12%, transparent 75%, #080810 100%)" }} />
     </div>
   );
 }
 
-// ─── Scroll reveal hook ────────────────────────────────────────────────────
+// ─── SCROLL REVEAL HOOK ───────────────────────────────────────────────────
 
-function useReveal() {
+function useReveal(threshold = 0.12) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const obs = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } }, { threshold: 0.15 });
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { threshold },
+    );
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
+  }, [threshold]);
   return { ref, visible };
 }
 
-// ─── Auth dialog ───────────────────────────────────────────────────────────
+// ─── AUTH DIALOG ──────────────────────────────────────────────────────────
 
-function AuthDialog({
-  mode,
-  text,
-  onClose,
-  onStartBuilding,
-}: {
-  mode: AuthMode;
-  text: typeof copy.sv;
-  onClose: () => void;
-  onStartBuilding: () => void;
+function AuthDialog({ mode, text, onClose, onStartBuilding }: {
+  mode: AuthMode; text: typeof copy.en; onClose: () => void; onStartBuilding: () => void;
 }) {
-  const [authError, setAuthError] = useState("");
-  const [authBusy, setAuthBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   if (!mode) return null;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0e0e0e] p-6 shadow-2xl">
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">
-            {mode === "login" ? text.auth.loginTitle : text.auth.signupTitle}
-          </h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-white/40 hover:text-white hover:bg-white/10 transition-colors">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-            setAuthError("");
-            setAuthBusy(true);
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 backdrop-blur-md" onClick={onClose}>
+      <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="rounded-2xl border border-white/10 bg-[#0e0e18]/95 p-8 shadow-2xl backdrop-blur-xl">
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-white">
+              {mode === "login" ? text.auth.loginTitle : text.auth.signupTitle}
+            </h2>
+            <button onClick={onClose} className="rounded-lg p-2 text-white/30 hover:text-white hover:bg-white/8 transition-colors">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <form className="flex flex-col gap-4" onSubmit={async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            setErr(""); setBusy(true);
             try {
-              await loginCadioAccount({
-                name: String(form.get("name") || ""),
-                email: String(form.get("email") || ""),
-                password: String(form.get("password") || ""),
-              });
+              await loginCadioAccount({ name: String(fd.get("name") || ""), email: String(fd.get("email") || ""), password: String(fd.get("password") || "") });
               onStartBuilding();
-            } catch (err) {
-              setAuthError(err instanceof Error ? err.message : "Could not log in.");
-            } finally {
-              setAuthBusy(false);
-            }
-          }}
-        >
-          {mode === "signup" && (
-            <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/50">
-              {text.auth.name}
-              <input name="name" className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#00F0FF]/50 focus:ring-1 focus:ring-[#00F0FF]/30 transition-colors" />
-            </label>
-          )}
-          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/50">
-            {text.auth.email}
-            <input name="email" type="email" required className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#00F0FF]/50 focus:ring-1 focus:ring-[#00F0FF]/30 transition-colors" />
-          </label>
-          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/50">
-            {text.auth.password}
-            <input name="password" type="password" minLength={4} required className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-[#00F0FF]/50 focus:ring-1 focus:ring-[#00F0FF]/30 transition-colors" />
-          </label>
-          {authError && (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{authError}</p>
-          )}
-          <button
-            disabled={authBusy}
-            className="h-11 w-full rounded-lg bg-[#00F0FF] text-sm font-semibold text-[#050505] hover:bg-[#00F0FF]/90 disabled:cursor-wait disabled:opacity-60 transition-colors mt-1"
-          >
-            {authBusy ? "..." : text.auth.continue}
-          </button>
-        </form>
-        <p className="mt-4 text-xs leading-relaxed text-white/30">{text.auth.hint}</p>
+            } catch (ex) { setErr(ex instanceof Error ? ex.message : "Could not sign in."); }
+            finally { setBusy(false); }
+          }}>
+            {mode === "signup" && (
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/40 mb-2">{text.auth.name}</label>
+                <input name="name" className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder-white/20 outline-none focus:border-[#c9a84c]/50 focus:ring-1 focus:ring-[#c9a84c]/20 transition-all" />
+              </div>
+            )}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/40 mb-2">{text.auth.email}</label>
+              <input name="email" type="email" required className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none focus:border-[#c9a84c]/50 focus:ring-1 focus:ring-[#c9a84c]/20 transition-all" />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/40 mb-2">{text.auth.password}</label>
+              <input name="password" type="password" minLength={4} required className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none focus:border-[#c9a84c]/50 focus:ring-1 focus:ring-[#c9a84c]/20 transition-all" />
+            </div>
+            {err && <p className="rounded-xl border border-red-400/20 bg-red-400/8 px-4 py-2.5 text-xs text-red-300">{err}</p>}
+            <button disabled={busy} className="mt-1 h-12 w-full rounded-xl bg-[#c9a84c] text-sm font-bold text-[#080810] hover:bg-[#d4b460] disabled:opacity-60 disabled:cursor-wait transition-colors shadow-lg">
+              {busy ? "..." : text.auth.continue}
+            </button>
+          </form>
+          <p className="mt-4 text-center text-xs leading-relaxed text-white/25">{text.auth.hint}</p>
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Main export ───────────────────────────────────────────────────────────
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────
+
+const MODELS = [
+  { label: "Lattice Shell", description: "Geodesic parametric structure" },
+  { label: "Gyroscope", description: "Nested precision rings" },
+  { label: "Turbine", description: "Swept blade geometry" },
+];
 
 export default function LandingPage({ onStartBuilding }: { onStartBuilding: () => void }) {
   const [language, setLanguage] = useState<Language>("en");
   const [authMode, setAuthMode] = useState<AuthMode>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [activeModel, setActiveModel] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const text = copy[language];
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // Auto-cycle models every 5s
+  useEffect(() => {
+    const id = setInterval(() => setActiveModel((m) => (m + 1) % 3), 5000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const handler = () => setScrolled(el.scrollTop > 48);
-    el.addEventListener("scroll", handler, { passive: true });
-    return () => el.removeEventListener("scroll", handler);
+    const h = () => setScrolled(el.scrollTop > 60);
+    el.addEventListener("scroll", h, { passive: true });
+    return () => el.removeEventListener("scroll", h);
   }, []);
 
-  const product = useReveal();
-  const workflow = useReveal();
-  const pricing = useReveal();
+  const s1 = useReveal();
+  const s2 = useReveal();
+  const s3 = useReveal();
+  const s4 = useReveal();
 
-  const marqueeItems = ["STL", "3MF", "STEP", "OBJ", "AMF", "AI CAD", "Parametric", "FDM", "SLA", "MSLA", "3D Print"];
+  const reveal = (v: boolean, delay = 0) =>
+    `transition-all duration-700 ease-out ${v ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"}`
+      + (delay ? ` delay-[${delay}ms]` : "");
 
   return (
     <>
       <style>{`
-        @keyframes marquee { from { transform: translateX(0) } to { transform: translateX(-50%) } }
-        .marquee-track { animation: marquee 24s linear infinite; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(28px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes marquee { from { transform:translateX(0) } to { transform:translateX(-50%) } }
+        @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:1} }
+        .anim-fadein { animation: fadeUp .85s cubic-bezier(.16,1,.3,1) both; }
+        .anim-fadein-1 { animation: fadeUp .85s .15s cubic-bezier(.16,1,.3,1) both; }
+        .anim-fadein-2 { animation: fadeUp .85s .3s cubic-bezier(.16,1,.3,1) both; }
+        .anim-fadein-3 { animation: fadeUp .85s .45s cubic-bezier(.16,1,.3,1) both; }
+        .marquee-track { animation: marquee 28s linear infinite; }
+        .model-shimmer { animation: shimmer 2.5s ease-in-out infinite; }
+        .gold { color: #c9a84c; }
+        .border-gold { border-color: #c9a84c; }
+        .bg-gold { background: #c9a84c; }
       `}</style>
 
-      <div id="landing-scroll" ref={scrollRef} className="h-full overflow-y-auto bg-[#050505] text-white"
-        style={{ backgroundImage: "radial-gradient(circle at 50% 0%, rgba(0,240,255,0.04) 0%, transparent 60%)" }}>
-
-        {/* Navbar */}
-        <header className={`fixed inset-x-0 top-0 z-40 transition-all duration-300 ${scrolled ? "border-b border-white/10 bg-[#050505]/90 backdrop-blur-xl shadow-lg" : "bg-transparent"}`}>
+      <div
+        id="landing-scroll"
+        ref={scrollRef}
+        className="h-full overflow-y-auto"
+        style={{ background: "#080810", color: "#f0ede8", fontFamily: "'Inter', system-ui, sans-serif" }}
+      >
+        {/* ── NAVBAR ── */}
+        <header
+          className="fixed inset-x-0 top-0 z-40 transition-all duration-500"
+          style={{ background: scrolled ? "rgba(8,8,16,0.88)" : "transparent", backdropFilter: scrolled ? "blur(20px)" : "none", borderBottom: scrolled ? "1px solid rgba(255,255,255,0.07)" : "1px solid transparent" }}
+        >
           <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8">
             <CadioLogo subtitle="" onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })} />
-            <nav className="hidden items-center gap-8 text-sm font-medium text-white/60 md:flex">
+            <nav className="hidden items-center gap-8 text-sm font-medium md:flex" style={{ color: "rgba(240,237,232,0.55)" }}>
               <a href="#product" className="hover:text-white transition-colors">{text.nav.product}</a>
               <a href="#workflow" className="hover:text-white transition-colors">{text.nav.workflow}</a>
               <a href="#pricing" className="hover:text-white transition-colors">{text.nav.pricing}</a>
@@ -666,20 +520,22 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as Language)}
-                className="h-9 rounded-md border border-white/10 bg-white/5 px-2 text-xs text-white/70 outline-none focus:ring-1 focus:ring-[#00F0FF]/50 backdrop-blur"
-                aria-label="Language"
+                className="h-9 rounded-lg px-2 text-xs outline-none transition-colors"
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(240,237,232,0.7)" }}
               >
-                {languageOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                {languageOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
               <button
                 onClick={() => setAuthMode("login")}
-                className="hidden h-9 rounded-lg border border-white/15 bg-white/5 px-4 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors sm:block"
+                className="hidden h-9 rounded-lg px-4 text-sm font-medium transition-all sm:block hover:text-white"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(240,237,232,0.65)" }}
               >
                 {text.nav.login}
               </button>
               <button
                 onClick={onStartBuilding}
-                className="h-9 rounded-lg bg-[#00F0FF] px-5 text-sm font-bold text-[#050505] hover:bg-[#00F0FF]/90 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_20px_rgba(0,240,255,0.25)]"
+                className="h-9 rounded-lg px-5 text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.97]"
+                style={{ background: "#c9a84c", color: "#080810", boxShadow: "0 2px 20px rgba(201,168,76,0.35)" }}
               >
                 {text.nav.start}
               </button>
@@ -687,194 +543,246 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
           </div>
         </header>
 
-        <main>
-          {/* ── Hero ── */}
-          <section className="relative min-h-screen overflow-hidden pt-16 flex flex-col justify-center">
-            <HeroScene />
-            <div className="relative z-10 mx-auto w-full max-w-7xl px-6 lg:px-8 py-32">
-              <div className="max-w-2xl">
-                <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-[#00F0FF]/30 bg-[#00F0FF]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-[#00F0FF]">
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00F0FF] opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00F0FF]" />
-                  </span>
+        {/* ── HERO ── */}
+        <section className="relative min-h-screen overflow-hidden">
+          <HeroScene activeModel={activeModel} />
+
+          {/* Hero text */}
+          <div className="relative z-10 flex min-h-screen flex-col justify-center pt-16">
+            <div className="mx-auto w-full max-w-7xl px-6 lg:px-8">
+              <div className="max-w-[640px]">
+                <p className="anim-fadein mb-6 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: "#c9a84c" }}>
                   {text.hero.eyebrow}
-                </div>
-                <h1 className="text-6xl font-extrabold leading-[0.88] tracking-tight text-white sm:text-7xl lg:text-8xl mb-8">
-                  {text.hero.title}
+                </p>
+                <h1 className="mb-8 font-black leading-[0.9] tracking-[-0.04em]" style={{ fontSize: "clamp(64px, 8vw, 112px)" }}>
+                  <span className="anim-fadein-1 block text-white">{text.hero.headline1}</span>
+                  <span className="anim-fadein-2 block" style={{ color: "#c9a84c" }}>{text.hero.headline2}</span>
+                  <span className="anim-fadein-3 block text-white">{text.hero.headline3}</span>
                 </h1>
-                <p className="max-w-lg text-lg leading-relaxed text-white/60 mb-10">
+                <p className="anim-fadein-3 mb-10 text-lg leading-relaxed" style={{ color: "rgba(240,237,232,0.55)", maxWidth: "440px" }}>
                   {text.hero.body}
                 </p>
-                <div className="flex flex-col sm:flex-row gap-4">
+                <div className="anim-fadein-3 flex flex-wrap gap-4">
                   <button
                     onClick={onStartBuilding}
-                    className="h-12 rounded-xl bg-white px-8 text-base font-bold text-[#050505] hover:bg-white/90 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_4px_32px_rgba(255,255,255,0.12)]"
+                    className="h-13 rounded-xl px-8 text-base font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    style={{ height: "52px", background: "#f0ede8", color: "#080810", boxShadow: "0 4px 40px rgba(240,237,232,0.15)" }}
                   >
                     {text.hero.primary}
                   </button>
                   <button
                     onClick={() => setAuthMode("signup")}
-                    className="h-12 rounded-xl border border-white/15 bg-white/5 px-8 text-base font-semibold text-white/80 hover:bg-white/10 hover:text-white backdrop-blur transition-colors"
+                    className="h-13 rounded-xl px-8 text-base font-semibold transition-all hover:text-white"
+                    style={{ height: "52px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.14)", color: "rgba(240,237,232,0.7)", backdropFilter: "blur(10px)" }}
                   >
                     {text.hero.secondary}
                   </button>
                 </div>
               </div>
             </div>
-          </section>
+          </div>
 
-          {/* ── Marquee band ── */}
-          <div className="border-y border-white/8 bg-white/[0.03] py-4 overflow-hidden">
-            <div className="flex marquee-track whitespace-nowrap">
-              {[...marqueeItems, ...marqueeItems].map((item, i) => (
-                <span key={i} className="mx-8 text-xs font-bold uppercase tracking-[0.24em] text-white/25">{item}</span>
+          {/* Model selector — bottom right */}
+          <div className="absolute bottom-10 right-8 z-10 hidden lg:block">
+            <div className="flex flex-col items-end gap-2">
+              {MODELS.map((m, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveModel(i)}
+                  className="flex items-center gap-3 transition-all duration-300"
+                  style={{ opacity: activeModel === i ? 1 : 0.35 }}
+                >
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-white">{m.label}</p>
+                    <p className="text-[10px]" style={{ color: "rgba(240,237,232,0.4)" }}>{m.description}</p>
+                  </div>
+                  <div
+                    className="h-1 w-8 rounded-full transition-all duration-300"
+                    style={{ background: activeModel === i ? "#c9a84c" : "rgba(255,255,255,0.2)", width: activeModel === i ? "32px" : "16px" }}
+                  />
+                </button>
               ))}
             </div>
           </div>
 
-          {/* ── Stats ── */}
-          <section className="mx-auto max-w-7xl px-6 lg:px-8 py-20">
+          {/* Scroll indicator */}
+          <div className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-2 model-shimmer">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: "rgba(240,237,232,0.3)" }}>Scroll</p>
+            <div className="h-8 w-px" style={{ background: "linear-gradient(to bottom, rgba(201,168,76,0.6), transparent)" }} />
+          </div>
+        </section>
+
+        {/* ── MARQUEE ── */}
+        <div className="overflow-hidden py-5" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.015)" }}>
+          <div className="flex marquee-track whitespace-nowrap">
+            {["Parametric CAD", "STL Export", "3MF Export", "STEP Export", "AI Generation", "FDM Ready", "SLA Ready", "Real Dimensions", "Natural Language", "Precision Geometry", "3D Printing"].concat(["Parametric CAD", "STL Export", "3MF Export", "STEP Export", "AI Generation", "FDM Ready", "SLA Ready", "Real Dimensions", "Natural Language", "Precision Geometry", "3D Printing"]).map((item, i) => (
+              <span key={i} className="mx-10 text-[11px] font-semibold uppercase tracking-[0.22em]" style={{ color: "rgba(240,237,232,0.2)" }}>
+                {item}
+                <span className="ml-10" style={{ color: "rgba(201,168,76,0.4)" }}>·</span>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* ── STATS ── */}
+        <section className="mx-auto max-w-7xl px-6 lg:px-8 py-24">
+          <div
+            ref={s1.ref}
+            className={`grid grid-cols-1 gap-px sm:grid-cols-3 ${reveal(s1.visible)}`}
+            style={{ background: "rgba(255,255,255,0.06)", borderRadius: "20px", overflow: "hidden" }}
+          >
+            {text.stats.map(([title, body], i) => (
+              <div key={i} className="p-10" style={{ background: "#080810" }}>
+                <p className="mb-1 text-3xl font-black tracking-tight" style={{ color: "#c9a84c" }}>
+                  {["01", "02", "03"][i]}
+                </p>
+                <p className="text-base font-semibold text-white mb-2">{title}</p>
+                <p className="text-sm leading-relaxed" style={{ color: "rgba(240,237,232,0.45)" }}>{body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── PRODUCT ── */}
+        <section id="product" className="mx-auto max-w-7xl px-6 lg:px-8 py-24">
+          <div ref={s2.ref} className={reveal(s2.visible)}>
+            <p className="mb-6 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: "#c9a84c" }}>{text.product.label}</p>
+            <div className="mb-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-end">
+              <h2 className="text-4xl font-black leading-tight tracking-tight text-white sm:text-5xl">{text.product.title}</h2>
+              <p className="text-lg leading-relaxed" style={{ color: "rgba(240,237,232,0.5)" }}>{text.product.body}</p>
+            </div>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-              {text.stats.map(([title, body]) => (
-                <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 hover:border-[#00F0FF]/20 hover:bg-[#00F0FF]/5 transition-all group">
-                  <div className="mb-3 h-1 w-8 rounded-full bg-[#00F0FF] group-hover:w-12 transition-all duration-300" />
-                  <p className="text-base font-semibold text-white mb-2">{title}</p>
-                  <p className="text-sm text-white/50 leading-relaxed">{body}</p>
+              {text.cards.map((card, i) => (
+                <div
+                  key={i}
+                  className="group rounded-2xl p-8 transition-all duration-400 hover:-translate-y-1"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    transitionDelay: `${i * 80}ms`,
+                  }}
+                >
+                  <div
+                    className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-110"
+                    style={{ background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)" }}
+                  >
+                    <svg className="h-5 w-5" style={{ color: "#c9a84c" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={card.icon} />
+                    </svg>
+                  </div>
+                  <p className="mb-3 text-base font-bold text-white">{card.title}</p>
+                  <p className="text-sm leading-relaxed" style={{ color: "rgba(240,237,232,0.45)" }}>{card.body}</p>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* ── Product ── */}
-          <section id="product" className="mx-auto max-w-7xl px-6 lg:px-8 py-20">
-            <div
-              ref={product.ref}
-              className={`transition-all duration-700 ${product.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
-            >
-              <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.24em] text-[#00F0FF]">Product</p>
-              <h2 className="max-w-2xl text-4xl font-bold tracking-tight text-white sm:text-5xl mb-6">{text.product.title}</h2>
-              <p className="max-w-xl text-lg text-white/50 leading-relaxed mb-14">{text.product.body}</p>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-                {text.cards.map(([title, body], i) => (
-                  <div
-                    key={title}
-                    style={{ transitionDelay: `${i * 100}ms` }}
-                    className={`rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.05] to-transparent p-8 transition-all duration-700 ${product.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
-                  >
-                    <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-[#00F0FF]/10 border border-[#00F0FF]/20">
-                      <svg className="h-5 w-5 text-[#00F0FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={i === 0 ? "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" : i === 1 ? "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" : "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"} />
-                      </svg>
-                    </div>
-                    <p className="text-base font-semibold text-white mb-2">{title}</p>
-                    <p className="text-sm text-white/50 leading-relaxed">{body}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* ── Workflow ── */}
-          <section id="workflow" className="bg-white/[0.02] border-y border-white/8 py-24">
-            <div
-              ref={workflow.ref}
-              className={`mx-auto max-w-7xl px-6 lg:px-8 transition-all duration-700 ${workflow.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
-            >
-              <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.24em] text-[#FF007A]">Workflow</p>
-              <h2 className="max-w-2xl text-4xl font-bold tracking-tight text-white sm:text-5xl mb-14">{text.workflow.title}</h2>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {text.workflow.steps.map(([num, title, body], i) => (
-                  <div
-                    key={num}
-                    style={{ transitionDelay: `${i * 80}ms` }}
-                    className={`relative rounded-2xl border border-white/10 bg-white/[0.03] p-7 transition-all duration-700 ${workflow.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
-                  >
-                    <span className="mb-6 block text-5xl font-black text-white/[0.07]">{num}</span>
-                    <p className="text-base font-semibold text-white mb-2">{title}</p>
-                    <p className="text-sm text-white/50 leading-relaxed">{body}</p>
+        {/* ── WORKFLOW ── */}
+        <section id="workflow" className="py-28" style={{ background: "rgba(255,255,255,0.018)", borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div ref={s3.ref} className={`mx-auto max-w-7xl px-6 lg:px-8 ${reveal(s3.visible)}`}>
+            <p className="mb-6 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: "#c9a84c" }}>{text.workflow.label}</p>
+            <h2 className="mb-20 text-4xl font-black tracking-tight text-white sm:text-5xl max-w-xl">{text.workflow.title}</h2>
+            <div className="grid grid-cols-1 gap-12 sm:grid-cols-2 lg:grid-cols-4">
+              {text.workflow.steps.map(([title, body], i) => (
+                <div
+                  key={i}
+                  style={{ transitionDelay: `${i * 100}ms` }}
+                  className={`relative ${reveal(s3.visible, i * 100)}`}
+                >
+                  {/* Step number */}
+                  <div className="mb-8 flex items-center gap-4">
+                    <span className="text-6xl font-black" style={{ color: "rgba(201,168,76,0.15)", lineHeight: 1 }}>
+                      0{i + 1}
+                    </span>
                     {i < text.workflow.steps.length - 1 && (
-                      <div className="absolute -right-3 top-1/2 hidden h-px w-6 bg-white/20 lg:block" />
+                      <div className="hidden lg:block flex-1 h-px" style={{ background: "linear-gradient(to right, rgba(201,168,76,0.3), transparent)" }} />
                     )}
                   </div>
-                ))}
+                  <p className="mb-3 text-lg font-bold text-white">{title}</p>
+                  <p className="text-sm leading-relaxed" style={{ color: "rgba(240,237,232,0.45)" }}>{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── PRICING ── */}
+        <section id="pricing" className="mx-auto max-w-7xl px-6 lg:px-8 py-28">
+          <div ref={s4.ref} className={reveal(s4.visible)}>
+            <p className="mb-6 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: "#c9a84c" }}>Pricing</p>
+            <h2 className="mb-4 text-4xl font-black tracking-tight text-white sm:text-5xl">{text.pricingTitle}</h2>
+            <p className="mb-16 text-lg max-w-lg" style={{ color: "rgba(240,237,232,0.45)" }}>{text.pricingBody}</p>
+
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 max-w-2xl">
+              {/* Free */}
+              <div className="rounded-2xl p-8" style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.2)", boxShadow: "0 0 50px rgba(201,168,76,0.06)" }}>
+                <p className="mb-6 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: "#c9a84c" }}>Free</p>
+                <div className="mb-1 flex items-end gap-2">
+                  <span className="text-6xl font-black text-white">$0</span>
+                  <span className="mb-2 text-sm" style={{ color: "rgba(240,237,232,0.4)" }}>/month</span>
+                </div>
+                <p className="mb-8 text-sm" style={{ color: "rgba(240,237,232,0.35)" }}>During early access</p>
+                <ul className="mb-8 space-y-3">
+                  {["AI model generation", "Export STL & 3MF", "Manual CAD tools", "Unlimited sessions"].map((f) => (
+                    <li key={f} className="flex items-center gap-3 text-sm" style={{ color: "rgba(240,237,232,0.7)" }}>
+                      <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: "#c9a84c" }} />{f}
+                    </li>
+                  ))}
+                </ul>
+                <button onClick={onStartBuilding} className="w-full rounded-xl py-3.5 text-sm font-bold transition-all hover:scale-[1.01]" style={{ background: "#c9a84c", color: "#080810" }}>
+                  Start Building
+                </button>
+              </div>
+
+              {/* Pro */}
+              <div className="rounded-2xl p-8" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <p className="mb-6 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: "rgba(240,237,232,0.3)" }}>Pro</p>
+                <div className="mb-1 flex items-end gap-2">
+                  <span className="text-6xl font-black" style={{ color: "rgba(240,237,232,0.2)" }}>$?</span>
+                  <span className="mb-2 text-sm" style={{ color: "rgba(240,237,232,0.2)" }}>/month</span>
+                </div>
+                <p className="mb-8 text-sm" style={{ color: "rgba(240,237,232,0.2)" }}>Coming soon</p>
+                <ul className="mb-8 space-y-3">
+                  {["Everything in Free", "Priority AI processing", "STEP export", "Team workspaces"].map((f) => (
+                    <li key={f} className="flex items-center gap-3 text-sm" style={{ color: "rgba(240,237,232,0.25)" }}>
+                      <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: "rgba(255,255,255,0.15)" }} />{f}
+                    </li>
+                  ))}
+                </ul>
+                <button disabled className="w-full rounded-xl py-3.5 text-sm font-bold cursor-not-allowed" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(240,237,232,0.2)" }}>
+                  Coming Soon
+                </button>
               </div>
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* ── Pricing ── */}
-          <section id="pricing" className="mx-auto max-w-7xl px-6 lg:px-8 py-24">
-            <div
-              ref={pricing.ref}
-              className={`transition-all duration-700 ${pricing.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
+        {/* ── CTA ── */}
+        <section className="mx-auto max-w-7xl px-6 lg:px-8 pb-28">
+          <div
+            className="relative overflow-hidden rounded-3xl px-10 py-20 text-center"
+            style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.1) 0%, rgba(201,168,76,0.03) 50%, rgba(68,136,204,0.06) 100%)", border: "1px solid rgba(201,168,76,0.18)" }}
+          >
+            {/* Background glow */}
+            <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% -10%, rgba(201,168,76,0.12), transparent 65%)" }} />
+            <p className="relative mb-4 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: "#c9a84c" }}>Get started</p>
+            <h2 className="relative mb-4 text-4xl font-black tracking-tight text-white sm:text-5xl">{text.cta.title}</h2>
+            <p className="relative mb-10 text-lg mx-auto max-w-md" style={{ color: "rgba(240,237,232,0.5)" }}>{text.cta.body}</p>
+            <button
+              onClick={onStartBuilding}
+              className="relative rounded-xl px-10 text-base font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+              style={{ height: "52px", background: "#c9a84c", color: "#080810", boxShadow: "0 4px 50px rgba(201,168,76,0.3)" }}
             >
-              <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.24em] text-[#8A2BE2]">Pricing</p>
-              <h2 className="max-w-xl text-4xl font-bold tracking-tight text-white sm:text-5xl mb-4">{text.pricingTitle}</h2>
-              <p className="max-w-lg text-white/50 leading-relaxed mb-14">{text.pricingBody}</p>
-
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 max-w-2xl">
-                {/* Free card */}
-                <div className="rounded-2xl border border-[#00F0FF]/25 bg-[#00F0FF]/5 p-8 shadow-[0_0_40px_rgba(0,240,255,0.08)]">
-                  <p className="text-sm font-bold uppercase tracking-widest text-[#00F0FF] mb-4">Free</p>
-                  <p className="text-5xl font-black text-white mb-2">$0<span className="text-lg font-normal text-white/40">/mo</span></p>
-                  <p className="text-sm text-white/50 mb-8">During early access</p>
-                  <ul className="space-y-3 mb-8 text-sm text-white/70">
-                    {["AI model generation", "Export STL & 3MF", "Manual CAD tools", "Unlimited sessions"].map((f) => (
-                      <li key={f} className="flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#00F0FF] shrink-0" />{f}
-                      </li>
-                    ))}
-                  </ul>
-                  <button onClick={onStartBuilding} className="w-full h-11 rounded-xl bg-[#00F0FF] text-sm font-bold text-[#050505] hover:bg-[#00F0FF]/90 transition-colors">
-                    Start Building
-                  </button>
-                </div>
-                {/* Pro card */}
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none" />
-                  <p className="text-sm font-bold uppercase tracking-widest text-white/40 mb-4">Pro</p>
-                  <p className="text-5xl font-black text-white/20 mb-2">$?<span className="text-lg font-normal">/mo</span></p>
-                  <p className="text-sm text-white/30 mb-8">Coming soon</p>
-                  <ul className="space-y-3 mb-8 text-sm text-white/30">
-                    {["Everything in Free", "Priority AI processing", "STEP export", "Team workspaces"].map((f) => (
-                      <li key={f} className="flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-white/20 shrink-0" />{f}
-                      </li>
-                    ))}
-                  </ul>
-                  <button disabled className="w-full h-11 rounded-xl border border-white/10 text-sm font-bold text-white/20 cursor-not-allowed">
-                    Coming Soon
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* ── CTA ── */}
-          <section className="mx-auto max-w-7xl px-6 lg:px-8 pb-24">
-            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#00F0FF]/8 via-transparent to-[#8A2BE2]/8 p-16 text-center">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(0,240,255,0.1),transparent_70%)]" />
-              <h2 className="relative text-4xl font-bold tracking-tight text-white sm:text-5xl mb-4">{text.cta.title}</h2>
-              <p className="relative text-lg text-white/50 mb-10 max-w-md mx-auto">{text.cta.body}</p>
-              <button
-                onClick={onStartBuilding}
-                className="relative h-12 rounded-xl bg-white px-10 text-base font-bold text-[#050505] hover:bg-white/90 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_4px_40px_rgba(255,255,255,0.15)]"
-              >
-                {text.cta.button}
-              </button>
-            </div>
-          </section>
-        </main>
+              {text.cta.button}
+            </button>
+          </div>
+        </section>
 
         <SiteFooter />
       </div>
 
-      <AuthDialog
-        mode={authMode}
-        text={text}
-        onClose={() => setAuthMode(null)}
-        onStartBuilding={() => { setAuthMode(null); onStartBuilding(); }}
-      />
+      <AuthDialog mode={authMode} text={text} onClose={() => setAuthMode(null)} onStartBuilding={() => { setAuthMode(null); onStartBuilding(); }} />
     </>
   );
 }
