@@ -22,7 +22,7 @@ function isTechnicalAction(action: string) {
   return /^(source-|translated-query:|generative-recipe:|generated clean|source-search:|source-match:|source-files:)/i.test(action.trim());
 }
 
-export default function AiPanel() {
+export default function AiPanel({ floating = false }: { floating?: boolean }) {
   const [prompt, setPrompt] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,6 +75,106 @@ export default function AiPanel() {
   const toggleFilter = (f: string) =>
     setActiveFilters((prev) => prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]);
 
+  // Floating mode: compact inline layout (no outer wrapper with bg — handled by parent)
+  if (floating) {
+    return (
+      <div className="flex flex-col">
+        {/* Quick edits — horizontal scroll */}
+        <div className="flex gap-2 overflow-x-auto px-4 pt-3 pb-2 scrollbar-none">
+          {QUICK_COMMANDS.map((cmd) => (
+            <button
+              key={cmd}
+              onClick={() => void run(cmd, false)}
+              disabled={isLoading}
+              className="shrink-0 rounded-md border border-cadio-border/50 bg-cadio-bg/60 px-3 py-1.5 text-xs text-cadio-text/70 transition-colors hover:border-cadio-border/80 hover:text-cadio-text disabled:opacity-30"
+            >
+              {cmd}
+            </button>
+          ))}
+        </div>
+
+        {/* Filters toggle */}
+        <div className="border-t border-cadio-border/30 px-4 py-2">
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className="flex w-full items-center justify-between text-[11px] font-semibold text-cadio-muted transition-colors hover:text-cadio-text"
+          >
+            <span className="flex items-center gap-2">
+              Filters
+              {activeFilters.length > 0 && (
+                <span className="rounded-full bg-cadio-accent px-1.5 py-px text-[10px] font-bold text-cadio-bg leading-none">
+                  {activeFilters.length}
+                </span>
+              )}
+            </span>
+            <svg className={`h-3.5 w-3.5 transition-transform ${showFilters ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showFilters && (
+            <div className="mt-2 flex flex-wrap gap-2 pb-1">
+              {FILTER_CHIPS.map((f) => {
+                const active = activeFilters.includes(f);
+                return (
+                  <button
+                    key={f}
+                    onClick={() => toggleFilter(f)}
+                    className={`rounded-md border px-2.5 py-1 text-xs transition-all ${
+                      active
+                        ? "border-cadio-accent/40 bg-cadio-accent/10 text-cadio-accent"
+                        : "border-cadio-border/50 bg-cadio-bg/60 text-cadio-muted hover:text-cadio-text"
+                    }`}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Prompt input */}
+        <div className="border-t border-cadio-border/30 p-3">
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-xl border border-cadio-border/60 bg-cadio-bg/60 transition-all focus-within:border-cadio-accent/40 focus-within:ring-2 focus-within:ring-cadio-accent/10"
+          >
+            <textarea
+              ref={textareaRef}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder={objects.length > 0 ? "Describe a change…" : "Describe what to build…"}
+              disabled={isLoading}
+              rows={2}
+              className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-sm text-cadio-text placeholder:text-cadio-muted/50 outline-none disabled:opacity-40"
+            />
+            <div className="flex items-center justify-between px-3 pb-3">
+              {activeFilters.length > 0 ? (
+                <p className="text-[10px] text-cadio-accent/70 truncate max-w-[180px]">
+                  +{activeFilters.join(", ")}
+                </p>
+              ) : (
+                <p className="text-[10px] text-cadio-muted/40">↵ to generate</p>
+              )}
+              <button
+                type="submit"
+                disabled={!prompt.trim() || isLoading}
+                className="flex h-8 items-center gap-2 rounded-lg bg-cadio-accent px-4 text-[11px] font-bold text-cadio-bg transition-all hover:bg-cadio-accent-hover disabled:opacity-30 active:scale-95"
+              >
+                {isLoading ? (
+                  <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4" strokeWidth="2" strokeLinecap="round" /></svg>
+                ) : (
+                  <>Generate <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 12h14M12 5l7 7-7 7" /></svg></>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col bg-cadio-bg">
 
@@ -99,7 +199,7 @@ export default function AiPanel() {
           <button
             onClick={() => void switchModel("previous")}
             disabled={isLoading}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cadio-border/60 bg-cadio-surface py-2 text-xs font-medium text-cadio-muted transition-colors hover:border-cadio-border hover:text-white disabled:opacity-30"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cadio-border/60 bg-cadio-surface py-2 text-xs font-medium text-cadio-muted transition-colors hover:border-cadio-border hover:text-cadio-text disabled:opacity-30"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
             Previous
@@ -107,7 +207,7 @@ export default function AiPanel() {
           <button
             onClick={() => void switchModel("next")}
             disabled={isLoading}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cadio-border/60 bg-cadio-surface py-2 text-xs font-medium text-cadio-muted transition-colors hover:border-cadio-border hover:text-white disabled:opacity-30"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cadio-border/60 bg-cadio-surface py-2 text-xs font-medium text-cadio-muted transition-colors hover:border-cadio-border hover:text-cadio-text disabled:opacity-30"
           >
             Next
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
@@ -124,7 +224,7 @@ export default function AiPanel() {
               key={cmd}
               onClick={() => void run(cmd, false)}
               disabled={isLoading}
-              className="rounded-md border border-cadio-border/50 bg-cadio-surface px-3 py-1.5 text-xs text-cadio-text/70 transition-colors hover:border-cadio-border hover:text-white disabled:opacity-30"
+              className="rounded-md border border-cadio-border/50 bg-cadio-surface px-3 py-1.5 text-xs text-cadio-text/70 transition-colors hover:border-cadio-border hover:text-cadio-text disabled:opacity-30"
             >
               {cmd}
             </button>
@@ -136,12 +236,12 @@ export default function AiPanel() {
       <div className="border-b border-cadio-border/30 px-5 py-3">
         <button
           onClick={() => setShowFilters((v) => !v)}
-          className="flex w-full items-center justify-between text-[11px] font-semibold text-cadio-muted transition-colors hover:text-white"
+          className="flex w-full items-center justify-between text-[11px] font-semibold text-cadio-muted transition-colors hover:text-cadio-text"
         >
           <span className="flex items-center gap-2">
             Filters
             {activeFilters.length > 0 && (
-              <span className="rounded-full bg-cadio-accent px-1.5 py-px text-[10px] font-bold text-white leading-none">
+              <span className="rounded-full bg-cadio-accent px-1.5 py-px text-[10px] font-bold text-cadio-bg leading-none">
                 {activeFilters.length}
               </span>
             )}
@@ -161,7 +261,7 @@ export default function AiPanel() {
                   className={`rounded-md border px-2.5 py-1 text-xs transition-all ${
                     active
                       ? "border-cadio-accent/40 bg-cadio-accent/10 text-cadio-accent"
-                      : "border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-white"
+                      : "border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-cadio-text"
                   }`}
                 >
                   {f}
@@ -186,7 +286,7 @@ export default function AiPanel() {
             placeholder={objects.length > 0 ? "Describe a change…" : "Describe what to build…"}
             disabled={isLoading}
             rows={2}
-            className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-sm text-white placeholder:text-cadio-muted/50 outline-none disabled:opacity-40"
+            className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-sm text-cadio-text placeholder:text-cadio-muted/50 outline-none disabled:opacity-40"
           />
           <div className="flex items-center justify-between px-3 pb-3">
             {activeFilters.length > 0 ? (
@@ -199,7 +299,7 @@ export default function AiPanel() {
             <button
               type="submit"
               disabled={!prompt.trim() || isLoading}
-              className="flex h-8 items-center gap-2 rounded-lg bg-white px-4 text-[11px] font-bold text-cadio-bg transition-all hover:bg-cadio-text/90 disabled:opacity-30 active:scale-95"
+              className="flex h-8 items-center gap-2 rounded-lg bg-cadio-accent px-4 text-[11px] font-bold text-cadio-bg transition-all hover:bg-cadio-accent-hover disabled:opacity-30 active:scale-95"
             >
               {isLoading ? (
                 <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4" strokeWidth="2" strokeLinecap="round" /></svg>
