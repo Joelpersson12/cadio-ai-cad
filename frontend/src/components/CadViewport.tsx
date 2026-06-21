@@ -7,11 +7,11 @@ import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
 
 const VIEW_COLORS = {
-  background: "#0b0f14",
-  plate: "#111827",
-  plateEdge: "#1f2937",
-  gridCell: "#1f2937",
-  gridSection: "#3b82f6",
+  background: "#111418",
+  plate: "#1e2a3a",
+  plateEdge: "#2bb8dc",
+  gridCell: "#252d38",
+  gridSection: "#2bb8dc",
   neutralBody: "#94a3b8",
   selectedBody: "#3b82f6",
   hoveredBody: "#cbd5e1",
@@ -536,36 +536,38 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
   const [px, py] = volume;
   return (
     <group>
-      {/* Base plate - visible and textured */}
-      <mesh position={[0, -0.55, 0]} receiveShadow>
-        <boxGeometry args={[px, 0.04, py]} />
-        <meshStandardMaterial 
+      {/* Solid plate — clearly visible, no shadow */}
+      <mesh position={[0, -0.6, 0]}>
+        <boxGeometry args={[px, 1.2, py]} />
+        <meshStandardMaterial
           color={VIEW_COLORS.plate}
-          roughness={0.82}
-          metalness={0.02}
-          transparent
-          opacity={0.11}
-          side={THREE.DoubleSide}
-          depthWrite={false}
+          roughness={0.9}
+          metalness={0.0}
         />
       </mesh>
-      {/* Corner markers for orientation */}
-      {[
-        [-px / 2, 0, -py / 2],
-        [px / 2, 0, -py / 2],
-        [-px / 2, 0, py / 2],
-        [px / 2, 0, py / 2],
-      ].map((pos, i) => (
-        <mesh key={i} position={[pos[0], pos[1], pos[2]]}>
-          <sphereGeometry args={[2, 8, 8]} />
-          <meshStandardMaterial color="#f1f5f9" emissive="#33383f" />
+      {/* Top surface highlight strip */}
+      <mesh position={[0, 0.02, 0]}>
+        <boxGeometry args={[px, 0.04, py]} />
+        <meshStandardMaterial
+          color="#2a3a4e"
+          roughness={0.7}
+          metalness={0.1}
+          emissive="#0d1a27"
+          emissiveIntensity={0.3}
+        />
+      </mesh>
+      {/* Border frame — accent color, clearly visible */}
+      <lineSegments position={[0, 0.04, 0]}>
+        <edgesGeometry args={[new THREE.BoxGeometry(px, 0.01, py)]} />
+        <lineBasicMaterial color={VIEW_COLORS.plateEdge} />
+      </lineSegments>
+      {/* Corner dots */}
+      {([ [-px/2, 0, -py/2], [px/2, 0, -py/2], [-px/2, 0, py/2], [px/2, 0, py/2] ] as [number,number,number][]).map((pos, i) => (
+        <mesh key={i} position={pos}>
+          <sphereGeometry args={[2.5, 8, 8]} />
+          <meshStandardMaterial color={VIEW_COLORS.plateEdge} emissive={VIEW_COLORS.plateEdge} emissiveIntensity={0.4} />
         </mesh>
       ))}
-      {/* Border frame - enhanced visibility */}
-      <lineSegments>
-        <edgesGeometry args={[new THREE.BoxGeometry(px, 0.5, py)]} />
-        <lineBasicMaterial color={VIEW_COLORS.plateEdge} linewidth={2} />
-      </lineSegments>
     </group>
   );
 }
@@ -898,8 +900,7 @@ export default function CadViewport({
       </div>
 
       <Canvas
-        shadows
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
         camera={{ position: [300, 220, 300], fov: 35, near: 1, far: 5000 }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl, scene }) => {
@@ -915,11 +916,9 @@ export default function CadViewport({
       <ambientLight intensity={0.3} />
       <spotLight
         position={[400, 500, 400]}
-        angle={0.15}
-        penumbra={1}
+        angle={0.2}
+        penumbra={0.8}
         intensity={2.5}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
       />
       <directionalLight position={[-400, 300, -200]} intensity={0.8} color="#93c5fd" />
       <pointLight position={[0, 400, 0]} intensity={0.4} color="#ffffff" />
