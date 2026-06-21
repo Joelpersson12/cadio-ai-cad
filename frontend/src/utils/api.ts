@@ -36,6 +36,8 @@ const API_FALLBACKS = Array.from(
   ),
 );
 
+const REQUEST_TIMEOUT_MS = 90_000;
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let lastError: unknown = null;
   const optionHeaders =
@@ -45,11 +47,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         ? Object.fromEntries(options.headers)
         : options.headers || {};
   for (const base of API_FALLBACKS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
       const res = await fetch(`${base}${path}`, {
         ...options,
         headers: { "Content-Type": "application/json", ...optionHeaders },
+        signal: controller.signal,
       });
+      clearTimeout(timer);
       const contentType = res.headers.get("content-type") || "";
       const data = contentType.includes("application/json")
         ? await res.json()
@@ -60,6 +66,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       }
       return data as T;
     } catch (err) {
+      clearTimeout(timer);
       lastError = err;
     }
   }

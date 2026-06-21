@@ -130,7 +130,7 @@ _MODEL_META_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _CACHE_TTL_SECONDS = 600.0
 
 
-def _fetch_text(url: str, timeout: float = 8.0) -> str:
+def _fetch_text(url: str, timeout: float = 2.5) -> str:
     req = Request(
         url,
         headers={
@@ -1324,22 +1324,48 @@ class ProviderRegistry:
         }
     
     def search_all(self, query: str, limit: int = 5) -> list[ExampleDesign]:
-        """Search all available providers with source-aware query expansion."""
-        ranked: dict[str, tuple[float, ExampleDesign]] = {}
+        """Search all available providers in parallel with a total 4-second deadline."""
+        from concurrent.futures import ThreadPoolExecutor, wait as _wait
+        import time as _time
+
         search_query = normalize_source_query(query) or query
         variants = _query_variants(search_query) or [search_query]
         per_query_limit = max(limit * 2, 10)
-        for provider in self.providers.values():
-            if not provider.is_available():
-                continue
-            for variant in variants:
-                for design in provider.search(variant, per_query_limit):
-                    score = _design_score(search_query, design)
-                    if score <= 0:
-                        continue
-                    existing = ranked.get(design.url)
-                    if existing is None or score > existing[0]:
-                        ranked[design.url] = (score, design)
+
+        tasks = [
+            (provider, variant)
+            for provider in self.providers.values()
+            if provider.is_available()
+            for variant in variants
+        ]
+
+        def _search_one(args: tuple) -> list[ExampleDesign]:
+            provider, variant = args
+            try:
+                return provider.search(variant, per_query_limit)
+            except Exception:
+                return []
+
+        ranked: dict[str, tuple[float, ExampleDesign]] = {}
+        deadline = _time.monotonic() + 4.0
+
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            futures = {executor.submit(_search_one, task) for task in tasks}
+            remaining = max(0.0, deadline - _time.monotonic())
+            done, not_done = _wait(futures, timeout=remaining)
+            for f in not_done:
+                f.cancel()
+            for future in done:
+                try:
+                    for design in future.result(timeout=0):
+                        score = _design_score(search_query, design)
+                        if score <= 0:
+                            continue
+                        existing = ranked.get(design.url)
+                        if existing is None or score > existing[0]:
+                            ranked[design.url] = (score, design)
+                except Exception:
+                    pass
 
         results = list(ranked.values())
         results.sort(key=lambda item: item[0], reverse=True)
