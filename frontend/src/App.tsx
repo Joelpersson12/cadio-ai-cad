@@ -418,23 +418,12 @@ function isModelBusyStatus(status: string) {
 
 function ModelLoadingOverlay({ status }: { status: string }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-cadio-bg/40 backdrop-blur-md">
-      <div className="relative flex h-64 w-64 items-center justify-center">
-        <div className="absolute inset-0 rounded-full border border-cadio-accent/20 bg-[radial-gradient(circle,rgba(59,130,246,0.15),transparent_70%)]" />
-        <div className="absolute inset-4 animate-spin rounded-full border border-dashed border-cadio-accent/40 shadow-[0_0_40px_rgba(59,130,246,0.1)]" />
-        <div
-          className="absolute inset-12 rounded-[32px] border border-white/10 bg-white/5"
-          style={{ animation: "spin 3s linear infinite reverse" }}
-        />
-        <div className="absolute h-28 w-28 rotate-45 animate-pulse rounded-2xl border border-cadio-accent bg-cadio-accent/5 shadow-[0_0_50px_rgba(59,130,246,0.3)]" />
-        
-        <div className="absolute -bottom-12 flex flex-col items-center gap-3">
-          <div className="px-6 py-2.5 rounded-full border border-cadio-border/50 bg-cadio-surface/90 shadow-2xl backdrop-blur-xl">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white animate-pulse">
-              {status || "Engineering Geometry..."}
-            </span>
-          </div>
-        </div>
+    <div className="pointer-events-none absolute inset-0 z-20 flex items-end justify-center pb-12 bg-cadio-bg/30 backdrop-blur-[2px]">
+      <div className="flex items-center gap-3 rounded-xl border border-cadio-border/50 bg-cadio-surface/90 px-5 py-3 shadow-2xl backdrop-blur-xl">
+        <svg className="h-4 w-4 animate-spin text-cadio-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+        <span className="text-sm font-medium text-white">{status || "Generating geometry…"}</span>
       </div>
     </div>
   );
@@ -571,135 +560,123 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
   return (
     <div className="w-full h-[100dvh] relative bg-cadio-bg text-cadio-text font-sans overflow-hidden">
-      {/* Desktop layout */}
+      {/* ── Desktop layout ── */}
       <div
         ref={desktopLayoutRef}
         className="hidden h-full w-full md:grid"
         style={{ gridTemplateColumns: desktopGridColumns }}
       >
-        {/* Workspace Panel */}
-        <aside className={`flex min-h-0 flex-col border-r border-cadio-border/50 bg-cadio-surface transition-all ${workspacePanelOpen ? "px-5 py-6" : "items-center px-2 py-6"}`}>
+        {/* ── Left Panel — Workspace ── */}
+        <aside className={`flex min-h-0 flex-col border-r border-cadio-border/30 bg-cadio-surface transition-all ${workspacePanelOpen ? "" : "items-center py-5 px-2"}`}>
           {workspacePanelOpen ? (
-            <>
-          <div className="mb-8 flex items-center justify-between">
-            <CadioLogo subtitle="" onClick={onHome} />
-            <button
-              onClick={() => setWorkspacePanelOpen(false)}
-              className="p-1.5 rounded-md hover:bg-cadio-border/50 text-cadio-muted transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-          </div>
-          
-          <div className="space-y-2 mb-8">
-            <button
-              onClick={startBlankCreation}
-              className="w-full flex h-11 items-center gap-3 rounded-lg border border-cadio-border bg-cadio-bg/50 px-4 text-xs font-bold text-white transition-all hover:bg-cadio-bg hover:border-cadio-accent/50 group"
-            >
-              <svg className="w-4 h-4 text-cadio-accent group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
-              New Workspace
-            </button>
-            <button
-              onClick={() => setShowMeasurements((v) => !v)}
-              className={`w-full flex h-11 items-center gap-3 rounded-lg border px-4 text-xs font-bold transition-all ${
-                showMeasurements
-                  ? "border-cadio-accent bg-cadio-accent/10 text-cadio-accent shadow-[0_0_15px_rgba(59,130,246,0.1)]"
-                  : "border-cadio-border bg-cadio-bg/50 text-cadio-muted hover:bg-cadio-bg hover:text-white"
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
-              Precision Measure
-            </button>
-          </div>
-
-          <div className="mb-8">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted mb-4 px-1">Editor Mode</div>
-            <div className="flex p-1 gap-1 rounded-xl bg-cadio-bg/80 border border-cadio-border/50">
-              <button
-                onClick={() => setExpertMode(false)}
-                className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-                  !expertMode ? "bg-white text-cadio-bg shadow-sm" : "text-cadio-muted hover:text-white"
-                }`}
-              >
-                Easy
-              </button>
-              <button
-                onClick={() => setExpertMode(true)}
-                className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-                  expertMode ? "bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20" : "text-cadio-muted hover:text-white"
-                }`}
-              >
-                Expert
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-6 scrollbar-none">
-            {expertMode && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-left-2 duration-300">
-                <section>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted mb-3 px-1">Active Selection</div>
-                  <div className="grid grid-cols-3 gap-1 rounded-lg border border-cadio-border/50 bg-cadio-bg/50 p-1">
-                    {SELECTION_MODES.map((mode) => (
-                      <button
-                        key={mode.id}
-                        onClick={() => setSelectionMode(mode.id)}
-                        className={`py-1.5 rounded-md text-[9px] font-bold uppercase transition-all ${
-                          selectionMode === mode.id ? "bg-cadio-surface text-white shadow-sm border border-cadio-border" : "text-cadio-muted hover:text-white"
-                        }`}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-                
-                <section>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted mb-3 px-1">Transform Mode</div>
-                  <div className="grid grid-cols-4 gap-1 rounded-lg border border-cadio-border/50 bg-cadio-bg/50 p-1">
-                    {TRANSFORM_MODES.map((mode) => (
-                      <button
-                        key={mode.id}
-                        onClick={() => setTransformMode(mode.id)}
-                        className={`py-1.5 rounded-md text-[9px] font-bold uppercase transition-all ${
-                          transformMode === mode.id ? "bg-cadio-accent text-white" : "text-cadio-muted hover:text-white"
-                        }`}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
-                  </div>
-                </section>
+            <div className="flex h-full flex-col">
+              {/* Header */}
+              <div className="flex h-14 shrink-0 items-center justify-between border-b border-cadio-border/30 px-5">
+                <CadioLogo subtitle="" onClick={onHome} />
+                <button onClick={() => setWorkspacePanelOpen(false)} className="rounded-md p-1.5 text-cadio-muted transition-colors hover:bg-cadio-border/40 hover:text-white">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+                </button>
               </div>
-            )}
 
-            <SavedModelsPanel
-              title={projectTitle}
-              prompt={latestPrompt}
-              sessionId={sessionId}
-              printer={printer}
-              objects={objects}
-              onOpenPrompt={(savedPrompt) => void runPrompt(savedPrompt)}
-            />
-          </div>
+              {/* Actions */}
+              <div className="shrink-0 border-b border-cadio-border/30 px-4 py-3 space-y-1.5">
+                <button
+                  onClick={startBlankCreation}
+                  className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-sm font-medium text-cadio-muted transition-colors hover:bg-cadio-border/30 hover:text-white"
+                >
+                  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                  New workspace
+                </button>
+                <button
+                  onClick={() => setShowMeasurements((v) => !v)}
+                  className={`flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors ${showMeasurements ? "bg-cadio-accent/10 text-cadio-accent" : "text-cadio-muted hover:bg-cadio-border/30 hover:text-white"}`}
+                >
+                  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 6l3 1m0 0l-3 9a5 5 0 006 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5 5 0 006 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
+                  Measure
+                </button>
+              </div>
 
-          <div className="mt-8 pt-6 border-t border-cadio-border/30">
-            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-cadio-muted px-1 mb-4">
-              <span>Selection</span>
-              <span>{selectedCount} Active</span>
+              {/* Mode toggle */}
+              <div className="shrink-0 border-b border-cadio-border/30 px-4 py-3">
+                <div className="flex rounded-lg border border-cadio-border/40 bg-cadio-bg/60 p-0.5">
+                  <button
+                    onClick={() => setExpertMode(false)}
+                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-all ${!expertMode ? "bg-white text-cadio-bg shadow-sm" : "text-cadio-muted hover:text-white"}`}
+                  >
+                    Easy
+                  </button>
+                  <button
+                    onClick={() => setExpertMode(true)}
+                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-all ${expertMode ? "bg-cadio-accent text-white" : "text-cadio-muted hover:text-white"}`}
+                  >
+                    Expert
+                  </button>
+                </div>
+              </div>
+
+              {/* Expert tools */}
+              {expertMode && (
+                <div className="shrink-0 border-b border-cadio-border/30 px-4 py-3 space-y-3">
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold text-cadio-muted">Select</p>
+                    <div className="flex gap-1">
+                      {SELECTION_MODES.map((m) => (
+                        <button key={m.id} onClick={() => setSelectionMode(m.id)}
+                          className={`flex-1 rounded-md py-1.5 text-[11px] font-medium transition-all ${selectionMode === m.id ? "bg-cadio-surface border border-cadio-border text-white" : "text-cadio-muted hover:text-white"}`}>
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold text-cadio-muted">Transform</p>
+                    <div className="flex gap-1">
+                      {TRANSFORM_MODES.map((m) => (
+                        <button key={m.id} onClick={() => setTransformMode(m.id)}
+                          className={`flex-1 rounded-md py-1.5 text-[11px] font-medium transition-all ${transformMode === m.id ? "bg-cadio-accent text-white" : "text-cadio-muted hover:text-white"}`}>
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Saved models */}
+              <div className="min-h-0 flex-1 overflow-y-auto scrollbar-none px-4 py-3">
+                <SavedModelsPanel
+                  title={projectTitle}
+                  prompt={latestPrompt}
+                  sessionId={sessionId}
+                  printer={printer}
+                  objects={objects}
+                  onOpenPrompt={(p) => void runPrompt(p)}
+                />
+              </div>
+
+              {/* Selection footer */}
+              <div className="shrink-0 border-t border-cadio-border/30 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] font-semibold text-cadio-muted">Selection</p>
+                  {selectedCount > 0 && <span className="text-[11px] text-cadio-muted">{selectedCount} selected</span>}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={selectAllObjects} className="flex-1 h-8 rounded-lg border border-cadio-border/50 text-xs font-medium text-cadio-muted transition-colors hover:border-cadio-border hover:text-white">
+                    Select all
+                  </button>
+                  <button onClick={() => void onDeleteObject()} disabled={!selectedObjectId} className="flex-1 h-8 rounded-lg border border-red-500/20 text-xs font-medium text-red-400/70 transition-colors hover:border-red-500/40 hover:text-red-400 disabled:opacity-25">
+                    Delete
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={selectAllObjects} className="h-9 rounded-lg border border-cadio-border bg-cadio-bg/50 text-[10px] font-bold text-white hover:bg-cadio-bg transition-colors">Select All</button>
-              <button onClick={() => void onDeleteObject()} disabled={!selectedObjectId} className="h-9 rounded-lg border border-red-500/20 bg-red-500/5 text-[10px] font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-20 transition-colors">Delete</button>
-            </div>
-          </div>
-            </>
           ) : (
-            <div className="flex h-full flex-col items-center gap-4">
-              <button onClick={onHome} className="h-10 w-10 flex items-center justify-center rounded-xl bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20">C</button>
-              <div className="w-full h-px bg-cadio-border/50" />
-              <button onClick={() => setWorkspacePanelOpen(true)} className="p-2.5 rounded-lg hover:bg-cadio-border/50 text-cadio-muted transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+            /* Collapsed */
+            <div className="flex flex-col items-center gap-3">
+              <button onClick={onHome} className="flex h-9 w-9 items-center justify-center rounded-xl bg-cadio-accent text-sm font-bold text-white">C</button>
+              <div className="h-px w-6 bg-cadio-border/50" />
+              <button onClick={() => setWorkspacePanelOpen(true)} className="rounded-lg p-2 text-cadio-muted transition-colors hover:bg-cadio-border/40 hover:text-white" title="Expand">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
               </button>
             </div>
           )}
@@ -707,43 +684,37 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         
         {/* Resize Handle */}
         <div
-          className="group relative z-20 cursor-col-resize bg-cadio-bg transition-all hover:bg-cadio-accent/20"
+          className="group relative z-20 w-[4px] cursor-col-resize bg-transparent hover:bg-cadio-accent/20 transition-colors"
           onMouseDown={(event) => startPanelResize("workspace", event)}
         >
-          <div className="absolute left-1/2 top-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cadio-border group-hover:bg-cadio-accent transition-colors" />
+          <div className="absolute left-1/2 top-1/2 h-8 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cadio-border/50 opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
 
-        {/* AI Assistant Panel */}
-        <section className={`${assistantPanelOpen ? "grid grid-rows-[64px_1fr]" : "flex items-start justify-center px-2 py-6"} min-h-0 border-r border-cadio-border/50 bg-cadio-surface transition-all`}>
+        {/* ── AI Assistant Panel ── */}
+        <section className={`${assistantPanelOpen ? "grid grid-rows-[56px_1fr]" : "flex items-start justify-center px-2 py-5"} min-h-0 border-r border-cadio-border/30 bg-cadio-surface transition-all`}>
           {assistantPanelOpen ? (
             <>
-          <header className="flex items-center justify-between px-6 border-b border-cadio-border/30">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setAssistantPanelOpen(false)}
-                className="p-1.5 rounded-md hover:bg-cadio-border/50 text-cadio-muted transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
-              </button>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-bold text-white tracking-tight">{projectTitle}</div>
-                <div className="text-[10px] font-medium text-cadio-muted">{objects.length} components generated</div>
+              <header className="flex h-14 shrink-0 items-center justify-between border-b border-cadio-border/30 px-5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <button onClick={() => setAssistantPanelOpen(false)} className="rounded-md p-1.5 text-cadio-muted transition-colors hover:bg-cadio-border/40 hover:text-white shrink-0">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white leading-none">{projectTitle}</p>
+                    {objects.length > 0 && <p className="mt-0.5 text-[11px] text-cadio-muted">{objects.length} object{objects.length !== 1 ? "s" : ""}</p>}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <button onClick={() => setShareOpen(true)} className="text-xs font-medium text-cadio-muted transition-colors hover:text-white">Share</button>
+                  <button onClick={() => setExportOpen(true)} className="h-8 rounded-lg bg-white px-4 text-xs font-bold text-cadio-bg transition-all hover:scale-[1.02] active:scale-[0.98]">Export</button>
+                </div>
+              </header>
+              <div className="min-h-0 overflow-y-auto scrollbar-none">
+                <AiPanel />
               </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <button onClick={() => setShareOpen(true)} className="text-[11px] font-bold text-cadio-muted hover:text-white transition-colors uppercase tracking-widest">Share</button>
-              <button onClick={() => setExportOpen(true)} className="px-4 py-1.5 rounded-lg bg-white text-cadio-bg text-[11px] font-black uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98]">Export</button>
-            </div>
-          </header>
-          <div className="min-h-0 overflow-y-auto">
-            <AiPanel />
-          </div>
             </>
           ) : (
-            <button
-              onClick={() => setAssistantPanelOpen(true)}
-              className="p-2.5 rounded-lg border border-cadio-border bg-cadio-surface text-[10px] font-bold text-cadio-muted transition-all hover:border-cadio-accent hover:text-white"
-            >
+            <button onClick={() => setAssistantPanelOpen(true)} className="rounded-lg border border-cadio-border/50 bg-cadio-surface p-2 text-[11px] font-semibold text-cadio-muted transition-colors hover:text-white" title="AI Assistant">
               AI
             </button>
           )}
@@ -756,22 +727,21 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           <div className="absolute left-1/2 top-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cadio-border group-hover:bg-cadio-accent transition-colors" />
         </div>
 
-        {/* Viewport View */}
+        {/* ── Viewport ── */}
         <main className="relative min-h-0 overflow-hidden bg-cadio-bg">
-          {/* Viewport Overlays */}
-          <div className="absolute right-6 top-6 z-10 flex items-center gap-3">
-             <div className="px-4 py-2 rounded-xl border border-cadio-border/50 bg-cadio-surface/80 backdrop-blur-xl shadow-2xl flex items-center gap-3">
-               <div className="flex flex-col">
-                 <span className="text-[9px] font-black text-cadio-muted uppercase tracking-tighter leading-none mb-1">Active Printer</span>
-                 <span className="text-xs font-bold text-white leading-none">{printerProfile?.name ?? "Standard"}</span>
-               </div>
-               <div className="h-4 w-px bg-cadio-border" />
-               <span className="text-[10px] font-black text-cadio-accent uppercase tracking-widest animate-pulse">{status || "Ready"}</span>
-             </div>
+          {/* Minimal viewport overlays */}
+          <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg border border-cadio-border/30 bg-cadio-surface/70 px-3 py-1.5 backdrop-blur-sm">
+            <span className="text-xs font-medium text-cadio-muted">{expertMode ? "Expert" : "AI Assisted"}</span>
+            {status && (
+              <>
+                <span className="h-3 w-px bg-cadio-border/60" />
+                <span className="h-1.5 w-1.5 rounded-full bg-cadio-accent animate-pulse shrink-0" />
+                <span className="max-w-[160px] truncate text-xs text-cadio-muted">{status}</span>
+              </>
+            )}
           </div>
-          
-          <div className="absolute left-6 top-6 z-10 rounded-xl border border-cadio-border/50 bg-cadio-surface/80 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-xl shadow-2xl">
-            {expertMode ? "Manual CAD Mode" : "AI Assisted Design"}
+          <div className="absolute right-4 top-4 z-10 rounded-lg border border-cadio-border/30 bg-cadio-surface/70 px-3 py-1.5 backdrop-blur-sm">
+            <span className="text-xs font-medium text-white">{printerProfile?.name ?? "Standard"}</span>
           </div>
 
           <CadViewport
@@ -807,24 +777,21 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           <div className="absolute left-1/2 top-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cadio-border group-hover:bg-cadio-accent transition-colors" />
         </div>
 
-        {/* Inspector Panel */}
-        <aside className={`${parametersPanelOpen ? "relative" : "flex items-start justify-center px-2 py-6"} min-h-0 overflow-hidden bg-cadio-surface transition-all`}>
+        {/* ── Inspector Panel ── */}
+        <aside className={`${parametersPanelOpen ? "relative" : "flex items-start justify-center px-2 py-5"} min-h-0 overflow-hidden border-l border-cadio-border/30 bg-cadio-surface transition-all`}>
           {parametersPanelOpen ? (
             <>
               <button
                 onClick={() => setParametersPanelOpen(false)}
-                className="absolute left-3 top-3 z-30 p-1.5 rounded-md hover:bg-cadio-border/50 text-cadio-muted transition-colors"
+                className="absolute right-3 top-3 z-30 rounded-md p-1.5 text-cadio-muted transition-colors hover:bg-cadio-border/40 hover:text-white"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" /></svg>
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
               </button>
               <ObjectInspector />
             </>
           ) : (
-            <button
-              onClick={() => setParametersPanelOpen(true)}
-              className="p-2.5 rounded-lg border border-cadio-border bg-cadio-surface text-[10px] font-bold text-cadio-muted transition-all hover:border-cadio-accent hover:text-white"
-            >
-              PROPS
+            <button onClick={() => setParametersPanelOpen(true)} className="rounded-lg border border-cadio-border/50 p-2 text-[11px] font-semibold text-cadio-muted transition-colors hover:text-white" title="Inspector">
+              ≡
             </button>
           )}
         </aside>
@@ -833,50 +800,30 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
       {/* Mobile layout */}
       <div className="md:hidden flex h-[100dvh] w-full flex-col bg-cadio-bg overflow-hidden">
         {/* Top bar */}
-        <div className="flex items-center justify-between border-b border-cadio-border/50 bg-cadio-surface/95 px-4 py-3 backdrop-blur-xl">
-          <button type="button" onClick={onHome} className="flex items-center gap-3 min-w-0 text-left group">
-            <div className="h-8 w-8 flex items-center justify-center rounded-lg bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20">C</div>
-            <div className="min-w-0">
-              <span className="block text-[10px] font-black tracking-widest text-cadio-muted uppercase leading-none mb-1">Cadio</span>
-              <span className="block truncate text-xs font-bold text-white leading-none">{projectTitle}</span>
-            </div>
+        <div className="flex h-14 items-center justify-between border-b border-cadio-border/30 bg-cadio-surface/90 px-4 backdrop-blur-xl">
+          <button type="button" onClick={onHome} className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cadio-accent text-sm font-bold text-white">C</div>
+            <span className="truncate text-sm font-semibold text-white">{projectTitle}</span>
           </button>
           <div className="flex shrink-0 gap-2">
-            <button
-              onClick={() => setMobileExportOpen(true)}
-              className="px-4 py-2 rounded-lg bg-white text-cadio-bg text-[10px] font-black uppercase tracking-wider shadow-lg"
-            >
-              Export
-            </button>
-            <button
-              onClick={() => setMobileEditOpen(true)}
-              className="p-2 rounded-lg border border-cadio-border bg-cadio-surface text-cadio-muted"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+            <button onClick={() => setMobileExportOpen(true)} className="h-8 rounded-lg bg-white px-4 text-xs font-bold text-cadio-bg">Export</button>
+            <button onClick={() => setMobileEditOpen(true)} className="rounded-lg border border-cadio-border/50 p-2 text-cadio-muted transition-colors hover:text-white">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
             </button>
           </div>
         </div>
 
-        {/* Quick Toolbar */}
-        <div className="flex gap-2 overflow-x-auto border-b border-cadio-border/30 bg-cadio-bg/95 px-4 py-2.5 scrollbar-none">
+        {/* Quick toolbar */}
+        <div className="flex gap-2 overflow-x-auto border-b border-cadio-border/30 bg-cadio-bg/90 px-4 py-2 scrollbar-none">
           {TRANSFORM_MODES.map((mode) => (
-            <button
-              key={mode.id}
-              onClick={() => setTransformMode(mode.id)}
-              className={`shrink-0 h-9 rounded-lg px-4 text-[10px] font-bold uppercase tracking-wider transition-all ${
-                transformMode === mode.id ? "bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20" : "bg-cadio-surface border border-cadio-border text-cadio-muted"
-              }`}
-            >
+            <button key={mode.id} onClick={() => setTransformMode(mode.id)}
+              className={`h-8 shrink-0 rounded-lg px-3 text-xs font-medium transition-all ${transformMode === mode.id ? "bg-cadio-accent text-white" : "border border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-white"}`}>
               {mode.label}
             </button>
           ))}
-          <div className="w-px bg-cadio-border/50 mx-1" />
-          <button
-            onClick={() => setShowMeasurements((v) => !v)}
-            className={`shrink-0 h-9 rounded-lg px-4 text-[10px] font-bold uppercase tracking-wider transition-all ${
-              showMeasurements ? "bg-white text-cadio-bg" : "bg-cadio-surface border border-cadio-border text-cadio-muted"
-            }`}
-          >
+          <div className="mx-1 w-px bg-cadio-border/40" />
+          <button onClick={() => setShowMeasurements((v) => !v)}
+            className={`h-8 shrink-0 rounded-lg px-3 text-xs font-medium transition-all ${showMeasurements ? "bg-white text-cadio-bg" : "border border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-white"}`}>
             Measure
           </button>
         </div>
