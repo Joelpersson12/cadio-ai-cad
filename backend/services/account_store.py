@@ -179,13 +179,27 @@ def _row_value(row: sqlite3.Row, key: str, fallback: Any) -> Any:
     return row[key] if key in row.keys() and row[key] is not None else fallback
 
 
+def _admin_emails() -> set[str]:
+    raw = os.environ.get("CADIO_ADMIN_EMAILS", "")
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
 def _account_from_row(row: sqlite3.Row) -> dict[str, Any]:
     plan = _row_value(row, "plan", "free")
+    email = row["email"] or ""
+
+    # Admin accounts always get unlimited access
+    if email.lower() in _admin_emails():
+        plan = "unlimited"
+
     downloads_used = max(0, int(_row_value(row, "downloads_used", 0)))
     download_limit = int(_row_value(row, "download_limit", FREE_DOWNLOAD_LIMIT))
     monthly_downloads_used = max(0, int(_row_value(row, "monthly_downloads_used", 0)))
 
-    if plan == "pro":
+    if plan == "unlimited":
+        can_download = True
+        downloads_remaining = None
+    elif plan == "pro":
         can_download = monthly_downloads_used < PRO_MONTHLY_LIMIT
         downloads_remaining = max(0, PRO_MONTHLY_LIMIT - monthly_downloads_used)
     elif download_limit < 0:
