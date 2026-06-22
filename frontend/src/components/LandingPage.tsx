@@ -936,11 +936,12 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               <a href="#workflow" className="transition-colors hover:text-white">{text.nav.workflow}</a>
               <a href="#pricing" className="transition-colors hover:text-white">{text.nav.pricing}</a>
             </nav>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Language selector — hidden on mobile to avoid crowding */}
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as Language)}
-                className="h-9 rounded-lg px-2 text-xs outline-none transition-colors"
+                className="hidden sm:block h-9 rounded-lg px-2 text-xs outline-none transition-colors"
                 style={{
                   background: "rgba(43,184,220,0.06)",
                   border: "1px solid rgba(43,184,220,0.15)",
@@ -953,20 +954,21 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               </select>
               {isAuthed ? (
                 <>
-                  <ProfileAvatar size={36} onClick={() => setProfileOpen(true)} />
+                  <ProfileAvatar size={32} onClick={() => setProfileOpen(true)} />
                   <button
                     onClick={onStartBuilding}
-                    className="h-9 rounded-lg px-5 text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.97]"
+                    className="h-8 sm:h-9 rounded-lg px-3 sm:px-5 text-xs sm:text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.97]"
                     style={{ background: ACCENT, color: BG, boxShadow: `0 2px 20px ${ACCENT_DIM}0.4)` }}
                   >
-                    Open Builder
+                    <span className="sm:hidden">Builder</span>
+                    <span className="hidden sm:inline">Open Builder</span>
                   </button>
                 </>
               ) : (
                 <>
                   <button
                     onClick={() => setAuthMode("login")}
-                    className="h-9 rounded-lg px-4 text-sm font-medium transition-all hover:text-white"
+                    className="h-8 sm:h-9 rounded-lg px-3 sm:px-4 text-xs sm:text-sm font-medium transition-all hover:text-white"
                     style={{
                       background: "rgba(255,255,255,0.04)",
                       border: "1px solid rgba(255,255,255,0.08)",
@@ -977,10 +979,11 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   </button>
                   <button
                     onClick={onStartBuilding}
-                    className="h-9 rounded-lg px-5 text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.97]"
+                    className="h-8 sm:h-9 rounded-lg px-3 sm:px-5 text-xs sm:text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.97]"
                     style={{ background: ACCENT, color: BG, boxShadow: `0 2px 20px ${ACCENT_DIM}0.4)` }}
                   >
-                    {text.nav.start}
+                    <span className="sm:hidden">Build</span>
+                    <span className="hidden sm:inline">{text.nav.start}</span>
                   </button>
                 </>
               )}
