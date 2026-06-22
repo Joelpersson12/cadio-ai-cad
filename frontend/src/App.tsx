@@ -8,6 +8,7 @@ import AiPanel from "./components/AiPanel";
 import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
 import LandingPage from "./components/LandingPage";
+import { CadioMark } from "./components/CadioLogo";
 import LegalPage from "./components/LegalPage";
 import ScalePercentInput from "./components/ScalePercentInput";
 import ExportFlowDialog, { ExportFlowContent } from "./components/ExportFlow";
@@ -545,7 +546,8 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         <div className="absolute inset-x-0 top-0 z-20 flex h-14 items-center justify-between px-5 pointer-events-none">
           {/* Logo + home */}
           <button onClick={onHome} className="pointer-events-auto flex items-center gap-2 rounded-xl bg-cadio-surface/80 border border-cadio-border/50 px-3 py-2 backdrop-blur-sm hover:border-cadio-accent/40 transition-colors">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-cadio-accent text-xs font-bold text-cadio-bg">C</span>
+            <span className="text-cadio-accent flex-shrink-0"><CadioMark size={20} /></span>
+            <span className="h-4 w-px bg-cadio-border/60" />
             <span className="text-sm font-medium text-cadio-text max-w-[160px] truncate">{projectTitle}</span>
           </button>
 
