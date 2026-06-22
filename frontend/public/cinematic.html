@@ -216,6 +216,54 @@ body {
   background: #2bb8dc; border-radius: 2px;
   transition: height 0.1s linear;
 }
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  body { cursor: auto; }
+  * { cursor: auto !important; }
+  .cursor-inner, .cursor-outer { display: none; }
+
+  .cinematic-container { padding: 0 20px 32px 20px; }
+
+  .main-header { padding: 16px 0; }
+  .brand { font-size: 13px; letter-spacing: 4px; }
+  .header-nav { display: none; }
+  .contact-btn { padding: 9px 18px; font-size: 9px; }
+
+  .slide-title { font-size: 13vw; letter-spacing: 1px; margin-bottom: 14px; }
+
+  /* All slides: left-aligned, full width, simple stack */
+  .slide { bottom: 8%; left: 0 !important; width: 100% !important; max-width: 100% !important; }
+
+  #slide-1 .slide-title { margin-left: 20px; }
+  #slide-1 .desc-row { display: block; }
+  #slide-1 .col-1 {
+    margin-left: 20px;
+    width: calc(100% - 40px);
+    max-width: calc(100% - 40px);
+  }
+  #slide-1 .col-2 { display: none; }
+
+  #slide-2 .slide-title { margin-left: 20px !important; }
+  #slide-2 .slide-desc {
+    margin-left: 20px !important;
+    width: calc(100% - 40px) !important;
+    max-width: calc(100% - 40px) !important;
+  }
+
+  #slide-3 { left: 20px !important; width: calc(100% - 40px) !important; max-width: calc(100% - 40px) !important; }
+  #slide-3 .slide-title { white-space: normal; }
+
+  #slide-4 { left: 20px !important; max-width: calc(100% - 40px) !important; }
+
+  .slide-desc { font-size: 14px; line-height: 1.65; }
+
+  .grid-lines { left: 16px; right: 16px; width: calc(100% - 32px); }
+  /* hide middle grid lines on mobile, keep first and last */
+  .grid-line:nth-child(2),
+  .grid-line:nth-child(3),
+  .grid-line:nth-child(4) { display: none; }
+}
 </style>
 </head>
 <body>
