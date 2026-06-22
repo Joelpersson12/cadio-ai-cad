@@ -6,7 +6,9 @@ provides real-time scene sync.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 import re
 import traceback
 from typing import Any
@@ -99,6 +101,8 @@ from backend.services.ws_manager import broadcast, connect, disconnect
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+GENERATION_TIMEOUT_SECONDS = int(os.environ.get("GENERATION_TIMEOUT", "45"))
 
 
 # ---------------------------------------------------------------------------
@@ -273,127 +277,139 @@ def search_examples(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/api/generate", response_model=None)
-async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
-    try:
-        lock = acquire_lock()
-        with lock:
-            session = get_or_create_session(data.session_id)
-            save_undo_snapshot(session)
-            session["printer"] = normalize_printer(data.printer)
-            session["fit"] = bool(data.fit)
+def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
+    """Synchronous generation work — runs in a thread pool to avoid blocking the event loop."""
+    lock = acquire_lock()
+    with lock:
+        session = get_or_create_session(data.session_id)
+        save_undo_snapshot(session)
+        session["printer"] = normalize_printer(data.printer)
+        session["fit"] = bool(data.fit)
 
-            prompt = (data.prompt or "").strip().lower()
-            command_prompt = f"{prompt} {normalize_source_query(data.prompt)}".strip().lower()
+        prompt = (data.prompt or "").strip().lower()
+        command_prompt = f"{prompt} {normalize_source_query(data.prompt)}".strip().lower()
 
-            # Special commands
-            if "duplicate" in command_prompt:
-                duplicate_object(session)
-                actions = ["duplicate selected object"]
-            elif "delete object" in command_prompt or "remove object" in command_prompt:
-                selected_id = session["selected_object_id"]
-                if remove_object(session, selected_id):
-                    actions = ["delete selected object"]
-                else:
-                    actions = ["cannot delete only object"]
-            elif any(kw in command_prompt for kw in ("new object", "add object", "new part")):
-                obj = create_object(f"part_{len(session['object_order']) + 1}")
+        # Special commands
+        if "duplicate" in command_prompt:
+            duplicate_object(session)
+            actions = ["duplicate selected object"]
+        elif "delete object" in command_prompt or "remove object" in command_prompt:
+            selected_id = session["selected_object_id"]
+            if remove_object(session, selected_id):
+                actions = ["delete selected object"]
+            else:
+                actions = ["cannot delete only object"]
+        elif any(kw in command_prompt for kw in ("new object", "add object", "new part")):
+            obj = create_object(f"part_{len(session['object_order']) + 1}")
+            add_object(session, obj)
+            session["selected_object_id"] = obj["id"]
+            actions = ["create new object"]
+        elif session["object_order"] and is_bottom_plate_prompt(data.prompt):
+            actions = add_bottom_plate_from_prompt(session, data.prompt)
+        elif session["object_order"] and is_text_label_prompt(data.prompt):
+            actions = add_text_label_from_prompt(session, data.prompt)
+        elif is_structural_ai_edit_prompt(data.prompt):
+            if not session["object_order"]:
+                obj = create_object("part_1")
                 add_object(session, obj)
                 session["selected_object_id"] = obj["id"]
-                actions = ["create new object"]
-            elif session["object_order"] and is_bottom_plate_prompt(data.prompt):
-                actions = add_bottom_plate_from_prompt(session, data.prompt)
-            elif session["object_order"] and is_text_label_prompt(data.prompt):
-                actions = add_text_label_from_prompt(session, data.prompt)
-            elif is_structural_ai_edit_prompt(data.prompt):
+            actions = apply_structural_ai_edit_from_prompt(session, data.prompt)
+            if not actions:
+                actions = ["edit skipped: command was not specific enough"]
+        else:
+            edit_only = is_edit_only_prompt(data.prompt)
+            if edit_only:
                 if not session["object_order"]:
                     obj = create_object("part_1")
                     add_object(session, obj)
                     session["selected_object_id"] = obj["id"]
-                actions = apply_structural_ai_edit_from_prompt(session, data.prompt)
-                if not actions:
-                    actions = ["edit skipped: command was not specific enough"]
+                elif not session.get("selected_object_id") or session["selected_object_id"] not in session["objects"]:
+                    session["selected_object_id"] = session["object_order"][0]
+                    obj = get_selected_object(session)
+                else:
+                    obj = get_selected_object(session)
             else:
-                edit_only = is_edit_only_prompt(data.prompt)
-                if edit_only:
-                    if not session["object_order"]:
-                        obj = create_object("part_1")
-                        add_object(session, obj)
-                        session["selected_object_id"] = obj["id"]
-                    elif not session.get("selected_object_id") or session["selected_object_id"] not in session["objects"]:
-                        session["selected_object_id"] = session["object_order"][0]
-                        obj = get_selected_object(session)
-                    else:
-                        obj = get_selected_object(session)
-                else:
-                    obj = prepare_generation_target(
-                        session,
-                        f"generated_{len(session['edit_history']) + 1}",
-                    )
-                source_actions = [] if edit_only else replace_object_with_source_model(session, obj, data.prompt)
-                if source_actions:
-                    actions = source_actions
-                else:
-                    parsed = parse_ai_command(data.prompt, session, obj)
-                    previous_parameters = dict(obj.get("parameters", {}))
-                    obj["parameters"] = parsed["parameters"]
-                    obj["feature_tree"] = parsed["feature_tree"]
-                    obj["transform"] = parsed["transform"]
-                    changed_keys = {
-                        key
-                        for key, value in parsed["parameters"].items()
-                        if previous_parameters.get(key) != value
-                    }
-                    if not update_imported_source_dimensions(obj, changed_keys):
-                        rebuild_object(obj)
+                obj = prepare_generation_target(
+                    session,
+                    f"generated_{len(session['edit_history']) + 1}",
+                )
+            source_actions = [] if edit_only else replace_object_with_source_model(session, obj, data.prompt)
+            if source_actions:
+                actions = source_actions
+            else:
+                parsed = parse_ai_command(data.prompt, session, obj)
+                previous_parameters = dict(obj.get("parameters", {}))
+                obj["parameters"] = parsed["parameters"]
+                obj["feature_tree"] = parsed["feature_tree"]
+                obj["transform"] = parsed["transform"]
+                changed_keys = {
+                    key
+                    for key, value in parsed["parameters"].items()
+                    if previous_parameters.get(key) != value
+                }
+                if not update_imported_source_dimensions(obj, changed_keys):
+                    rebuild_object(obj)
 
-                    assembly_actions = replace_object_with_template_assembly(
+                assembly_actions = replace_object_with_template_assembly(
+                    session,
+                    obj,
+                    None if edit_only else parsed.get("template"),
+                    parsed["parameters"],
+                )
+                research_actions = []
+                if not assembly_actions and not edit_only:
+                    research_actions = replace_object_with_research_assembly(
                         session,
                         obj,
-                        None if edit_only else parsed.get("template"),
+                        parsed.get("research_brief"),
                         parsed["parameters"],
                     )
-                    research_actions = []
-                    if not assembly_actions and not edit_only:
-                        research_actions = replace_object_with_research_assembly(
-                            session,
-                            obj,
-                            parsed.get("research_brief"),
-                            parsed["parameters"],
-                        )
-                    if assembly_actions or research_actions:
-                        actions = parsed["actions"] + assembly_actions + research_actions
+                if assembly_actions or research_actions:
+                    actions = parsed["actions"] + assembly_actions + research_actions
+                else:
+                    # Validate generated geometry
+                    validation = GeometryValidator.validate(obj["shape"])
+                    if not validation.is_valid:
+                        logger.warning(f"Generated model failed validation: {validation.issues}")
+                        actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
                     else:
-                        # Validate generated geometry
-                        validation = GeometryValidator.validate(obj["shape"])
-                        if not validation.is_valid:
-                            logger.warning(f"Generated model failed validation: {validation.issues}")
-                            # Add validation info to actions
-                            actions = parsed["actions"] + [f"Warning: {issue}" for issue in validation.issues]
-                        else:
-                            actions = parsed["actions"]
-                            if validation.warnings:
-                                actions += [f"Note: {w}" for w in validation.warnings]
+                        actions = parsed["actions"]
+                        if validation.warnings:
+                            actions += [f"Note: {w}" for w in validation.warnings]
 
-                        # Store validation metrics
-                        obj["validation"] = validation.to_dict()
+                    obj["validation"] = validation.to_dict()
 
-                if not edit_only and obj.get("id") in session["objects"]:
-                    session["selected_object_id"] = ""
+            if not edit_only and obj.get("id") in session["objects"]:
+                session["selected_object_id"] = ""
 
-            if session.get("fit"):
-                auto_fit_session(session)
+        if session.get("fit"):
+            auto_fit_session(session)
 
-            bump_version(session)
-            add_history(session, data.prompt, actions)
-            payload = build_scene_payload(
-                session, include_mesh=True, model_updated=True
-            )
+        bump_version(session)
+        add_history(session, data.prompt, actions)
+        payload = build_scene_payload(
+            session, include_mesh=True, model_updated=True
+        )
 
-        # Broadcast outside lock
-        await broadcast(session["session_id"], payload.model_dump())
+    return payload, session["session_id"]
+
+
+@router.post("/api/generate", response_model=None)
+async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
+    try:
+        payload, session_id = await asyncio.wait_for(
+            asyncio.to_thread(_sync_generate, data),
+            timeout=GENERATION_TIMEOUT_SECONDS,
+        )
+        await broadcast(session_id, payload.model_dump())
         return payload
-
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Generation timed out after %ds for prompt: %r",
+            GENERATION_TIMEOUT_SECONDS,
+            data.prompt,
+        )
+        return _error(504, f"Generation timed out after {GENERATION_TIMEOUT_SECONDS}s. Please try a simpler prompt.")
     except Exception as exc:
         traceback.print_exc()
         return _error(500, str(exc))
