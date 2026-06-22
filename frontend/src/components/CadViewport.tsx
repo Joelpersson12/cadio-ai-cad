@@ -2,7 +2,7 @@
  
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls, Environment } from "@react-three/drei";
+import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
 
@@ -12,14 +12,14 @@ const VIEW_COLORS = {
   plateEdge: "#2bb8dc",
   gridCell: "#1e2832",
   gridSection: "#2bb8dc",
-  neutralBody: "#b8c2cc",
+  neutralBody: "#d4d9e0",
   selectedBody: "#f0a020",
-  hoveredBody: "#cad4dc",
-  edgeSubtle: "#1a2530",
+  hoveredBody: "#dde3ea",
+  edgeSubtle: "#0a0d10",
   edgeStrong: "#2bb8dc",
-  edgeSelected: "#fff4d0",
-  edgeSelectedInk: "#5c3200",
-  edgeSelectedDetail: "#f5c070",
+  edgeSelected: "#ffd060",
+  edgeSelectedInk: "#7a4000",
+  edgeSelectedDetail: "#ffb830",
   edgeHover: "#5ac8e0",
   measure: "#f0f4f8",
   measureAccent: "#2bb8dc",
@@ -454,18 +454,14 @@ function ScaledMesh({
       }}
       onPointerOver={() => setHovered(true)}
       onPointerOut={() => setHovered(false)}
-      castShadow
-      receiveShadow={false}
     >
-      <meshPhysicalMaterial
+      <meshStandardMaterial
         color={visibleBodyColor(obj, selected, hovered)}
-        roughness={selected ? 0.40 : 0.52}
-        metalness={selected ? 0.06 : 0.03}
-        clearcoat={selected ? 0.40 : 0.15}
-        clearcoatRoughness={0.30}
-        envMapIntensity={selected ? 1.0 : 0.55}
-        emissive={selected ? "#7a4200" : hovered ? "#1a4a5a" : "#000000"}
-        emissiveIntensity={selected ? 0.06 : hovered ? 0.04 : 0}
+        roughness={selected ? 0.88 : 0.95}
+        metalness={0}
+        envMapIntensity={0}
+        emissive={selected ? "#3a1800" : "#000000"}
+        emissiveIntensity={selected ? 0.03 : 0}
         polygonOffset
         polygonOffsetFactor={1}
         polygonOffsetUnits={1}
@@ -914,25 +910,14 @@ export default function CadViewport({
         }}
         onPointerUp={() => setTransformDragging(false)}
       >
-      {/* Studio environment — drives reflections and IBL */}
-      <Environment preset="studio" />
-      {/* Key light — hard shadow from upper-right */}
-      <spotLight
-        position={[350, 600, 350]}
-        angle={0.18}
-        penumbra={0.65}
-        intensity={3.5}
-        color="#f0f6ff"
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-bias={-0.0005}
-      />
-      {/* Fill light — soft cool from left */}
-      <directionalLight position={[-400, 300, -200]} intensity={0.9} color="#a8d4f0" />
-      {/* Rim light from behind — accent cyan glow on edges */}
-      <pointLight position={[0, 200, -600]} intensity={1.2} color="#2bb8dc" />
-      {/* Top ambient */}
-      <hemisphereLight intensity={0.35} color="#e8f0ff" groundColor="#0a1520" />
+      {/* Key light — creates clear face differentiation */}
+      <directionalLight position={[300, 500, 300]} intensity={2.8} color="#f5f8ff" />
+      {/* Fill light — soft cool from left, reduces harsh shadows */}
+      <directionalLight position={[-350, 250, -150]} intensity={1.1} color="#c8dff0" />
+      {/* Back/rim — subtle edge separation */}
+      <directionalLight position={[0, 150, -500]} intensity={0.5} color="#ffffff" />
+      {/* Ambient — low so face contrast is strong (like Shapr3D) */}
+      <hemisphereLight intensity={0.18} color="#e8eef5" groundColor="#0a0d10" />
  
       {/* Refined Grid */}
       <Grid
