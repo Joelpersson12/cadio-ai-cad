@@ -1323,14 +1323,26 @@ class ProviderRegistry:
             ),
         }
     
+    # Module-level cache: normalized_query → (monotonic_timestamp, sorted_results)
+    _search_cache: dict[str, tuple[float, list]] = {}
+    _SEARCH_CACHE_TTL = 45.0
+
     def search_all(self, query: str, limit: int = 5) -> list[ExampleDesign]:
         """Search all available providers in parallel with a total 4-second deadline."""
         from concurrent.futures import ThreadPoolExecutor, wait as _wait
-        import time as _time
 
         search_query = normalize_source_query(query) or query
+        cache_key = search_query.lower().strip()
+        now = time.monotonic()
+
+        cached = self._search_cache.get(cache_key)
+        if cached is not None:
+            ts, cached_results = cached
+            if now - ts < self._SEARCH_CACHE_TTL:
+                return cached_results[:limit]
+
         variants = _query_variants(search_query) or [search_query]
-        per_query_limit = max(limit * 2, 10)
+        per_query_limit = max(limit * 2, 12)
 
         tasks = [
             (provider, variant)
@@ -1347,11 +1359,11 @@ class ProviderRegistry:
                 return []
 
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
-        deadline = _time.monotonic() + 4.0
+        deadline = time.monotonic() + 4.0
 
         with ThreadPoolExecutor(max_workers=16) as executor:
             futures = {executor.submit(_search_one, task) for task in tasks}
-            remaining = max(0.0, deadline - _time.monotonic())
+            remaining = max(0.0, deadline - time.monotonic())
             done, not_done = _wait(futures, timeout=remaining)
             for f in not_done:
                 f.cancel()
@@ -1369,7 +1381,9 @@ class ProviderRegistry:
 
         results = list(ranked.values())
         results.sort(key=lambda item: item[0], reverse=True)
-        return [design for _, design in results[:limit]]
+        all_results = [design for _, design in results]
+        self._search_cache[cache_key] = (time.monotonic(), all_results)
+        return all_results[:limit]
     
     def get_popular_all(self, category: str, limit: int = 5) -> list[ExampleDesign]:
         """Get popular designs from all available providers."""

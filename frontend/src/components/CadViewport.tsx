@@ -2,7 +2,7 @@
  
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls, Environment, ContactShadows } from "@react-three/drei";
+import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
 
@@ -544,17 +544,19 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
           color={VIEW_COLORS.plate}
           roughness={0.9}
           metalness={0.0}
+          envMapIntensity={0}
         />
       </mesh>
       {/* Top surface highlight strip */}
       <mesh position={[0, 0.02, 0]}>
         <boxGeometry args={[px, 0.04, py]} />
         <meshStandardMaterial
-          color="#2a3a4e"
-          roughness={0.7}
-          metalness={0.1}
-          emissive="#0d1a27"
-          emissiveIntensity={0.3}
+          color="#1e2a3a"
+          roughness={0.8}
+          metalness={0.0}
+          emissive="#0a141e"
+          emissiveIntensity={0.25}
+          envMapIntensity={0}
         />
       </mesh>
       {/* Border frame — accent color, clearly visible */}
@@ -947,15 +949,6 @@ export default function CadViewport({
         position={[0, 0.05, 0]}
       />
  
-      <ContactShadows
-        position={[0, 0.02, 0]}
-        opacity={0.55}
-        scale={[printerVolume[0] * 1.5, printerVolume[1] * 1.5]}
-        blur={2.5}
-        far={80}
-        color="#000000"
-        resolution={512}
-      />
       <BuildPlate volume={printerVolume} />
       <SketchPlane
         active={expertMode}

@@ -439,15 +439,15 @@ def _parse_with_gpt(
         )
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
             ],
             temperature=0.1,
-            max_tokens=1000,
+            max_tokens=600,
             response_format={"type": "json_object"},
-            timeout=20,
+            timeout=12,
         )
 
         raw = response.choices[0].message.content or "{}"
