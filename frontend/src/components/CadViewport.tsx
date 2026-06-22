@@ -535,29 +535,15 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
   const [px, py] = volume;
   return (
     <group>
-      {/* Solid plate */}
+      {/* Plate — meshBasicMaterial ignores lighting, looks same from all angles */}
       <mesh position={[0, -0.6, 0]}>
         <boxGeometry args={[px, 1.2, py]} />
-        <meshStandardMaterial
-          color={VIEW_COLORS.plate}
-          roughness={0.9}
-          metalness={0.0}
-          envMapIntensity={0}
-          side={THREE.DoubleSide}
-        />
+        <meshBasicMaterial color={VIEW_COLORS.plate} side={THREE.DoubleSide} />
       </mesh>
-      {/* Top surface highlight strip */}
+      {/* Top/bottom surface tint */}
       <mesh position={[0, 0.02, 0]}>
         <boxGeometry args={[px, 0.04, py]} />
-        <meshStandardMaterial
-          color="#1e2a3a"
-          roughness={0.8}
-          metalness={0.0}
-          emissive="#0a141e"
-          emissiveIntensity={0.5}
-          envMapIntensity={0}
-          side={THREE.DoubleSide}
-        />
+        <meshBasicMaterial color="#1e2a3a" side={THREE.DoubleSide} />
       </mesh>
       {/* Border frame */}
       <lineSegments position={[0, 0.04, 0]}>
@@ -568,7 +554,7 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       {([ [-px/2, 0, -py/2], [px/2, 0, -py/2], [-px/2, 0, py/2], [px/2, 0, py/2] ] as [number,number,number][]).map((pos, i) => (
         <mesh key={i} position={pos}>
           <sphereGeometry args={[2.5, 8, 8]} />
-          <meshStandardMaterial color={VIEW_COLORS.plateEdge} emissive={VIEW_COLORS.plateEdge} emissiveIntensity={0.4} side={THREE.DoubleSide} />
+          <meshBasicMaterial color={VIEW_COLORS.plateEdge} />
         </mesh>
       ))}
     </group>
