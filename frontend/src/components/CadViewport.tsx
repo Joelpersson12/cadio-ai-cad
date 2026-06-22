@@ -535,18 +535,13 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
   const [px, py] = volume;
   return (
     <group>
-      {/* Plate — meshBasicMaterial ignores lighting, looks same from all angles */}
-      <mesh position={[0, -0.6, 0]}>
-        <boxGeometry args={[px, 1.2, py]} />
-        <meshBasicMaterial color={VIEW_COLORS.plate} side={THREE.DoubleSide} />
-      </mesh>
-      {/* Top/bottom surface tint */}
-      <mesh position={[0, 0.02, 0]}>
-        <boxGeometry args={[px, 0.04, py]} />
-        <meshBasicMaterial color="#1e2a3a" side={THREE.DoubleSide} />
+      {/* Flat plane — FrontSide only, so it vanishes when camera is below */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
+        <planeGeometry args={[px, py]} />
+        <meshBasicMaterial color={VIEW_COLORS.plate} side={THREE.FrontSide} />
       </mesh>
       {/* Border frame */}
-      <lineSegments position={[0, 0.04, 0]}>
+      <lineSegments position={[0, 0, 0]}>
         <edgesGeometry args={[new THREE.BoxGeometry(px, 0.01, py)]} />
         <lineBasicMaterial color={VIEW_COLORS.plateEdge} />
       </lineSegments>
@@ -911,7 +906,6 @@ export default function CadViewport({
       {/* Ambient hemisphere — warmer ground so floor-facing faces stay visible */}
       <hemisphereLight intensity={0.35} color="#dde8f0" groundColor="#3a4a5a" />
  
-      {/* Grid — top side */}
       <Grid
         args={[printerVolume[0] * 3, printerVolume[1] * 3]}
         cellSize={SKETCH_GRID_STEP_MM}
@@ -924,21 +918,6 @@ export default function CadViewport({
         fadeStrength={1.5}
         infiniteGrid={false}
         position={[0, 0.05, 0]}
-      />
-      {/* Grid — bottom side (rotated 180° so visible from below) */}
-      <Grid
-        args={[printerVolume[0] * 3, printerVolume[1] * 3]}
-        cellSize={SKETCH_GRID_STEP_MM}
-        cellThickness={1}
-        cellColor={VIEW_COLORS.gridCell}
-        sectionSize={50}
-        sectionThickness={1.5}
-        sectionColor={VIEW_COLORS.gridSection}
-        fadeDistance={800}
-        fadeStrength={1.5}
-        infiniteGrid={false}
-        position={[0, -0.05, 0]}
-        rotation={[Math.PI, 0, 0]}
       />
  
       <BuildPlate volume={printerVolume} />
