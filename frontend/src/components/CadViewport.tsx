@@ -12,14 +12,14 @@ const VIEW_COLORS = {
   plateEdge: "#2bb8dc",
   gridCell: "#1e2832",
   gridSection: "#2bb8dc",
-  neutralBody: "#d2d6da",
-  selectedBody: "#2bb8dc",
-  hoveredBody: "#e2e6ea",
+  neutralBody: "#b8c2cc",
+  selectedBody: "#f0a020",
+  hoveredBody: "#cad4dc",
   edgeSubtle: "#1a2530",
   edgeStrong: "#2bb8dc",
-  edgeSelected: "#ffffff",
-  edgeSelectedInk: "#0c3d50",
-  edgeSelectedDetail: "#7dd3e8",
+  edgeSelected: "#fff4d0",
+  edgeSelectedInk: "#5c3200",
+  edgeSelectedDetail: "#f5c070",
   edgeHover: "#5ac8e0",
   measure: "#f0f4f8",
   measureAccent: "#2bb8dc",
@@ -459,13 +459,13 @@ function ScaledMesh({
     >
       <meshPhysicalMaterial
         color={visibleBodyColor(obj, selected, hovered)}
-        roughness={selected ? 0.38 : 0.60}
-        metalness={selected ? 0.06 : 0.02}
-        clearcoat={selected ? 0.45 : 0.1}
-        clearcoatRoughness={0.35}
-        envMapIntensity={selected ? 1.2 : 0.6}
-        emissive={selected ? "#2bb8dc" : hovered ? "#2bb8dc" : "#000000"}
-        emissiveIntensity={selected ? 0.07 : hovered ? 0.025 : 0}
+        roughness={selected ? 0.40 : 0.52}
+        metalness={selected ? 0.06 : 0.03}
+        clearcoat={selected ? 0.40 : 0.15}
+        clearcoatRoughness={0.30}
+        envMapIntensity={selected ? 1.0 : 0.55}
+        emissive={selected ? "#7a4200" : hovered ? "#1a4a5a" : "#000000"}
+        emissiveIntensity={selected ? 0.06 : hovered ? 0.04 : 0}
         polygonOffset
         polygonOffsetFactor={1}
         polygonOffsetUnits={1}

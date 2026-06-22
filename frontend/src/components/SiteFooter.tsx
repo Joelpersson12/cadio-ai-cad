@@ -1,3 +1,5 @@
+import type React from "react";
+
 const legalLinks = [
   { label: "Terms", href: "/terms" },
   { label: "Privacy", href: "/privacy" },
@@ -6,10 +8,17 @@ const legalLinks = [
 ];
 
 const productLinks = [
-  { label: "Builder", href: "/app" },
+  { label: "Builder", href: "/#builder" },
   { label: "Examples", href: "/#workflow" },
   { label: "Pricing", href: "/#pricing" },
 ];
+
+function spaNavigate(href: string, e: React.MouseEvent) {
+  if (href.startsWith("/#")) return; // hash links handled natively
+  e.preventDefault();
+  window.history.pushState({}, "", href);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
 
 export default function SiteFooter({ compact = false }: { compact?: boolean }) {
   if (compact) {
@@ -22,7 +31,7 @@ export default function SiteFooter({ compact = false }: { compact?: boolean }) {
           </div>
           <nav className="flex flex-wrap gap-4">
             {legalLinks.map((link) => (
-              <a key={link.href} href={link.href} className="hover:text-white transition-colors">
+              <a key={link.href} href={link.href} onClick={(e) => spaNavigate(link.href, e)} className="hover:text-white transition-colors">
                 {link.label}
               </a>
             ))}
@@ -77,7 +86,7 @@ export default function SiteFooter({ compact = false }: { compact?: boolean }) {
             <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-white/40">Legal</p>
             <nav className="flex flex-col gap-3">
               {legalLinks.map((link) => (
-                <a key={link.href} href={link.href} className="text-sm text-white/60 hover:text-white transition-colors">
+                <a key={link.href} href={link.href} onClick={(e) => spaNavigate(link.href, e)} className="text-sm text-white/60 hover:text-white transition-colors">
                   {link.label}
                 </a>
               ))}
