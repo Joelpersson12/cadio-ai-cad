@@ -227,7 +227,7 @@ function MobileEditSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const { objects, selectedObjectId, materials, printSettings, patchParam, patchAppearance, setSelectedScalePercent, onToggleFeature } = useCadStore();
+  const { objects, selectedObjectId, materials, printSettings, patchParam, patchAppearance, setSelectedScalePercent, onToggleFeature, printer, printers, setPrinter } = useCadStore();
   const obj = objects.find((o) => o.id === selectedObjectId) ?? objects[0];
   const materialEntries: Array<[string, MaterialProfile]> = Object.entries(materials).length
     ? Object.entries(materials)
@@ -259,6 +259,21 @@ function MobileEditSheet({
 
         <div className="px-5 pb-8 flex flex-col gap-4">
           <h3 className="text-sm font-semibold text-cadio-text">Edit Model</h3>
+
+          {Object.keys(printers).length > 0 && (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-cadio-muted">Printer</span>
+              <select
+                value={printer}
+                onChange={(e) => void setPrinter(e.target.value)}
+                className="h-10 rounded-lg border border-cadio-border bg-cadio-surface px-3 text-sm text-cadio-text outline-none"
+              >
+                {Object.entries(printers).map(([key, p]) => (
+                  <option value={key} key={key}>{p.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
@@ -565,7 +580,19 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
           {/* Printer + Export */}
           <div className="pointer-events-auto flex items-center gap-3">
-            <span className="text-xs text-cadio-muted">{printerProfile?.name ?? "Standard"}</span>
+            {Object.keys(printers).length > 0 ? (
+              <select
+                value={printer}
+                onChange={(e) => void setPrinter(e.target.value)}
+                className="h-7 rounded-md border border-cadio-border/40 bg-cadio-surface/70 px-2 text-xs text-cadio-muted backdrop-blur-sm outline-none hover:border-cadio-accent/40 transition-colors cursor-pointer"
+              >
+                {Object.entries(printers).map(([key, p]) => (
+                  <option value={key} key={key}>{p.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-xs text-cadio-muted">{printerProfile?.name ?? "Standard"}</span>
+            )}
             <button onClick={() => setShareOpen(true)} className="text-xs font-medium text-cadio-muted hover:text-cadio-text transition-colors">Share</button>
             <button onClick={() => setExportOpen(true)} className="h-8 rounded-lg bg-cadio-accent px-4 text-xs font-bold text-cadio-bg hover:bg-cadio-accent-hover transition-colors">Export</button>
           </div>
@@ -617,6 +644,22 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
               <button onClick={() => setExpertMode(true)} className={`flex-1 rounded-md py-2 text-xs font-semibold transition-all ${expertMode ? "bg-cadio-accent text-cadio-bg" : "text-cadio-muted hover:text-cadio-text"}`}>Expert</button>
             </div>
           </div>
+
+          {/* Printer */}
+          {Object.keys(printers).length > 0 && (
+            <div className="border-b border-cadio-border/30 px-4 py-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-cadio-muted">Printer</p>
+              <select
+                value={printer}
+                onChange={(e) => void setPrinter(e.target.value)}
+                className="w-full h-9 rounded-lg border border-cadio-border/40 bg-cadio-bg/60 px-2.5 text-sm text-cadio-text outline-none"
+              >
+                {Object.entries(printers).map(([key, p]) => (
+                  <option value={key} key={key}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Expert tools */}
           {expertMode && (

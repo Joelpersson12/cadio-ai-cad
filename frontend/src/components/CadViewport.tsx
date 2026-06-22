@@ -15,7 +15,7 @@ const VIEW_COLORS = {
   neutralBody: "#d4d9e0",
   selectedBody: "#f0a020",
   hoveredBody: "#dde3ea",
-  edgeSubtle: "#0a0d10",
+  edgeSubtle: "#1a2535",
   edgeStrong: "#2bb8dc",
   edgeSelected: "#ffd060",
   edgeSelectedInk: "#7a4000",
@@ -472,7 +472,7 @@ function ScaledMesh({
       <lineBasicMaterial
         color={selected ? VIEW_COLORS.edgeSelectedInk : hovered ? VIEW_COLORS.edgeHover : VIEW_COLORS.edgeSubtle}
         transparent
-        opacity={selected ? 0.8 : hovered ? 0.6 : 0.15}
+        opacity={selected ? 0.8 : hovered ? 0.65 : 0.5}
         depthTest
       />
     </lineSegments>
