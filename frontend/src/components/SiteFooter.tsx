@@ -46,7 +46,7 @@ export default function SiteFooter({ compact = false }: { compact?: boolean }) {
           <div className="lg:col-span-1">
             <div className="flex items-center gap-2 mb-4">
               <span className="text-lg font-bold tracking-tight text-white">Cadio</span>
-              <span className="rounded-full bg-[#00F0FF]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-[#00F0FF]">
+              <span className="rounded-full bg-[#2bb8dc]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-[#2bb8dc]">
                 Beta
               </span>
             </div>
@@ -90,12 +90,12 @@ export default function SiteFooter({ compact = false }: { compact?: boolean }) {
             <div className="flex flex-col gap-3">
               <a
                 href="mailto:support@cadio.net"
-                className="text-sm text-white/60 hover:text-[#00F0FF] transition-colors"
+                className="text-sm text-white/60 hover:text-[#2bb8dc] transition-colors"
               >
                 support@cadio.net
               </a>
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#00F0FF]/10 px-3 py-1 text-[11px] font-semibold text-[#00F0FF]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#00F0FF] animate-pulse" />
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#2bb8dc]/10 px-3 py-1 text-[11px] font-semibold text-[#2bb8dc]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#2bb8dc] animate-pulse" />
                 Early Access Open
               </span>
             </div>
