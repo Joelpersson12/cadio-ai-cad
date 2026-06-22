@@ -48,10 +48,13 @@ from backend.services.object_manager import (
 )
 from backend.services.print_profiles import material_profiles_response, normalize_material
 from backend.services.account_store import (
+    account_from_token,
+    consume_download,
     get_account_profile,
     load_saved_library,
     login_or_create_account,
     save_saved_library,
+    upgrade_plan,
 )
 from backend.services.prompt_translation import normalize_source_query
 from backend.services.session_manager import (
@@ -156,6 +159,7 @@ def auth_login(data: AuthRequest) -> dict[str, Any] | JSONResponse:
             email=data.email,
             phone=data.phone,
             password=data.password,
+            agreed_terms=data.agreed_terms,
         )
         return {"status": "ok", **result}
     except ValueError as exc:
@@ -815,8 +819,13 @@ def get_session_mesh(session_id: str) -> ScenePayload | JSONResponse:
 def export_model(
     session_id: str,
     fmt: str,
+    authorization: str | None = Header(default=None),
 ) -> FileResponse | JSONResponse:
     try:
+        token = _bearer_token(authorization)
+        if not token:
+            return _error(401, "Login required to download files.")
+
         fmt_key = fmt.strip().lower()
         if fmt_key not in SUPPORTED_FORMATS:
             return _error(400, f"Unsupported format. Supported: {SUPPORTED_FORMATS}")
@@ -828,6 +837,14 @@ def export_model(
                 return _error(404, "Session not found")
             path = export_assembly(session, fmt_key)
 
+        # Consume one download credit after exporting (raises on limit)
+        try:
+            consume_download(token)
+        except PermissionError as exc:
+            return _error(401, str(exc))
+        except ValueError as exc:
+            return _error(402, str(exc))
+
         return FileResponse(
             path,
             media_type=media_type_for(fmt_key),
@@ -836,6 +853,88 @@ def export_model(
     except Exception as exc:
         traceback.print_exc()
         return _error(500, str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Stripe
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/stripe/checkout", response_model=None)
+def stripe_checkout(
+    data: dict[str, Any],
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any] | JSONResponse:
+    import os
+    stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
+    if not stripe_key:
+        return _error(503, "Payment processing not configured")
+    try:
+        import stripe as stripe_lib
+        stripe_lib.api_key = stripe_key
+        token = _bearer_token(authorization)
+        account = account_from_token(token)
+        if account is None:
+            return _error(401, "Login required")
+        plan = str(data.get("plan", "pro")).lower()
+        price_ids = {
+            "pro": os.environ.get("STRIPE_PRICE_PRO", ""),
+            "unlimited": os.environ.get("STRIPE_PRICE_UNLIMITED", ""),
+        }
+        price_id = price_ids.get(plan, "")
+        if not price_id:
+            return _error(400, f"Unknown plan: {plan}")
+        success_url = str(data.get("success_url", "https://cadio.net/app?upgrade=success"))
+        cancel_url = str(data.get("cancel_url", "https://cadio.net/app"))
+        session = stripe_lib.checkout.Session.create(
+            mode="subscription",
+            customer_email=account.get("email") or None,
+            line_items=[{"price": price_id, "quantity": 1}],
+            metadata={"account_id": account["accountId"], "plan": plan},
+            success_url=success_url,
+            cancel_url=cancel_url,
+        )
+        return {"status": "ok", "url": session.url}
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.post("/api/stripe/webhook", response_model=None)
+async def stripe_webhook(request: Any) -> dict[str, Any] | JSONResponse:
+    import os
+    from fastapi import Request
+    stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    if not stripe_key or not webhook_secret:
+        return _error(503, "Stripe not configured")
+    try:
+        import stripe as stripe_lib
+        stripe_lib.api_key = stripe_key
+        body = await request.body()
+        sig = request.headers.get("stripe-signature", "")
+        event = stripe_lib.Webhook.construct_event(body, sig, webhook_secret)
+        event_type = event["type"]
+        if event_type in ("customer.subscription.created", "customer.subscription.updated"):
+            sub = event["data"]["object"]
+            account_id = sub.get("metadata", {}).get("account_id", "")
+            plan = sub.get("metadata", {}).get("plan", "pro")
+            if account_id and sub.get("status") == "active":
+                upgrade_plan(
+                    account_id,
+                    plan,
+                    stripe_customer_id=sub.get("customer", ""),
+                    stripe_subscription_id=sub.get("id", ""),
+                )
+        elif event_type == "customer.subscription.deleted":
+            sub = event["data"]["object"]
+            account_id = sub.get("metadata", {}).get("account_id", "")
+            if account_id:
+                upgrade_plan(account_id, "free")
+        return {"status": "ok"}
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(400, str(exc))
 
 
 # ---------------------------------------------------------------------------

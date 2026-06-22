@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useCadStore } from "../stores/cadStore";
 import { downloadExport } from "../utils/api";
 import { copyText } from "../utils/projectShare";
+import { getCadioAuthToken, getCadioAccount, isCadioAuthenticated, requestCadioAuth, updateCadioAccount } from "../utils/auth";
 import ScalePercentInput from "./ScalePercentInput";
 
 const EXPORT_FORMATS = [
@@ -16,7 +17,7 @@ function tempRange(value: [number, number] | undefined) {
   return `${value[0]}-${value[1]} C`;
 }
 
-export function ExportFlowContent({ onClose }: { onClose?: () => void }) {
+export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () => void; onRequestUpgrade?: () => void }) {
   const {
     sessionId,
     objects,
@@ -30,6 +31,11 @@ export function ExportFlowContent({ onClose }: { onClose?: () => void }) {
   const [copied, setCopied] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [exportError, setExportError] = useState("");
+  const account = getCadioAccount();
+  const isAuthed = isCadioAuthenticated();
+  const canDownload = account?.canDownload ?? false;
+  const downloadsRemaining = account?.downloadsRemaining;
+  const plan = account?.plan ?? "free";
   const selectedObject = objects.find((object) => object.id === selectedObjectId) ?? objects[0];
   const scalePercent = (selectedObject?.transform.scale[0] ?? 1) * 100;
   const selectedPrinter = printers[printer];
@@ -56,12 +62,39 @@ export function ExportFlowContent({ onClose }: { onClose?: () => void }) {
 
   const handleDownload = async () => {
     if (!sessionId || downloadBusy) return;
+    if (!isAuthed) {
+      requestCadioAuth();
+      onClose?.();
+      return;
+    }
+    if (!canDownload) {
+      onRequestUpgrade?.();
+      return;
+    }
     setExportError("");
     setDownloadBusy(true);
     try {
-      await downloadExport(sessionId, format);
+      const token = getCadioAuthToken();
+      await downloadExport(sessionId, format, token);
+      // Refresh account after download to update remaining count
+      if (account) {
+        updateCadioAccount({
+          ...account,
+          downloadsUsed: (account.downloadsUsed ?? 0) + 1,
+          downloadsRemaining: downloadsRemaining != null ? Math.max(0, downloadsRemaining - 1) : null,
+          canDownload: downloadsRemaining != null ? downloadsRemaining > 1 : true,
+        });
+      }
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : "Download failed.");
+      const msg = err instanceof Error ? err.message : "Download failed.";
+      if (msg.toLowerCase().includes("login") || msg.toLowerCase().includes("401")) {
+        requestCadioAuth();
+        onClose?.();
+      } else if (msg.includes("free download") || msg.includes("limit") || msg.toLowerCase().includes("upgrade") || msg.includes("402")) {
+        onRequestUpgrade?.();
+      } else {
+        setExportError(msg);
+      }
     } finally {
       setDownloadBusy(false);
     }
@@ -161,19 +194,66 @@ export function ExportFlowContent({ onClose }: { onClose?: () => void }) {
         </section>
       )}
 
-      <section className="rounded-xl border border-[#24464d] bg-[#13272c] p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b7f3ff]">Early Access Beta</div>
-            <p className="mt-1 text-xs leading-5 text-[#a9cbd1]">
-              All downloads are currently unlocked. Pricing launches later.
-            </p>
+      {!isAuthed ? (
+        <section className="rounded-xl border border-[#3d2a00] bg-[#1f1500] p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#ffd060]">Sign In Required</div>
+              <p className="mt-1 text-xs leading-5 text-[#c8a84a]">
+                Create a free account to download models. 3 downloads included.
+              </p>
+            </div>
+            <button
+              onClick={() => { requestCadioAuth(); onClose?.(); }}
+              className="shrink-0 rounded-lg bg-[#ffd060] px-3 py-1.5 text-[11px] font-bold text-[#1a0d00]"
+            >
+              Sign In
+            </button>
           </div>
-          <span className="rounded-full bg-[#0f3b45] px-2.5 py-1 text-[11px] font-semibold text-[#b7f3ff]">
-            Unlocked
-          </span>
-        </div>
-      </section>
+        </section>
+      ) : !canDownload ? (
+        <section className="rounded-xl border border-[#4d1a1a] bg-[#200d0d] p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#ff8080]">Download Limit Reached</div>
+              <p className="mt-1 text-xs leading-5 text-[#c07070]">
+                {plan === "pro" ? "Monthly limit reached." : "Free downloads used."} Upgrade for more.
+              </p>
+            </div>
+            <button
+              onClick={() => onRequestUpgrade?.()}
+              className="shrink-0 rounded-lg bg-[#ff8080] px-3 py-1.5 text-[11px] font-bold text-[#1a0000]"
+            >
+              Upgrade
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section className="rounded-xl border border-[#1a3a20] bg-[#0d1f10] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6de89a]">
+                {plan === "unlimited" ? "Unlimited Plan" : plan === "pro" ? "Pro Plan" : "Free Plan"}
+              </div>
+              <p className="mt-1 text-xs text-[#4fa86a]">
+                {plan === "unlimited"
+                  ? "Unlimited downloads"
+                  : plan === "pro"
+                  ? `${downloadsRemaining ?? 0} downloads left this month`
+                  : `${downloadsRemaining ?? 0} of 3 free downloads remaining`}
+              </p>
+            </div>
+            {plan === "free" && (
+              <button
+                onClick={() => onRequestUpgrade?.()}
+                className="shrink-0 rounded-lg border border-[#2bb8dc]/40 px-3 py-1.5 text-[11px] font-semibold text-[#2bb8dc]"
+              >
+                Upgrade
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {exportError && (
         <p className="rounded-lg border border-[#6b2d2d] bg-[#2a1717] px-3 py-2 text-xs text-[#ffb3b3]">
@@ -187,12 +267,20 @@ export function ExportFlowContent({ onClose }: { onClose?: () => void }) {
           onClick={() => void handleDownload()}
           disabled={!sessionId || downloadBusy}
           className={`flex h-12 items-center justify-center rounded-xl text-sm font-semibold ${
-            sessionId
-              ? "bg-[#e8e8e8] text-[#171717] hover:bg-white"
-              : "bg-[#333] text-[#777]"
+            !sessionId || downloadBusy
+              ? "bg-[#333] text-[#777]"
+              : !isAuthed || !canDownload
+              ? "bg-[#2a2a2c] text-[#9a9a9d] hover:bg-[#333]"
+              : "bg-[#e8e8e8] text-[#171717] hover:bg-white"
           }`}
         >
-          {downloadBusy ? "Preparing..." : `Download ${format.toUpperCase()}`}
+          {downloadBusy
+            ? "Preparing..."
+            : !isAuthed
+            ? "Sign In to Download"
+            : !canDownload
+            ? "Upgrade to Download"
+            : `Download ${format.toUpperCase()}`}
         </button>
         <button
           onClick={() => void copySettings()}
@@ -206,12 +294,20 @@ export function ExportFlowContent({ onClose }: { onClose?: () => void }) {
   );
 }
 
-export default function ExportFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function ExportFlowDialog({
+  open,
+  onClose,
+  onRequestUpgrade,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onRequestUpgrade?: () => void;
+}) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[75] grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-2xl border border-[#343436] bg-[#1f1f20] p-5 shadow-2xl">
-        <ExportFlowContent onClose={onClose} />
+        <ExportFlowContent onClose={onClose} onRequestUpgrade={onRequestUpgrade} />
       </div>
     </div>
   );

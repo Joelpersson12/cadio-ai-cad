@@ -16,14 +16,31 @@ const pages: Record<
   terms: {
     title: "Terms of Service",
     eyebrow: "Cadio legal",
-    updated: "Effective June 7, 2026",
+    updated: "Effective June 22, 2026",
     icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
     sections: [
       {
         heading: "What Cadio Is",
         body: [
-          "Cadio is an AI-assisted CAD and 3D-printing tool. It helps users search for inspiration, generate printable model concepts, remix designs, and edit CAD-style geometry.",
-          "The product is currently in early development, so outputs should be treated as drafts that require review.",
+          "Cadio is an AI-assisted CAD and 3D-printing platform. It helps users generate printable model concepts, remix designs, and edit CAD-style geometry using natural language.",
+          "Outputs should be treated as drafts that require review before use.",
+        ],
+      },
+      {
+        heading: "Account and Access",
+        body: [
+          "You must create an account to download files. By creating an account you confirm you are at least 13 years old and that the information you provide is accurate.",
+          "You are responsible for maintaining the security of your account credentials. Cadio is not liable for losses caused by unauthorized account access.",
+        ],
+      },
+      {
+        heading: "Subscriptions and Billing",
+        body: [
+          "Cadio offers paid subscription plans (Pro and Unlimited) in addition to a Free tier. All prices are in USD and billed monthly.",
+          "Free accounts include 3 total file downloads. Pro accounts include 20 downloads per calendar month. Unused monthly downloads do not roll over.",
+          "Paid subscriptions renew automatically each month. You can cancel at any time from your account settings — cancellation takes effect at the end of the current billing period.",
+          "All payments are processed by Stripe, Inc. Refunds are available within 7 days of a charge if no files have been downloaded during that billing period. Contact support@cadio.net to request a refund.",
+          "Cadio reserves the right to change subscription prices with 30 days notice. Continued use after the notice period constitutes acceptance of the new price.",
         ],
       },
       {
@@ -56,7 +73,7 @@ const pages: Record<
   privacy: {
     title: "Privacy Policy",
     eyebrow: "Cadio privacy",
-    updated: "Effective June 7, 2026",
+    updated: "Effective June 22, 2026",
     icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
     sections: [
       {
@@ -64,6 +81,20 @@ const pages: Record<
         body: [
           "Cadio may process prompts, uploaded images, generated models, selected examples, saved model data, export choices, printer/material selections, and basic usage data.",
           "This data is used to provide the product, improve model generation, troubleshoot issues, and make Cadio more useful.",
+        ],
+      },
+      {
+        heading: "Account Data",
+        body: [
+          "When you create an account, Cadio stores your email address, a hashed (non-reversible) version of your password, your subscription plan, and your download usage count.",
+          "Your email may be used to send transactional messages such as receipts and account notifications. Cadio does not send marketing emails without your consent.",
+        ],
+      },
+      {
+        heading: "Payment Processing",
+        body: [
+          "Payments are processed by Stripe, Inc. Cadio does not store your full card number, CVV, or other sensitive payment details — these are handled entirely by Stripe under their PCI-compliant infrastructure.",
+          "Cadio may store your Stripe Customer ID and subscription ID to link your account to an active plan. Stripe's privacy policy applies to data processed on their platform.",
         ],
       },
       {
@@ -77,6 +108,12 @@ const pages: Record<
         heading: "Third-Party Model Sources",
         body: [
           "When Cadio searches for public models or inspiration, it may request information from public model sites. Those services may have their own privacy practices.",
+        ],
+      },
+      {
+        heading: "Data Deletion",
+        body: [
+          "You may request deletion of your account and associated data at any time by emailing support@cadio.net. Deletion removes your email, hashed password, saved models, and session tokens.",
         ],
       },
       {
@@ -258,7 +295,7 @@ export default function LegalPage({
           {/* CTA block */}
           <div className="mt-16 rounded-2xl border border-[#00F0FF]/20 bg-[#00F0FF]/5 p-8 text-center">
             <p className="text-lg font-semibold text-white">Ready to get started?</p>
-            <p className="mt-2 text-sm text-white/50">Cadio is free during early access.</p>
+            <p className="mt-2 text-sm text-white/50">Start free with 3 downloads. Upgrade anytime.</p>
             <button
               onClick={onStartBuilding}
               className="mt-6 rounded-lg bg-[#00F0FF] px-8 py-3 text-sm font-semibold text-[#050505] hover:bg-[#00F0FF]/90 transition-colors"

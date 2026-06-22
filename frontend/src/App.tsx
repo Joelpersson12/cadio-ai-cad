@@ -12,6 +12,7 @@ import { CadioMark } from "./components/CadioLogo";
 import LegalPage from "./components/LegalPage";
 import ScalePercentInput from "./components/ScalePercentInput";
 import ExportFlowDialog, { ExportFlowContent } from "./components/ExportFlow";
+import UpgradeDialog from "./components/UpgradeDialog";
 import SavedModelsPanel from "./components/SavedModelsPanel";
 import ShareProjectDialog from "./components/ShareProjectDialog";
 import SiteFooter from "./components/SiteFooter";
@@ -187,9 +188,11 @@ function MobileExamplesSheet({
 function MobileExportSheet({
   open,
   onClose,
+  onRequestUpgrade,
 }: {
   open: boolean;
   onClose: () => void;
+  onRequestUpgrade?: () => void;
 }) {
   return (
     <>
@@ -209,7 +212,7 @@ function MobileExportSheet({
           <div className="h-1 w-10 rounded-full bg-cadio-border" />
         </div>
         <div className="px-5 pb-8">
-          <ExportFlowContent onClose={onClose} />
+          <ExportFlowContent onClose={onClose} onRequestUpgrade={onRequestUpgrade} />
         </div>
       </div>
     </>
@@ -463,6 +466,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [showMeasurements, setShowMeasurements] = useState(false);
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
@@ -743,6 +747,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
       <MobileExportSheet
         open={mobileExportOpen}
         onClose={() => setMobileExportOpen(false)}
+        onRequestUpgrade={() => { setMobileExportOpen(false); setUpgradeOpen(true); }}
       />
 
       {/* Mobile edit sheet */}
@@ -751,7 +756,8 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         onClose={() => setMobileEditOpen(false)}
       />
 
-      <ExportFlowDialog open={exportOpen} onClose={() => setExportOpen(false)} />
+      <ExportFlowDialog open={exportOpen} onClose={() => setExportOpen(false)} onRequestUpgrade={() => { setExportOpen(false); setUpgradeOpen(true); }} />
+      <UpgradeDialog open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
       <ShareProjectDialog
         open={shareOpen}
         onClose={() => setShareOpen(false)}

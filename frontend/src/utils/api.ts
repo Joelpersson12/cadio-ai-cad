@@ -94,6 +94,7 @@ export interface AuthPayload {
   email?: string;
   phone?: string;
   password?: string;
+  agreed_terms?: boolean;
 }
 
 export interface AccountProfile {

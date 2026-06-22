@@ -19,7 +19,8 @@ from typing import Any
 DB_ENV = "CADIO_ACCOUNT_DB"
 DATA_DIR_ENV = "CADIO_DATA_DIR"
 MAX_LIBRARY_BYTES = 350_000
-FREE_DOWNLOAD_LIMIT = 1
+FREE_DOWNLOAD_LIMIT = 3
+PRO_MONTHLY_LIMIT = 20
 
 
 def _now() -> str:
@@ -57,7 +58,12 @@ def _init(conn: sqlite3.Connection) -> None:
             password_hash TEXT NOT NULL,
             plan TEXT NOT NULL DEFAULT 'free',
             downloads_used INTEGER NOT NULL DEFAULT 0,
-            download_limit INTEGER NOT NULL DEFAULT 1,
+            download_limit INTEGER NOT NULL DEFAULT 3,
+            monthly_downloads_used INTEGER NOT NULL DEFAULT 0,
+            monthly_reset_date TEXT NOT NULL DEFAULT '',
+            agreed_terms INTEGER NOT NULL DEFAULT 0,
+            stripe_customer_id TEXT NOT NULL DEFAULT '',
+            stripe_subscription_id TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -65,7 +71,12 @@ def _init(conn: sqlite3.Connection) -> None:
     )
     _ensure_column(conn, "accounts", "plan", "TEXT NOT NULL DEFAULT 'free'")
     _ensure_column(conn, "accounts", "downloads_used", "INTEGER NOT NULL DEFAULT 0")
-    _ensure_column(conn, "accounts", "download_limit", "INTEGER NOT NULL DEFAULT 1")
+    _ensure_column(conn, "accounts", "download_limit", "INTEGER NOT NULL DEFAULT 3")
+    _ensure_column(conn, "accounts", "monthly_downloads_used", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "accounts", "monthly_reset_date", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "accounts", "agreed_terms", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "accounts", "stripe_customer_id", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "accounts", "stripe_subscription_id", "TEXT NOT NULL DEFAULT ''")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -158,19 +169,32 @@ def _row_value(row: sqlite3.Row, key: str, fallback: Any) -> Any:
 
 
 def _account_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    plan = _row_value(row, "plan", "free")
     downloads_used = max(0, int(_row_value(row, "downloads_used", 0)))
     download_limit = int(_row_value(row, "download_limit", FREE_DOWNLOAD_LIMIT))
-    downloads_remaining = None if download_limit < 0 else max(0, download_limit - downloads_used)
+    monthly_downloads_used = max(0, int(_row_value(row, "monthly_downloads_used", 0)))
+
+    if plan == "pro":
+        can_download = monthly_downloads_used < PRO_MONTHLY_LIMIT
+        downloads_remaining = max(0, PRO_MONTHLY_LIMIT - monthly_downloads_used)
+    elif download_limit < 0:
+        can_download = True
+        downloads_remaining = None
+    else:
+        can_download = downloads_used < download_limit
+        downloads_remaining = max(0, download_limit - downloads_used)
+
     return {
         "accountId": row["id"],
         "name": row["name"],
         "email": row["email"],
         "phone": row["phone"],
-        "plan": _row_value(row, "plan", "free"),
+        "plan": plan,
         "downloadsUsed": downloads_used,
         "downloadLimit": download_limit,
+        "monthlyDownloadsUsed": monthly_downloads_used,
         "downloadsRemaining": downloads_remaining,
-        "canDownload": download_limit < 0 or downloads_used < download_limit,
+        "canDownload": can_download,
     }
 
 
@@ -209,6 +233,7 @@ def login_or_create_account(
     email: str | None = None,
     phone: str | None = None,
     password: str | None = None,
+    agreed_terms: bool = False,
 ) -> dict[str, Any]:
     """Create an account or log into the existing matching email/phone account."""
     clean_email = _clean_email(email)
@@ -241,9 +266,12 @@ def login_or_create_account(
                 INSERT INTO accounts (
                     id, name, email, phone, password_hash,
                     plan, downloads_used, download_limit,
+                    monthly_downloads_used, monthly_reset_date,
+                    agreed_terms,
+                    stripe_customer_id, stripe_subscription_id,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     account_id,
@@ -254,6 +282,11 @@ def login_or_create_account(
                     "free",
                     0,
                     FREE_DOWNLOAD_LIMIT,
+                    0,
+                    "",
+                    1 if agreed_terms else 0,
+                    "",
+                    "",
                     now,
                     now,
                 ),
@@ -266,6 +299,7 @@ def login_or_create_account(
                 "plan": "free",
                 "downloadsUsed": 0,
                 "downloadLimit": FREE_DOWNLOAD_LIMIT,
+                "monthlyDownloadsUsed": 0,
                 "downloadsRemaining": FREE_DOWNLOAD_LIMIT,
                 "canDownload": True,
             }
@@ -315,6 +349,7 @@ def consume_download(token: str | None) -> dict[str, Any]:
     if not token:
         raise PermissionError("Login required to download")
     now = _now()
+    month_key = datetime.now(timezone.utc).strftime("%Y-%m")
     with _connect() as conn:
         row = conn.execute(
             """
@@ -327,30 +362,78 @@ def consume_download(token: str | None) -> dict[str, Any]:
         ).fetchone()
         if row is None:
             raise PermissionError("Login required to download")
-        account = _account_from_row(row)
-        if not account["canDownload"]:
-            raise ValueError(
-                "The free download for this account has already been used. Upgrade a plan to download more files."
-            )
-        if account["downloadLimit"] >= 0:
+        plan = _row_value(row, "plan", "free")
+        account_id = row["id"]
+
+        if plan == "pro":
+            reset_date = _row_value(row, "monthly_reset_date", "")
+            monthly_used = max(0, int(_row_value(row, "monthly_downloads_used", 0)))
+            if not reset_date.startswith(month_key):
+                conn.execute(
+                    "UPDATE accounts SET monthly_downloads_used = 0, monthly_reset_date = ?, updated_at = ? WHERE id = ?",
+                    (month_key, now, account_id),
+                )
+                monthly_used = 0
+            if monthly_used >= PRO_MONTHLY_LIMIT:
+                raise ValueError(
+                    f"Monthly download limit of {PRO_MONTHLY_LIMIT} reached. Upgrade to Unlimited for unlimited downloads."
+                )
             conn.execute(
-                """
-                UPDATE accounts
-                SET downloads_used = downloads_used + 1, updated_at = ?
-                WHERE id = ?
-                """,
-                (now, account["accountId"]),
+                "UPDATE accounts SET monthly_downloads_used = monthly_downloads_used + 1, updated_at = ? WHERE id = ?",
+                (now, account_id),
             )
+        elif plan == "unlimited":
+            pass  # no limit
+        else:
+            # free plan
+            downloads_used = max(0, int(_row_value(row, "downloads_used", 0)))
+            download_limit = int(_row_value(row, "download_limit", FREE_DOWNLOAD_LIMIT))
+            if download_limit >= 0 and downloads_used >= download_limit:
+                raise ValueError(
+                    f"You've used all {download_limit} free downloads. Upgrade to Pro or Unlimited for more."
+                )
+            conn.execute(
+                "UPDATE accounts SET downloads_used = downloads_used + 1, updated_at = ? WHERE id = ?",
+                (now, account_id),
+            )
+
         conn.execute(
             "UPDATE sessions SET last_seen = ? WHERE token = ?",
             (now, token),
         )
         updated = conn.execute(
             "SELECT * FROM accounts WHERE id = ?",
-            (account["accountId"],),
+            (account_id,),
         ).fetchone()
         conn.commit()
     return _account_from_row(updated)
+
+
+def upgrade_plan(
+    account_id: str,
+    plan: str,
+    stripe_customer_id: str = "",
+    stripe_subscription_id: str = "",
+) -> dict[str, Any]:
+    """Upgrade or downgrade an account plan. Called by Stripe webhook."""
+    now = _now()
+    new_limit = FREE_DOWNLOAD_LIMIT if plan == "free" else -1
+    with _connect() as conn:
+        conn.execute(
+            """
+            UPDATE accounts
+            SET plan = ?, download_limit = ?,
+                stripe_customer_id = ?, stripe_subscription_id = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (plan, new_limit, stripe_customer_id, stripe_subscription_id, now, account_id),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        if row is None:
+            raise ValueError("Account not found")
+        return _account_from_row(row)
 
 
 def load_saved_library(token: str) -> dict[str, Any]:
