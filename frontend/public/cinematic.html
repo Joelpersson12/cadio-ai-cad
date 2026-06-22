@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cadio — AI 3D Design</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Italiana&family=Outfit:wght@300;400;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+
+html, body {
+  width: 100%;
+  background-color: #000;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+body {
+  min-height: 900vh;
+  font-family: 'Outfit', sans-serif;
+  color: #fff;
+  overflow-x: hidden;
+  cursor: none;
+}
+
+* { cursor: none !important; }
+::-webkit-scrollbar { display: none; width: 0; }
+
+#webgl {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 1;
+  outline: none;
+}
+
+/* ── Cursor ── */
+.cursor-inner {
+  position: fixed; top: 0; left: 0;
+  width: 6px; height: 6px;
+  border: 2px solid rgba(43,184,220,1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 9999;
+}
+.cursor-outer {
+  position: fixed; top: 0; left: 0;
+  width: 40px; height: 40px;
+  border: 1.5px solid rgba(43,184,220,0.65);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 9998;
+  transition: width 0.3s, height 0.3s;
+}
+
+/* ── Cinematic container ── */
+.cinematic-container {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0 60px 40px 60px;
+  box-sizing: border-box;
+}
+
+/* ── Header ── */
+.main-header {
+  display: flex; justify-content: space-between; align-items: center;
+  width: 100%; z-index: 20;
+  pointer-events: auto;
+  padding: 20px 0;
+}
+.brand {
+  font-size: 14px; font-weight: 600;
+  letter-spacing: 5px; text-transform: uppercase;
+  color: #2bb8dc;
+}
+.header-nav { display: flex; align-items: center; gap: 24px; }
+.nav-link {
+  color: #fff; text-decoration: none;
+  font-size: 10px; text-transform: uppercase;
+  letter-spacing: 2px; font-weight: 500;
+  transition: color 0.3s;
+}
+.nav-link:hover { color: #2bb8dc; }
+.nav-dot { width: 3px; height: 3px; background: rgba(255,255,255,0.2); border-radius: 50%; }
+.contact-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 24px;
+  background: #2bb8dc; color: #000;
+  text-decoration: none;
+  font-size: 10px; text-transform: uppercase;
+  letter-spacing: 1px; font-weight: 600;
+  border-radius: 20px;
+  transition: transform 0.3s, background 0.3s;
+}
+.btn-circle {
+  display: inline-block; width: 6px; height: 6px;
+  border: 1px solid #000; border-radius: 50%;
+}
+.contact-btn:hover { transform: scale(1.05); background: #44ccf0; }
+
+/* ── Slides ── */
+.slide { position: absolute; bottom: 12%; pointer-events: none; }
+
+#slide-1 { left: 0; width: 100%; }
+#slide-1 .slide-title { margin-left: 60px; }
+#slide-1 .desc-row { position: relative; display: flex; width: 100%; }
+#slide-1 .col-1 {
+  margin-left: 60px;
+  width: calc(25vw - 60px);
+  max-width: calc(25vw - 60px);
+}
+#slide-1 .col-2 {
+  position: absolute;
+  left: calc(25vw + 40px);
+  width: calc(25vw - 60px);
+  max-width: calc(25vw - 60px);
+}
+
+#slide-2 { left: 0; width: 100%; }
+#slide-2 .slide-title { margin-left: calc(25vw + 40px); }
+#slide-2 .slide-desc {
+  margin-left: calc(50vw + 20px);
+  width: calc(25vw - 60px);
+  max-width: calc(25vw - 60px);
+}
+
+#slide-3 {
+  left: calc(50vw + 20px);
+  width: calc(25vw - 60px);
+  max-width: calc(25vw - 60px);
+}
+#slide-3 .slide-title { white-space: nowrap; }
+
+#slide-4 { left: calc(25% + 40px); max-width: 600px; }
+
+.slide-title {
+  font-family: 'Italiana', serif;
+  font-size: 116px;
+  line-height: 1.0;
+  font-weight: 400;
+  letter-spacing: 2px;
+  margin-bottom: 20px;
+  color: #e8f8ff;
+}
+.slide-desc {
+  font-size: 16px; line-height: 1.7; font-weight: 300;
+  color: #d1d5db; letter-spacing: 0.5px;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s cubic-bezier(0.25, 1, 0.5, 1),
+              transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  transition-delay: 0.4s;
+}
+.slide.active .slide-desc { opacity: 1; transform: translateY(0); }
+
+.slide-title .char {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(50px);
+  filter: blur(12px);
+  transition: opacity 0.8s cubic-bezier(0.25, 1, 0.5, 1),
+              transform 0.8s cubic-bezier(0.25, 1, 0.5, 1),
+              filter 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.slide.active .slide-title .char { opacity: 1; transform: translateY(0); filter: blur(0); }
+.slide.active { pointer-events: auto; }
+
+/* ── Grid ── */
+.grid-horizontal-line {
+  position: fixed; top: 70px; left: 0; right: 0;
+  width: 100%; height: 1px;
+  background: rgba(43,184,220,0.14);
+  z-index: 5; pointer-events: none;
+}
+.grid-lines {
+  position: fixed; top: 0; left: 40px; right: 40px;
+  width: calc(100% - 80px); height: 100vh;
+  display: flex; justify-content: space-between;
+  z-index: 5; pointer-events: none;
+}
+.grid-line {
+  position: relative; width: 1px; height: 100%;
+  background: rgba(43,184,220,0.10);
+}
+.grid-line:nth-child(3) { margin-top: 70px; height: calc(100vh - 70px); }
+.grid-dot {
+  position: absolute; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(43,184,220,0.55);
+  box-shadow: 0 0 8px rgba(43,184,220,0.35);
+}
+
+/* ── Stories progress ── */
+.story-progress-container { position: relative; }
+.story-dashes {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.story-dash {
+  width: 2px; height: 40px;
+  background: rgba(43,184,220,0.15); border-radius: 2px;
+}
+.story-dash-fill {
+  width: 100%; height: 0%;
+  background: #2bb8dc; border-radius: 2px;
+  transition: height 0.1s linear;
+}
+</style>
+</head>
+<body>
+
+<div class="cursor-inner"></div>
+<div class="cursor-outer"></div>
+
+<div class="cinematic-container">
+  <div class="main-header">
+    <div class="brand">Cadio</div>
+    <nav class="header-nav">
+      <a href="#" class="nav-link" data-nav="0">Design</a>
+      <span class="nav-dot"></span>
+      <a href="#" class="nav-link" data-nav="1">Precision</a>
+      <span class="nav-dot"></span>
+      <a href="#" class="nav-link" data-nav="2">AI</a>
+      <span class="nav-dot"></span>
+      <a href="#" class="nav-link" data-nav="3">Future</a>
+    </nav>
+    <div class="header-actions">
+      <a href="/" class="contact-btn" style="pointer-events:auto;">
+        Start Free <span class="btn-circle"></span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Slide 1 -->
+  <div class="slide" id="slide-1">
+    <h2 class="slide-title">Form<br>and Future</h2>
+    <div class="desc-row">
+      <p class="slide-desc col-1">Describe what you need. Our AI translates your words into precise, printable geometry in seconds. No CAD experience required.</p>
+      <p class="slide-desc col-2">From concept to STL in one conversation. The future of 3D design is fluid, intelligent, and entirely yours to command.</p>
+    </div>
+  </div>
+
+  <!-- Slide 2 -->
+  <div class="slide" id="slide-2">
+    <h2 class="slide-title">Precision<br>Craft</h2>
+    <p class="slide-desc">Every layer counts. Cadio generates models optimised for your exact printer and material — wall thickness, tolerances, and supports calculated automatically.</p>
+  </div>
+
+  <!-- Slide 3 -->
+  <div class="slide" id="slide-3">
+    <h2 class="slide-title">Fluid AI</h2>
+    <p class="slide-desc">Intelligence that understands geometry. Not just shapes, but structure, strength, and purpose. Forms that push the limits of what's printable.</p>
+  </div>
+
+  <!-- Slide 4 -->
+  <div class="slide" id="slide-4">
+    <h2 class="slide-title">Infinite<br>Design</h2>
+    <p class="slide-desc">Every design is a beginning. Iterate in seconds, print in minutes. The distance between imagination and object has never been thinner.</p>
+  </div>
+</div>
+
+<!-- Grid overlay -->
+<div class="grid-horizontal-line"></div>
+<div class="grid-lines">
+  <div class="grid-line"><div class="grid-dot top"></div><div class="grid-dot bottom"></div></div>
+  <div class="grid-line"><div class="grid-dot top"></div><div class="grid-dot bottom"></div></div>
+  <div class="grid-line"><div class="grid-dot top"></div><div class="grid-dot bottom"></div></div>
+  <div class="grid-line"><div class="grid-dot top"></div><div class="grid-dot bottom"></div></div>
+  <div class="grid-line story-progress-container">
+    <div class="grid-dot top"></div>
+    <div class="grid-dot bottom"></div>
+    <div class="story-dashes">
+      <div class="story-dash"><div class="story-dash-fill" id="dash-fill-1"></div></div>
+      <div class="story-dash"><div class="story-dash-fill" id="dash-fill-2"></div></div>
+      <div class="story-dash"><div class="story-dash-fill" id="dash-fill-3"></div></div>
+      <div class="story-dash"><div class="story-dash-fill" id="dash-fill-4"></div></div>
+    </div>
+  </div>
+</div>
+
+<canvas id="webgl"></canvas>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ── Globals ──────────────────────────────────────────────────────────────────
+const canvas = document.querySelector('#webgl');
+let scene, camera, renderer;
+let modelPivot, innerKnot, cageWire, orbitalRings = [];
+const clock = new THREE.Clock();
+let currentScroll = 0;
+
+let mouseX = 0, mouseY = 0, targetMouseX = 0, targetMouseY = 0;
+let cursorX = window.innerWidth / 2, cursorY = window.innerHeight / 2;
+let outerCursorX = window.innerWidth / 2, outerCursorY = window.innerHeight / 2;
+
+let bgMaterial;
+const shaderUniforms = {
+  uTime:       { value: 0 },
+  uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+  uMouse:      { value: new THREE.Vector2(0, 0) },
+  uScroll:     { value: 0 }
+};
+
+let sparkParticles;
+const sparkCount = 450;
+const sparkData  = [];
+const sizes = { width: window.innerWidth, height: window.innerHeight };
+
+// ── Background liquid-wave shader ─────────────────────────────────────────────
+function createBackgroundShader() {
+  const vert = `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+
+  const frag = `
+    varying vec2 vUv;
+    uniform float uTime;
+    uniform vec2  uResolution;
+    uniform vec2  uMouse;
+    uniform float uScroll;
+
+    float hash(float n) { return fract(sin(n) * 43758.5453123); }
+
+    void main() {
+      vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
+      float aspect = uResolution.x / uResolution.y;
+      float time   = uTime * 0.08;
+      float scroll = uScroll;
+
+      float angle1 = 0.6,  angle2 = -0.7, angle3 = 1.2;
+      float freq1  = 2.4,  freq2  =  3.2, freq3  = 4.0;
+
+      vec2 w = uv;
+      float sd = scroll * 5.0;
+      w.x += sin(uv.y * 2.5 + time * 0.2  + sd)        * 0.35;
+      w.y += cos(uv.x * 2.5 - time * 0.15 - sd * 0.8)  * 0.35;
+      w.x += sin(uv.y * 1.2 - time * 0.1  - sd * 1.5)  * 0.25;
+      w.y += cos(uv.x * 1.2 + time * 0.18 + sd * 1.2)  * 0.25;
+      w   += vec2(scroll * 0.04, -scroll * 0.02);
+      w   += vec2(uMouse.x * aspect * 0.05, uMouse.y * 0.05);
+
+      vec2 d1 = vec2(cos(angle1), sin(angle1));
+      vec2 d2 = vec2(cos(angle2), sin(angle2));
+      vec2 d3 = vec2(cos(angle3), sin(angle3));
+      float w1 = sin(dot(w, d1) * freq1 + time * 1.0);
+      float w2 = cos(dot(w, d2) * freq2 - time * 1.4 + w1 * 0.4);
+      float w3 = sin(dot(w, d3) * freq3 + time * 1.8 + w2 * 0.5);
+      float wf = w1 * 0.50 + w2 * 0.35 + w3 * 0.15;
+
+      float sheen   = pow(max(0.0, 1.0 - abs(wf - 0.10)), 2.5);
+      float crisp   = pow(max(0.0, 1.0 - abs(wf - 0.15)), 8.0);
+      float crest   = sheen * 0.5 + crisp * 0.9;
+
+      /* Cadio palette: near-black deep teal → vivid cyan glow */
+      vec3 s0 = vec3(0.001, 0.002, 0.004);
+      vec3 w10 = vec3(0.003, 0.018, 0.030);
+      vec3 w20 = vec3(0.002, 0.009, 0.018);
+      vec3 c0 = vec3(0.05,  0.32,  0.48);
+
+      vec3 s1 = vec3(0.001, 0.004, 0.008);
+      vec3 w11 = vec3(0.006, 0.038, 0.058);
+      vec3 w21 = vec3(0.003, 0.018, 0.032);
+      vec3 c1 = vec3(0.17,  0.72,  0.86);
+
+      float t = smoothstep(0.0, 1.0, scroll);
+      vec3 cs = mix(s0,  s1,  t);
+      vec3 cw1 = mix(w10, w11, t);
+      vec3 cw2 = mix(w20, w21, t);
+      vec3 cc  = mix(c0,  c1,  t);
+
+      vec3 col = cs;
+      col = mix(col, cw2, smoothstep(-0.6, 0.2, wf));
+      col = mix(col, cw1, smoothstep( 0.0, 0.8, wf));
+      col += cc * crest * 1.4;
+      col *= 1.0 - dot(uv, uv) * 0.12;
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  bgMaterial = new THREE.ShaderMaterial({
+    vertexShader: vert,
+    fragmentShader: frag,
+    uniforms: shaderUniforms,
+    depthWrite: false,
+    depthTest: false
+  });
+
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), bgMaterial);
+  plane.position.set(0, 0, -8);
+  plane.renderOrder = -10;
+  camera.add(plane);
+}
+
+// ── Spark particles ───────────────────────────────────────────────────────────
+function createSparkTexture() {
+  const c = document.createElement('canvas');
+  c.width = 16; c.height = 16;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+  g.addColorStop(0,    'rgba(255,255,255,1)');
+  g.addColorStop(0.25, 'rgba(255,255,255,0.85)');
+  g.addColorStop(0.6,  'rgba(255,255,255,0.3)');
+  g.addColorStop(1,    'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 16, 16);
+  return new THREE.CanvasTexture(c);
+}
+
+function createSparks() {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(sparkCount * 3);
+  const col = new Float32Array(sparkCount * 3);
+
+  for (let i = 0; i < sparkCount; i++) {
+    pos[i*3]   = (Math.random() - 0.5) * 6.5;
+    pos[i*3+1] = (Math.random() - 0.5) * 5.0 - 0.5;
+    pos[i*3+2] = (Math.random() - 0.5) * 6.5;
+
+    if (Math.random() < 0.5) {
+      // bright white
+      col[i*3]   = 0.85 + Math.random() * 0.15;
+      col[i*3+1] = 0.88 + Math.random() * 0.12;
+      col[i*3+2] = 0.92 + Math.random() * 0.08;
+    } else {
+      // Cadio cyan
+      col[i*3]   = 0.08 + Math.random() * 0.10;
+      col[i*3+1] = 0.68 + Math.random() * 0.14;
+      col[i*3+2] = 0.86 + Math.random() * 0.14;
+    }
+
+    sparkData.push({
+      speedX:     (Math.random() - 0.5) * 0.4,
+      speedY:     0.15 + Math.random() * 0.30,
+      speedZ:     (Math.random() - 0.5) * 0.4,
+      swaySpeed:  0.5  + Math.random() * 1.5,
+      swayRadius: 0.05 + Math.random() * 0.15,
+      phase:      Math.random() * Math.PI * 2
+    });
+  }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+
+  sparkParticles = new THREE.Points(geo, new THREE.PointsMaterial({
+    size: 0.025,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.85,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    map: createSparkTexture()
+  }));
+  scene.add(sparkParticles);
+}
+
+// ── Procedural 3D-print model ─────────────────────────────────────────────────
+function createModel() {
+  modelPivot = new THREE.Group();
+  scene.add(modelPivot);
+  modelPivot.position.y = -0.4;
+
+  // Hero: torus knot — mathematically complex, AI-designed aesthetic
+  const knotGeo = new THREE.TorusKnotGeometry(0.78, 0.22, 320, 32, 2, 3);
+  const knotMat = new THREE.MeshStandardMaterial({
+    color:     new THREE.Color(0.93, 0.95, 0.97),
+    roughness: 0.10,
+    metalness: 0.88,
+    flatShading: false
+  });
+  innerKnot = new THREE.Mesh(knotGeo, knotMat);
+  innerKnot.castShadow = true;
+  innerKnot.receiveShadow = true;
+  modelPivot.add(innerKnot);
+
+  // Geodesic cage — represents the design envelope / build volume
+  const cageGeo = new THREE.IcosahedronGeometry(1.50, 1);
+  const cageWireMat = new THREE.MeshStandardMaterial({
+    color:      new THREE.Color('#2bb8dc'),
+    roughness:  0.35,
+    metalness:  0.65,
+    wireframe:  true,
+    transparent: true,
+    opacity:    0.28
+  });
+  cageWire = new THREE.Mesh(cageGeo, cageWireMat);
+  modelPivot.add(cageWire);
+
+  // Three orbital rings (different axial angles)
+  const ringDef = [
+    [Math.PI / 2, 0,              0],
+    [Math.PI / 2, Math.PI / 3,   0],
+    [Math.PI / 2, (2*Math.PI)/3, 0]
+  ];
+  ringDef.forEach(([rx, ry, rz]) => {
+    const rGeo = new THREE.TorusGeometry(1.44, 0.016, 8, 120);
+    const rMat = new THREE.MeshStandardMaterial({
+      color:             new THREE.Color('#2bb8dc'),
+      roughness:         0.12,
+      metalness:         0.95,
+      transparent:       true,
+      opacity:           0.80,
+      emissive:          new THREE.Color('#083844'),
+      emissiveIntensity: 0.5
+    });
+    const ring = new THREE.Mesh(rGeo, rMat);
+    ring.rotation.set(rx, ry, rz);
+    modelPivot.add(ring);
+    orbitalRings.push(ring);
+  });
+
+  // Thin disc base — like a 3D-print build plate base
+  const baseGeo = new THREE.CylinderGeometry(0.88, 0.88, 0.045, 80);
+  const baseMat = new THREE.MeshStandardMaterial({
+    color:     new THREE.Color('#111820'),
+    roughness: 0.78,
+    metalness: 0.25
+  });
+  const base = new THREE.Mesh(baseGeo, baseMat);
+  base.position.y = -1.16;
+  base.receiveShadow = true;
+  modelPivot.add(base);
+
+  // Rim ring on the base disc
+  const rimGeo = new THREE.TorusGeometry(0.88, 0.012, 8, 80);
+  const rimMat = new THREE.MeshStandardMaterial({
+    color:             new THREE.Color('#2bb8dc'),
+    roughness:         0.2,
+    metalness:         0.9,
+    emissive:          new THREE.Color('#083844'),
+    emissiveIntensity: 0.6
+  });
+  const rim = new THREE.Mesh(rimGeo, rimMat);
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = -1.14;
+  modelPivot.add(rim);
+}
+
+// ── Resize ────────────────────────────────────────────────────────────────────
+function onWindowResize() {
+  sizes.width  = window.innerWidth;
+  sizes.height = window.innerHeight;
+  camera.aspect = sizes.width / sizes.height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(sizes.width, sizes.height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  shaderUniforms.uResolution.value.set(sizes.width, sizes.height);
+}
+
+// ── Per-letter title split ─────────────────────────────────────────────────────
+function splitTitlesIntoChars() {
+  document.querySelectorAll('.slide-title').forEach(title => {
+    const text = title.innerHTML;
+    let html = '', delay = 0;
+    const parts = text.split(/(<br\s*\/?>)/i);
+    parts.forEach(part => {
+      if (part.toLowerCase().startsWith('<br')) {
+        html += part;
+      } else {
+        for (let i = 0; i < part.length; i++) {
+          if (part[i] === ' ') {
+            html += ' ';
+          } else {
+            html += `<span class="char" style="transition-delay:${(delay++)*0.035}s">${part[i]}</span>`;
+          }
+        }
+      }
+    });
+    title.innerHTML = html;
+  });
+}
+
+// ── Grid dots drift ───────────────────────────────────────────────────────────
+function updateGridDots(scroll) {
+  document.querySelectorAll('.grid-dot').forEach((dot, i) => {
+    const startY = (i * 17) % 80 + 10;
+    let speed = 90 + (i * 55) % 180;
+    if (i % 2 === 0) speed = -speed;
+    let y = ((startY + scroll * speed) % 100 + 100) % 100;
+    dot.style.top = `${y}%`;
+  });
+}
+
+// ── Slide reveals + stories progress ─────────────────────────────────────────
+function updateSlides(scroll) {
+  for (let i = 1; i <= 4; i++) {
+    const fill = document.getElementById(`dash-fill-${i}`);
+    if (fill) {
+      const s = (i - 1) * 0.25, e = i * 0.25;
+      fill.style.height = `${Math.max(0, Math.min(1, (scroll - s) / (e - s))) * 100}%`;
+    }
+  }
+  const inRange = (v, a, b) => v >= a && v <= b;
+  const s1 = document.getElementById('slide-1');
+  const s2 = document.getElementById('slide-2');
+  const s3 = document.getElementById('slide-3');
+  const s4 = document.getElementById('slide-4');
+  if (s1) s1.classList.toggle('active', inRange(scroll, -0.10, 0.12));
+  if (s2) s2.classList.toggle('active', inRange(scroll,  0.28, 0.40));
+  if (s3) s3.classList.toggle('active', inRange(scroll,  0.56, 0.68));
+  if (s4) s4.classList.toggle('active', inRange(scroll,  0.84, 1.05));
+}
+
+// ── Main animation loop ───────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+
+  // Smooth scroll
+  const maxScroll  = document.documentElement.scrollHeight - window.innerHeight;
+  const scrollTop  = window.scrollY ?? window.pageYOffset ?? document.documentElement.scrollTop;
+  const tgtScroll  = maxScroll > 0 ? scrollTop / maxScroll : 0;
+  currentScroll   += (tgtScroll - currentScroll) * 0.025;
+
+  // Mouse lerp
+  mouseX += (targetMouseX - mouseX) * 0.05;
+  mouseY += (targetMouseY - mouseY) * 0.05;
+
+  // Outer cursor ring
+  outerCursorX += (cursorX - outerCursorX) * 0.2;
+  outerCursorY += (cursorY - outerCursorY) * 0.2;
+  const co = document.querySelector('.cursor-outer');
+  if (co) { co.style.left = `${outerCursorX}px`; co.style.top = `${outerCursorY}px`; }
+
+  // Model interaction + continuous spin
+  if (modelPivot) {
+    modelPivot.rotation.y = mouseX * 0.25;
+    modelPivot.rotation.x = mouseY * 0.15;
+  }
+  if (innerKnot) {
+    innerKnot.rotation.z += dt * 0.16;
+  }
+  if (cageWire) {
+    cageWire.rotation.y += dt * 0.04;
+    cageWire.rotation.x += dt * 0.02;
+  }
+
+  // Sparks physics
+  if (sparkParticles) {
+    const pos  = sparkParticles.geometry.attributes.position.array;
+    const time = clock.getElapsedTime();
+    const sv   = Math.abs(tgtScroll - currentScroll);
+    const sm   = 1.0 + sv * 9.0;
+    const turb = sv * 0.8;
+    for (let i = 0; i < sparkCount; i++) {
+      const idx = i * 3, d = sparkData[i];
+      pos[idx]   += d.speedX * dt * sm;
+      pos[idx+1] += d.speedY * dt * sm;
+      pos[idx+2] += d.speedZ * dt * sm;
+      const sw    = d.swayRadius * (1.0 + turb * 4.0);
+      pos[idx]   += Math.sin(time * d.swaySpeed + d.phase) * sw * dt;
+      pos[idx+2] += Math.cos(time * d.swaySpeed + d.phase) * sw * dt;
+      if (pos[idx+1] > 3.0 || Math.abs(pos[idx]) > 3.5 || Math.abs(pos[idx+2]) > 3.5) {
+        pos[idx+1] = -2.5;
+        pos[idx]   = (Math.random() - 0.5) * 3.0;
+        pos[idx+2] = (Math.random() - 0.5) * 3.0;
+      }
+    }
+    sparkParticles.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // Camera 360° orbit driven by scroll
+  const phi    = currentScroll * Math.PI * 2.0;
+  const orbitY = 0.35 + Math.sin(currentScroll * Math.PI) * 0.8;
+  const radius = 4.2  - Math.sin(currentScroll * Math.PI) * 0.6;
+  const tgtPos = new THREE.Vector3(radius * Math.sin(phi), orbitY, radius * Math.cos(phi));
+
+  const ease = (Math.cos(Math.min(1, currentScroll / 0.28) * Math.PI) + 1.0) * 0.5;
+  camera.position.lerp(tgtPos, 0.025);
+  camera.lookAt(-0.9 * ease, -0.15, 0);
+
+  // Shader uniforms
+  shaderUniforms.uTime.value  = clock.getElapsedTime();
+  shaderUniforms.uMouse.value.set(mouseX, -mouseY);
+  shaderUniforms.uScroll.value = currentScroll;
+
+  updateSlides(currentScroll);
+  updateGridDots(currentScroll);
+  renderer.render(scene, camera);
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function setupNavigation() {
+  const targets = [0.0, 0.34, 0.62, 0.94];
+  document.querySelectorAll('.nav-link').forEach((link, i) => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      window.scrollTo({ top: max * targets[i], behavior: 'smooth' });
+    });
+  });
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  splitTitlesIntoChars();
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color('#000000');
+  scene.fog = new THREE.FogExp2('#000000', 0.008);
+
+  camera = new THREE.PerspectiveCamera(50, sizes.width / sizes.height, 0.1, 100);
+  camera.position.set(0, 0.2, 3.0);
+  scene.add(camera);
+
+  createBackgroundShader();
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+  renderer.setSize(sizes.width, sizes.height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 2.2;
+
+  // Lighting — chiaroscuro rig adapted for polished metal
+  scene.add(new THREE.AmbientLight('#ffffff', 0.10));
+
+  const key = new THREE.SpotLight('#ffffff', 18.0);
+  key.position.set(4, 6, 3);
+  key.angle = Math.PI / 4;
+  key.penumbra = 0.9;
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.camera.near = 1.0;
+  key.shadow.camera.far  = 15;
+  key.shadow.bias = -0.001;
+  scene.add(key);
+
+  // Rim light in Cadio cyan — defines model silhouette
+  const rim = new THREE.DirectionalLight('#7de0ff', 9.0);
+  rim.position.set(-5, 3, -4);
+  scene.add(rim);
+
+  // Soft warm fill from below
+  const fill = new THREE.DirectionalLight('#e8f4ff', 0.9);
+  fill.position.set(-2, -4, 2);
+  scene.add(fill);
+
+  // Second fill from right — prevents hard shadow cutoff on detail
+  const fill2 = new THREE.DirectionalLight('#2bb8dc', 2.5);
+  fill2.position.set(5, 1, 4);
+  scene.add(fill2);
+
+  createSparks();
+  createModel();
+
+  window.addEventListener('mousemove', e => {
+    cursorX = e.clientX; cursorY = e.clientY;
+    const ci = document.querySelector('.cursor-inner');
+    if (ci) { ci.style.left = `${cursorX}px`; ci.style.top = `${cursorY}px`; }
+    targetMouseX = (e.clientX / window.innerWidth)  * 2 - 1;
+    targetMouseY = (e.clientY / window.innerHeight) * 2 - 1;
+  });
+
+  window.addEventListener('resize', onWindowResize);
+  onWindowResize();
+  animate();
+  setupNavigation();
+});
+</script>
+</body>
+</html>
