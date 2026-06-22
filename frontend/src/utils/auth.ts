@@ -98,3 +98,11 @@ export function requestCadioAuth() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("cadio-auth-required"));
 }
+
+export function signOutCadioAccount() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(CADIO_AUTH_KEY);
+  window.localStorage.removeItem(CADIO_ACCOUNT_KEY);
+  window.localStorage.removeItem(CADIO_AUTH_TOKEN_KEY);
+  window.dispatchEvent(new Event("cadio-auth-changed"));
+}

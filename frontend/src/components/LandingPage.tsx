@@ -6,9 +6,10 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { loginCadioAccount, isCadioAuthenticated, getCadioAuthToken } from "../utils/auth";
+import { loginCadioAccount, isCadioAuthenticated, getCadioAuthToken, getCadioAccount } from "../utils/auth";
 import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
+import ProfilePanel, { ProfileAvatar } from "./ProfilePanel";
 
 type Language = "en" | "sv" | "es" | "fr" | "it" | "de" | "pt";
 type AuthMode = "login" | "signup" | null;
@@ -824,7 +825,15 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
   const [language, setLanguage] = useState<Language>("en");
   const [authMode, setAuthMode] = useState<AuthMode>(null);
   const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(isCadioAuthenticated);
+
+  useEffect(() => {
+    const update = () => setIsAuthed(isCadioAuthenticated());
+    window.addEventListener("cadio-auth-changed", update);
+    return () => window.removeEventListener("cadio-auth-changed", update);
+  }, []);
   const [displayModel, setDisplayModel] = useState(0);
   const [exitingModel, setExitingModel] = useState<number | null>(null);
   const [inTransition, setInTransition] = useState(false);
@@ -942,28 +951,39 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
-              <button
-                onClick={() => setAuthMode("login")}
-                className="hidden h-9 rounded-lg px-4 text-sm font-medium transition-all sm:block hover:text-white"
-                style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  color: "rgba(232,237,242,0.6)",
-                }}
-              >
-                {text.nav.login}
-              </button>
-              <button
-                onClick={onStartBuilding}
-                className="h-9 rounded-lg px-5 text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.97]"
-                style={{
-                  background: ACCENT,
-                  color: BG,
-                  boxShadow: `0 2px 20px ${ACCENT_DIM}0.4)`,
-                }}
-              >
-                {text.nav.start}
-              </button>
+              {isAuthed ? (
+                <>
+                  <ProfileAvatar size={36} onClick={() => setProfileOpen(true)} />
+                  <button
+                    onClick={onStartBuilding}
+                    className="h-9 rounded-lg px-5 text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.97]"
+                    style={{ background: ACCENT, color: BG, boxShadow: `0 2px 20px ${ACCENT_DIM}0.4)` }}
+                  >
+                    Open Builder
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setAuthMode("login")}
+                    className="h-9 rounded-lg px-4 text-sm font-medium transition-all hover:text-white"
+                    style={{
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      color: "rgba(232,237,242,0.6)",
+                    }}
+                  >
+                    {text.nav.login}
+                  </button>
+                  <button
+                    onClick={onStartBuilding}
+                    className="h-9 rounded-lg px-5 text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.97]"
+                    style={{ background: ACCENT, color: BG, boxShadow: `0 2px 20px ${ACCENT_DIM}0.4)` }}
+                  >
+                    {text.nav.start}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -1434,6 +1454,12 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
 
         <SiteFooter />
       </div>
+
+      <ProfilePanel
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        onUpgrade={() => { setProfileOpen(false); setAuthMode(null); setPendingPlan("pro"); void startCheckout("pro"); }}
+      />
 
       <AuthDialog
         mode={authMode}

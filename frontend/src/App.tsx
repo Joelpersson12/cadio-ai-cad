@@ -13,6 +13,7 @@ import LegalPage from "./components/LegalPage";
 import ScalePercentInput from "./components/ScalePercentInput";
 import ExportFlowDialog, { ExportFlowContent } from "./components/ExportFlow";
 import UpgradeDialog from "./components/UpgradeDialog";
+import ProfilePanel, { ProfileAvatar } from "./components/ProfilePanel";
 import SavedModelsPanel from "./components/SavedModelsPanel";
 import ShareProjectDialog from "./components/ShareProjectDialog";
 import SiteFooter from "./components/SiteFooter";
@@ -482,6 +483,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [showMeasurements, setShowMeasurements] = useState(false);
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
@@ -580,6 +582,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
           {/* Printer + Export */}
           <div className="pointer-events-auto flex items-center gap-3">
+            <ProfileAvatar size={30} onClick={() => setProfileOpen(true)} />
             {Object.keys(printers).length > 0 ? (
               <select
                 value={printer}
@@ -732,6 +735,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             <span className="truncate text-sm font-semibold text-white">{projectTitle}</span>
           </button>
           <div className="flex shrink-0 gap-2">
+            <ProfileAvatar size={30} onClick={() => setProfileOpen(true)} />
             <button onClick={() => setMobileExportOpen(true)} className="h-8 rounded-lg bg-white px-4 text-xs font-bold text-cadio-bg">Export</button>
             <button onClick={() => setMobileEditOpen(true)} className="rounded-lg border border-cadio-border/50 p-2 text-cadio-muted transition-colors hover:text-white">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
@@ -801,6 +805,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
       <ExportFlowDialog open={exportOpen} onClose={() => setExportOpen(false)} onRequestUpgrade={() => { setExportOpen(false); setUpgradeOpen(true); }} />
       <UpgradeDialog open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+      <ProfilePanel open={profileOpen} onClose={() => setProfileOpen(false)} onUpgrade={() => { setProfileOpen(false); setUpgradeOpen(true); }} />
       <ShareProjectDialog
         open={shareOpen}
         onClose={() => setShareOpen(false)}
