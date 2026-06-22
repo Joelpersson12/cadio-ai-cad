@@ -362,7 +362,7 @@ function ScaledMesh({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
- 
+
   const geometry = useMemo(() => {
     if (!obj.mesh) return null;
     const geo = new THREE.BufferGeometry();
@@ -382,6 +382,12 @@ function ScaledMesh({
     return geo;
   }, [obj.mesh]);
  
+  // Pre-build edge geometry once so it never rebuilds when selection state changes
+  const edgesGeometry = useMemo(() => {
+    if (!geometry) return null;
+    return new THREE.EdgesGeometry(geometry, 15);
+  }, [geometry]);
+
   // Compute scale factor so model fits printer volume
   const scaleFactor = useMemo(() => {
     if (!geometry?.boundingBox) return 1;
@@ -453,8 +459,12 @@ function ScaledMesh({
           );
         }
       }}
-      onPointerOver={() => setHovered(true)}
-      onPointerOut={() => setHovered(false)}
+      onPointerOver={(e) => {
+        if ((e.nativeEvent as PointerEvent).pointerType !== "touch") setHovered(true);
+      }}
+      onPointerOut={(e) => {
+        if ((e.nativeEvent as PointerEvent).pointerType !== "touch") setHovered(false);
+      }}
     >
       <meshStandardMaterial
         color={visibleBodyColor(obj, selected, hovered)}
@@ -469,18 +479,18 @@ function ScaledMesh({
         polygonOffsetUnits={1}
       />
     </mesh>
-    <lineSegments renderOrder={selected ? 4 : 1}>
-      <edgesGeometry args={[geometry, selected ? 12 : 25]} />
-      <lineBasicMaterial
-        color={selected ? VIEW_COLORS.edgeSelectedInk : hovered ? VIEW_COLORS.edgeHover : VIEW_COLORS.edgeSubtle}
-        transparent
-        opacity={selected ? 0.75 : hovered ? 0.6 : 0.38}
-        depthTest
-      />
-    </lineSegments>
-    {selected && (
-      <lineSegments renderOrder={5}>
-        <edgesGeometry args={[geometry, 8]} />
+    {edgesGeometry && (
+      <lineSegments renderOrder={2} geometry={edgesGeometry}>
+        <lineBasicMaterial
+          color={selected ? VIEW_COLORS.edgeSelectedInk : hovered ? VIEW_COLORS.edgeHover : VIEW_COLORS.edgeSubtle}
+          transparent
+          opacity={selected ? 0.75 : hovered ? 0.6 : 0.38}
+          depthTest
+        />
+      </lineSegments>
+    )}
+    {selected && edgesGeometry && (
+      <lineSegments renderOrder={3} geometry={edgesGeometry}>
         <lineBasicMaterial
           color={VIEW_COLORS.edgeSelected}
           transparent
