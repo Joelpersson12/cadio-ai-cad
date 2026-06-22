@@ -6,7 +6,7 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { loginCadioAccount } from "../utils/auth";
+import { loginCadioAccount, isCadioAuthenticated, getCadioAuthToken } from "../utils/auth";
 import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
 
@@ -625,12 +625,13 @@ function useReveal(threshold = 0.12) {
 // ─── AUTH DIALOG ─────────────────────────────────────────────────────────────
 
 function AuthDialog({
-  mode, text, onClose, onStartBuilding,
+  mode, text, onClose, onStartBuilding, pendingPlan,
 }: {
   mode: AuthMode;
   text: typeof copy.en;
   onClose: () => void;
   onStartBuilding: () => void;
+  pendingPlan?: string | null;
 }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -654,7 +655,7 @@ function AuthDialog({
         >
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white">
-              {isSignup ? text.auth.signupTitle : text.auth.loginTitle}
+              {pendingPlan ? `Create account to upgrade` : isSignup ? text.auth.signupTitle : text.auth.loginTitle}
             </h2>
             <button
               onClick={onClose}
@@ -803,9 +804,26 @@ const MODELS = [
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
+async function startCheckout(plan: string): Promise<void> {
+  const token = getCadioAuthToken();
+  const res = await fetch("/api/stripe/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      plan,
+      success_url: `${window.location.origin}/app?upgrade=success`,
+      cancel_url: window.location.href,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.status === "error") throw new Error(data.message || "Stripe not configured yet");
+  window.location.href = data.url as string;
+}
+
 export default function LandingPage({ onStartBuilding }: { onStartBuilding: () => void }) {
   const [language, setLanguage] = useState<Language>("en");
   const [authMode, setAuthMode] = useState<AuthMode>(null);
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [displayModel, setDisplayModel] = useState(0);
   const [exitingModel, setExitingModel] = useState<number | null>(null);
@@ -813,6 +831,15 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
   const transitionLock = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const text = copy[language];
+
+  const handlePlanClick = (plan: string) => {
+    if (isCadioAuthenticated()) {
+      void startCheckout(plan);
+    } else {
+      setPendingPlan(plan);
+      setAuthMode("signup");
+    }
+  };
 
   const switchModel = useCallback((next: number) => {
     if (transitionLock.current || next === displayModel) return;
@@ -1317,7 +1344,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   ))}
                 </ul>
                 <button
-                  onClick={() => onStartBuilding()}
+                  onClick={() => handlePlanClick("pro")}
                   className="w-full rounded-xl py-3 text-sm font-bold transition-all hover:scale-[1.01]"
                   style={{ background: ACCENT, color: BG, boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
                 >
@@ -1348,7 +1375,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   ))}
                 </ul>
                 <button
-                  onClick={() => onStartBuilding()}
+                  onClick={() => handlePlanClick("unlimited")}
                   className="w-full rounded-xl py-3 text-sm font-bold transition-all hover:scale-[1.01]"
                   style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(232,237,242,0.7)" }}
                 >
@@ -1411,8 +1438,18 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
       <AuthDialog
         mode={authMode}
         text={text}
-        onClose={() => setAuthMode(null)}
-        onStartBuilding={() => { setAuthMode(null); onStartBuilding(); }}
+        pendingPlan={pendingPlan}
+        onClose={() => { setAuthMode(null); setPendingPlan(null); }}
+        onStartBuilding={() => {
+          setAuthMode(null);
+          if (pendingPlan) {
+            const plan = pendingPlan;
+            setPendingPlan(null);
+            void startCheckout(plan);
+          } else {
+            onStartBuilding();
+          }
+        }}
       />
     </>
   );
