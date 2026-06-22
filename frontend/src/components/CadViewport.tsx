@@ -305,9 +305,10 @@ function CameraController({
     camera.far = 10000;
     (camera as THREE.PerspectiveCamera).updateProjectionMatrix?.();
     
-    // Center on the build plate
+    // Orbit around the model's actual centre so you can view from below
+    const centreY = Math.max(bounds.z * 0.5, size * 0.25);
     // @ts-ignore
-    controls?.target?.set(0, size * 0.15, 0);
+    controls?.target?.set(0, centreY, 0);
     // @ts-ignore
     controls?.update?.();
   }, [bounds, camera, controls, fitKey]);
