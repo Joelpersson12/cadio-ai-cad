@@ -535,7 +535,7 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
   const [px, py] = volume;
   return (
     <group>
-      {/* Solid plate — clearly visible, no shadow */}
+      {/* Solid plate */}
       <mesh position={[0, -0.6, 0]}>
         <boxGeometry args={[px, 1.2, py]} />
         <meshStandardMaterial
@@ -543,6 +543,7 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
           roughness={0.9}
           metalness={0.0}
           envMapIntensity={0}
+          side={THREE.DoubleSide}
         />
       </mesh>
       {/* Top surface highlight strip */}
@@ -553,11 +554,12 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
           roughness={0.8}
           metalness={0.0}
           emissive="#0a141e"
-          emissiveIntensity={0.25}
+          emissiveIntensity={0.5}
           envMapIntensity={0}
+          side={THREE.DoubleSide}
         />
       </mesh>
-      {/* Border frame — accent color, clearly visible */}
+      {/* Border frame */}
       <lineSegments position={[0, 0.04, 0]}>
         <edgesGeometry args={[new THREE.BoxGeometry(px, 0.01, py)]} />
         <lineBasicMaterial color={VIEW_COLORS.plateEdge} />
@@ -566,7 +568,7 @@ function BuildPlate({ volume }: { volume: [number, number, number] }) {
       {([ [-px/2, 0, -py/2], [px/2, 0, -py/2], [-px/2, 0, py/2], [px/2, 0, py/2] ] as [number,number,number][]).map((pos, i) => (
         <mesh key={i} position={pos}>
           <sphereGeometry args={[2.5, 8, 8]} />
-          <meshStandardMaterial color={VIEW_COLORS.plateEdge} emissive={VIEW_COLORS.plateEdge} emissiveIntensity={0.4} />
+          <meshStandardMaterial color={VIEW_COLORS.plateEdge} emissive={VIEW_COLORS.plateEdge} emissiveIntensity={0.4} side={THREE.DoubleSide} />
         </mesh>
       ))}
     </group>
@@ -923,7 +925,7 @@ export default function CadViewport({
       {/* Ambient hemisphere — warmer ground so floor-facing faces stay visible */}
       <hemisphereLight intensity={0.35} color="#dde8f0" groundColor="#3a4a5a" />
  
-      {/* Refined Grid */}
+      {/* Grid — top side */}
       <Grid
         args={[printerVolume[0] * 3, printerVolume[1] * 3]}
         cellSize={SKETCH_GRID_STEP_MM}
@@ -936,6 +938,21 @@ export default function CadViewport({
         fadeStrength={1.5}
         infiniteGrid={false}
         position={[0, 0.05, 0]}
+      />
+      {/* Grid — bottom side (rotated 180° so visible from below) */}
+      <Grid
+        args={[printerVolume[0] * 3, printerVolume[1] * 3]}
+        cellSize={SKETCH_GRID_STEP_MM}
+        cellThickness={1}
+        cellColor={VIEW_COLORS.gridCell}
+        sectionSize={50}
+        sectionThickness={1.5}
+        sectionColor={VIEW_COLORS.gridSection}
+        fadeDistance={800}
+        fadeStrength={1.5}
+        infiniteGrid={false}
+        position={[0, -0.05, 0]}
+        rotation={[Math.PI, 0, 0]}
       />
  
       <BuildPlate volume={printerVolume} />
