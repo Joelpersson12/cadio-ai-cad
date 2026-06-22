@@ -745,7 +745,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
         {/* Quick toolbar */}
         <div className="flex gap-2 overflow-x-auto border-b border-cadio-border/30 bg-cadio-bg/90 px-4 py-2 scrollbar-none">
-          <button onClick={() => setExpertMode((v) => !v)}
+          <button onClick={() => setExpertMode(!expertMode)}
             className={`h-8 shrink-0 rounded-lg px-3 text-xs font-bold transition-all ${expertMode ? "bg-cadio-accent text-cadio-bg" : "border border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-white"}`}>
             {expertMode ? "Expert" : "Easy"}
           </button>
