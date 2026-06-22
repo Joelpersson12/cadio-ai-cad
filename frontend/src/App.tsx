@@ -745,6 +745,11 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
         {/* Quick toolbar */}
         <div className="flex gap-2 overflow-x-auto border-b border-cadio-border/30 bg-cadio-bg/90 px-4 py-2 scrollbar-none">
+          <button onClick={() => setExpertMode((v) => !v)}
+            className={`h-8 shrink-0 rounded-lg px-3 text-xs font-bold transition-all ${expertMode ? "bg-cadio-accent text-cadio-bg" : "border border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-white"}`}>
+            {expertMode ? "Expert" : "Easy"}
+          </button>
+          <div className="mx-1 w-px bg-cadio-border/40" />
           {TRANSFORM_MODES.map((mode) => (
             <button key={mode.id} onClick={() => setTransformMode(mode.id)}
               className={`h-8 shrink-0 rounded-lg px-3 text-xs font-medium transition-all ${transformMode === mode.id ? "bg-cadio-accent text-white" : "border border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-white"}`}>
@@ -769,7 +774,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             onTransformCommit={(id, t) => void onTransformCommit(id, t)}
             printerVolume={printerVolume}
             bounds={bounds}
-            expertMode={false}
+            expertMode={expertMode}
             mobileMode
             showMeasurements={showMeasurements}
           />

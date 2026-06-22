@@ -457,22 +457,23 @@ function ScaledMesh({
     >
       <meshStandardMaterial
         color={visibleBodyColor(obj, selected, hovered)}
-        roughness={selected ? 0.88 : 0.95}
+        roughness={selected ? 0.88 : 0.92}
         metalness={0}
         envMapIntensity={0}
         emissive={selected ? "#3a1800" : "#000000"}
-        emissiveIntensity={selected ? 0.03 : 0}
+        emissiveIntensity={selected ? 0.04 : 0}
+        side={THREE.DoubleSide}
         polygonOffset
         polygonOffsetFactor={1}
         polygonOffsetUnits={1}
       />
     </mesh>
     <lineSegments renderOrder={selected ? 4 : 1}>
-      <edgesGeometry args={[geometry, selected ? 12 : 24]} />
+      <edgesGeometry args={[geometry, selected ? 12 : 25]} />
       <lineBasicMaterial
         color={selected ? VIEW_COLORS.edgeSelectedInk : hovered ? VIEW_COLORS.edgeHover : VIEW_COLORS.edgeSubtle}
         transparent
-        opacity={selected ? 0.8 : hovered ? 0.65 : 0.5}
+        opacity={selected ? 0.75 : hovered ? 0.6 : 0.38}
         depthTest
       />
     </lineSegments>
@@ -910,14 +911,16 @@ export default function CadViewport({
         }}
         onPointerUp={() => setTransformDragging(false)}
       >
-      {/* Key light — creates clear face differentiation */}
-      <directionalLight position={[300, 500, 300]} intensity={2.8} color="#f5f8ff" />
-      {/* Fill light — soft cool from left, reduces harsh shadows */}
-      <directionalLight position={[-350, 250, -150]} intensity={1.1} color="#c8dff0" />
-      {/* Back/rim — subtle edge separation */}
-      <directionalLight position={[0, 150, -500]} intensity={0.5} color="#ffffff" />
-      {/* Ambient — low so face contrast is strong (like Shapr3D) */}
-      <hemisphereLight intensity={0.18} color="#e8eef5" groundColor="#0a0d10" />
+      {/* Key light — top-right-front, main shading source */}
+      <directionalLight position={[300, 500, 300]} intensity={2.2} color="#f5f8ff" />
+      {/* Fill — soft left, reduces harsh shadows */}
+      <directionalLight position={[-350, 250, -150]} intensity={1.0} color="#c8dff0" />
+      {/* Rim — back edge separation */}
+      <directionalLight position={[0, 150, -500]} intensity={0.45} color="#ffffff" />
+      {/* Bottom fill — prevents underside faces from going black */}
+      <directionalLight position={[0, -300, 0]} intensity={0.6} color="#8ab4cc" />
+      {/* Ambient hemisphere — warmer ground so floor-facing faces stay visible */}
+      <hemisphereLight intensity={0.35} color="#dde8f0" groundColor="#3a4a5a" />
  
       {/* Refined Grid */}
       <Grid
