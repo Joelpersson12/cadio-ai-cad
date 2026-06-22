@@ -35,9 +35,9 @@ const copy = {
       { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Smart Export", body: "Optimized files for FDM, SLA and industrial 3D printing workflows." },
     ],
     workflow: { label: "Workflow", title: "From idea to object in four steps", steps: [["Search", "Describe what you need or find an existing design to remix."], ["Generate", "AI creates valid parametric geometry with real-world dimensions."], ["Refine", "Professional CAD tools for precise edge and surface control."], ["Export", "Production-ready files for your exact printer and material."]] },
-    pricingTitle: "Simple pricing, always",
-    pricingBody: "Free during early access. Help us build the future of AI-assisted CAD.",
-    auth: { loginTitle: "Welcome back", signupTitle: "Start building today", email: "Email address", password: "Password", name: "Full name", continue: "Enter Workspace", hint: "By continuing you agree to our terms and privacy policy." },
+    pricingTitle: "Simple, transparent pricing",
+    pricingBody: "Start free with 3 downloads. Upgrade when you're ready to build more.",
+    auth: { loginTitle: "Welcome back", signupTitle: "Create your account", email: "Email address", password: "Password", name: "Full name", continue: "Enter Workspace", hint: "Sign up for a free account" },
     cta: { title: "Start building today", body: "Join engineers and makers who build faster with Cadio.", button: "Open Workspace" },
   },
   sv: {
@@ -51,9 +51,9 @@ const copy = {
       { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Smart export", body: "Optimerade filer för FDM, SLA och industriell 3D-utskrift." },
     ],
     workflow: { label: "Arbetsflöde", title: "Från idé till objekt i fyra steg", steps: [["Sök", "Beskriv vad du behöver eller hitta en befintlig design."], ["Generera", "AI skapar giltig parametrisk geometri med verkliga mått."], ["Förfina", "Professionella CAD-verktyg för exakt kant- och ytkontroll."], ["Exportera", "Produktionsklara filer för din skrivare och material."]] },
-    pricingTitle: "Enkel prissättning, alltid",
-    pricingBody: "Gratis under early access. Hjälp oss bygga framtidens AI-assisterade CAD.",
-    auth: { loginTitle: "Välkommen tillbaka", signupTitle: "Börja bygga idag", email: "E-postadress", password: "Lösenord", name: "Fullständigt namn", continue: "Gå till Workspace", hint: "Genom att fortsätta godkänner du våra villkor och integritetspolicy." },
+    pricingTitle: "Enkel, transparent prissättning",
+    pricingBody: "Börja gratis med 3 nedladdningar. Uppgradera när du är redo att bygga mer.",
+    auth: { loginTitle: "Välkommen tillbaka", signupTitle: "Skapa ditt konto", email: "E-postadress", password: "Lösenord", name: "Fullständigt namn", continue: "Gå till Workspace", hint: "Skapa ett gratis konto" },
     cta: { title: "Börja bygga idag", body: "Gå med ingenjörer och makers som bygger snabbare med Cadio.", button: "Öppna Workspace" },
   },
   es: {
@@ -537,7 +537,9 @@ function AuthDialog({
 }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [agreedTerms, setAgreedTerms] = useState(false);
   if (!mode) return null;
+  const isSignup = mode === "signup";
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-center px-4"
@@ -555,7 +557,7 @@ function AuthDialog({
         >
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white">
-              {mode === "login" ? text.auth.loginTitle : text.auth.signupTitle}
+              {isSignup ? text.auth.signupTitle : text.auth.loginTitle}
             </h2>
             <button
               onClick={onClose}
@@ -570,6 +572,10 @@ function AuthDialog({
             className="flex flex-col gap-4"
             onSubmit={async (e) => {
               e.preventDefault();
+              if (isSignup && !agreedTerms) {
+                setErr("You must agree to the Terms of Service to create an account.");
+                return;
+              }
               const fd = new FormData(e.currentTarget);
               setErr(""); setBusy(true);
               try {
@@ -577,6 +583,7 @@ function AuthDialog({
                   name: String(fd.get("name") || ""),
                   email: String(fd.get("email") || ""),
                   password: String(fd.get("password") || ""),
+                  agreed_terms: isSignup ? agreedTerms : undefined,
                 });
                 onStartBuilding();
               } catch (ex) {
@@ -586,7 +593,7 @@ function AuthDialog({
               }
             }}
           >
-            {mode === "signup" && (
+            {isSignup && (
               <div>
                 <label className="mb-2 block text-[11px] font-semibold uppercase tracking-widest text-white/40">
                   {text.auth.name}
@@ -623,20 +630,65 @@ function AuthDialog({
                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
               />
             </div>
+            {isSignup && (
+              <label className="flex cursor-pointer items-start gap-3">
+                <div className="relative mt-0.5 shrink-0">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={agreedTerms}
+                    onChange={(e) => setAgreedTerms(e.target.checked)}
+                  />
+                  <div
+                    className="h-5 w-5 rounded transition-all"
+                    style={{
+                      background: agreedTerms ? ACCENT : "rgba(255,255,255,0.06)",
+                      border: `1.5px solid ${agreedTerms ? ACCENT : "rgba(255,255,255,0.18)"}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {agreedTerms && (
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 12 12" stroke="#050709" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <span className="text-xs leading-5 text-white/40">
+                  I agree to Cadio's{" "}
+                  <a href="/terms" className="text-[#2bb8dc] hover:text-white underline transition-colors" onClick={(e) => e.stopPropagation()}>Terms of Service</a>
+                  {" "}and{" "}
+                  <a href="/privacy" className="text-[#2bb8dc] hover:text-white underline transition-colors" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>.
+                </span>
+              </label>
+            )}
             {err && (
               <p className="rounded-xl px-4 py-2.5 text-xs text-red-300" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
                 {err}
               </p>
             )}
             <button
-              disabled={busy}
+              disabled={busy || (isSignup && !agreedTerms)}
               className="mt-1 h-12 w-full rounded-xl text-sm font-bold transition-all disabled:opacity-50"
               style={{ background: ACCENT, color: "#050709", boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
             >
               {busy ? "…" : text.auth.continue}
             </button>
           </form>
-          <p className="mt-4 text-center text-xs leading-relaxed text-white/25">{text.auth.hint}</p>
+          {!isSignup && (
+            <p className="mt-4 text-center text-xs leading-relaxed text-white/25">
+              No account?{" "}
+              <button
+                type="button"
+                className="text-[#2bb8dc] hover:text-white transition-colors underline"
+                onClick={() => { /* mode is controlled by parent */ }}
+              >
+                {text.auth.hint}
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -1087,110 +1139,104 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               {text.pricingBody}
             </p>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 max-w-2xl">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 max-w-4xl">
               {/* Free */}
               <div
-                className="rounded-2xl p-8"
+                className="rounded-2xl p-7"
                 style={{
-                  background: `${ACCENT_DIM}0.05)`,
-                  border: `1px solid ${ACCENT_DIM}0.22)`,
-                  boxShadow: `0 0 60px ${ACCENT_DIM}0.06)`,
+                  background: "rgba(255,255,255,0.025)",
+                  border: "1px solid rgba(255,255,255,0.09)",
                 }}
               >
-                <p
-                  className="mb-6 text-[11px] font-bold uppercase tracking-[0.28em]"
-                  style={{ color: ACCENT }}
-                >
-                  Free
-                </p>
+                <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em] text-white/40">Free</p>
                 <div className="mb-1 flex items-end gap-2">
-                  <span className="text-6xl font-black text-white">$0</span>
-                  <span className="mb-2 text-sm" style={{ color: "rgba(232,237,242,0.38)" }}>
-                    /month
-                  </span>
+                  <span className="text-5xl font-black text-white">$0</span>
+                  <span className="mb-1.5 text-sm text-white/30">/mo</span>
                 </div>
-                <p className="mb-8 text-sm" style={{ color: "rgba(232,237,242,0.32)" }}>
-                  During early access
-                </p>
-                <ul className="mb-8 space-y-3">
-                  {[
-                    "AI model generation",
-                    "Export STL & 3MF",
-                    "Manual CAD tools",
-                    "Unlimited sessions",
-                  ].map((f) => (
-                    <li
-                      key={f}
-                      className="flex items-center gap-3 text-sm"
-                      style={{ color: "rgba(232,237,242,0.68)" }}
-                    >
-                      <span
-                        className="h-1.5 w-1.5 rounded-full flex-shrink-0"
-                        style={{ background: ACCENT }}
-                      />
+                <p className="mb-7 text-sm text-white/30">3 downloads to get started</p>
+                <ul className="mb-7 space-y-2.5">
+                  {["AI model generation", "STL & 3MF export", "Manual CAD tools", "3 downloads total"].map((f) => (
+                    <li key={f} className="flex items-center gap-2.5 text-sm text-white/55">
+                      <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: ACCENT }} />
                       {f}
                     </li>
                   ))}
                 </ul>
                 <button
-                  onClick={onStartBuilding}
-                  className="w-full rounded-xl py-3.5 text-sm font-bold transition-all hover:scale-[1.01]"
-                  style={{ background: ACCENT, color: BG, boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
+                  onClick={() => onStartBuilding()}
+                  className="w-full rounded-xl py-3 text-sm font-bold transition-all hover:scale-[1.01]"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(232,237,242,0.7)" }}
                 >
-                  Start Building
+                  Get Started
                 </button>
               </div>
 
-              {/* Pro */}
+              {/* Pro — highlighted */}
               <div
-                className="rounded-2xl p-8"
+                className="rounded-2xl p-7 relative"
                 style={{
-                  background: "rgba(255,255,255,0.025)",
-                  border: "1px solid rgba(255,255,255,0.07)",
+                  background: `${ACCENT_DIM}0.06)`,
+                  border: `1.5px solid ${ACCENT_DIM}0.35)`,
+                  boxShadow: `0 0 60px ${ACCENT_DIM}0.08)`,
                 }}
               >
-                <p
-                  className="mb-6 text-[11px] font-bold uppercase tracking-[0.28em]"
-                  style={{ color: "rgba(232,237,242,0.25)" }}
+                <div
+                  className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest"
+                  style={{ background: ACCENT, color: BG }}
                 >
-                  Pro
-                </p>
-                <div className="mb-1 flex items-end gap-2">
-                  <span className="text-6xl font-black" style={{ color: "rgba(232,237,242,0.18)" }}>
-                    $?
-                  </span>
-                  <span className="mb-2 text-sm" style={{ color: "rgba(232,237,242,0.18)" }}>
-                    /month
-                  </span>
+                  Popular
                 </div>
-                <p className="mb-8 text-sm" style={{ color: "rgba(232,237,242,0.18)" }}>
-                  Coming soon
-                </p>
-                <ul className="mb-8 space-y-3">
-                  {["Everything in Free", "Priority AI processing", "STEP export", "Team workspaces"].map((f) => (
-                    <li
-                      key={f}
-                      className="flex items-center gap-3 text-sm"
-                      style={{ color: "rgba(232,237,242,0.22)" }}
-                    >
-                      <span
-                        className="h-1.5 w-1.5 rounded-full flex-shrink-0"
-                        style={{ background: "rgba(255,255,255,0.12)" }}
-                      />
+                <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>Pro</p>
+                <div className="mb-1 flex items-end gap-2">
+                  <span className="text-5xl font-black text-white">$9</span>
+                  <span className="mb-1.5 text-sm text-white/40">/mo</span>
+                </div>
+                <p className="mb-7 text-sm text-white/40">20 downloads per month</p>
+                <ul className="mb-7 space-y-2.5">
+                  {["Everything in Free", "20 downloads / month", "STEP export", "Priority AI speed"].map((f) => (
+                    <li key={f} className="flex items-center gap-2.5 text-sm" style={{ color: "rgba(232,237,242,0.72)" }}>
+                      <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: ACCENT }} />
                       {f}
                     </li>
                   ))}
                 </ul>
                 <button
-                  disabled
-                  className="w-full rounded-xl py-3.5 text-sm font-bold cursor-not-allowed"
-                  style={{
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                    color: "rgba(232,237,242,0.18)",
-                  }}
+                  onClick={() => onStartBuilding()}
+                  className="w-full rounded-xl py-3 text-sm font-bold transition-all hover:scale-[1.01]"
+                  style={{ background: ACCENT, color: BG, boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
                 >
-                  Coming Soon
+                  Start Pro
+                </button>
+              </div>
+
+              {/* Unlimited */}
+              <div
+                className="rounded-2xl p-7"
+                style={{
+                  background: "rgba(255,255,255,0.025)",
+                  border: "1px solid rgba(255,255,255,0.09)",
+                }}
+              >
+                <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em] text-white/40">Unlimited</p>
+                <div className="mb-1 flex items-end gap-2">
+                  <span className="text-5xl font-black text-white">$19</span>
+                  <span className="mb-1.5 text-sm text-white/30">/mo</span>
+                </div>
+                <p className="mb-7 text-sm text-white/30">Unlimited downloads</p>
+                <ul className="mb-7 space-y-2.5">
+                  {["Everything in Pro", "Unlimited downloads", "All export formats", "Early feature access"].map((f) => (
+                    <li key={f} className="flex items-center gap-2.5 text-sm text-white/55">
+                      <span className="h-1.5 w-1.5 rounded-full flex-shrink-0 bg-white/30" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => onStartBuilding()}
+                  className="w-full rounded-xl py-3 text-sm font-bold transition-all hover:scale-[1.01]"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(232,237,242,0.7)" }}
+                >
+                  Go Unlimited
                 </button>
               </div>
             </div>

@@ -33,8 +33,8 @@ function storeAccount(account: Partial<CadioAccount>, token?: string) {
       accountId,
       plan: account.plan || "free",
       downloadsUsed: account.downloadsUsed ?? 0,
-      downloadLimit: account.downloadLimit ?? 1,
-      downloadsRemaining: account.downloadsRemaining ?? 1,
+      downloadLimit: account.downloadLimit ?? 3,
+      downloadsRemaining: account.downloadsRemaining ?? 3,
       canDownload: account.canDownload ?? true,
     }));
   }
@@ -64,8 +64,8 @@ export function getCadioAccount(): CadioAccount | null {
       accountId,
       plan: parsed.plan || "free",
       downloadsUsed: parsed.downloadsUsed ?? 0,
-      downloadLimit: parsed.downloadLimit ?? 1,
-      downloadsRemaining: parsed.downloadsRemaining ?? 1,
+      downloadLimit: parsed.downloadLimit ?? 3,
+      downloadsRemaining: parsed.downloadsRemaining ?? 3,
       canDownload: parsed.canDownload ?? true,
     };
   } catch {
