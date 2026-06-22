@@ -38,7 +38,18 @@ def _db_path() -> Path:
     return path
 
 
-def _connect() -> sqlite3.Connection:
+def _connect():
+    turso_url = os.environ.get("TURSO_DATABASE_URL", "")
+    turso_token = os.environ.get("TURSO_AUTH_TOKEN", "")
+    if turso_url:
+        try:
+            import libsql_experimental as libsql  # type: ignore[import]
+            conn = libsql.connect(database=turso_url, auth_token=turso_token)
+            conn.row_factory = sqlite3.Row
+            _init(conn)
+            return conn
+        except ImportError:
+            pass  # fall back to local sqlite if package not installed
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
