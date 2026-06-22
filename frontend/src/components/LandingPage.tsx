@@ -941,7 +941,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as Language)}
-                className="hidden sm:block h-9 rounded-lg px-2 text-xs outline-none transition-colors"
+                className="h-8 sm:h-9 rounded-lg px-2 text-xs outline-none transition-colors"
                 style={{
                   background: "rgba(43,184,220,0.06)",
                   border: "1px solid rgba(43,184,220,0.15)",
