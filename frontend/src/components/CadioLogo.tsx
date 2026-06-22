@@ -5,27 +5,32 @@ type CadioLogoProps = {
   className?: string;
 };
 
+/** Isometric cube — three visible faces, CAD-engineering mark */
 export function CadioMark({ size = 28, color = "currentColor" }: { size?: number; color?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      fill={color}
       width={size}
       height={size}
+      fill="none"
       aria-hidden="true"
+      style={{ display: "block" }}
     >
-      {/* Precision caliper "C" — three bars forming the letter */}
-      {/* Left vertical bar */}
-      <rect x="2.5" y="2" width="3.5" height="20" rx="1.75" />
-      {/* Top horizontal bar */}
-      <rect x="2.5" y="2" width="15" height="3.5" rx="1.75" />
-      {/* Bottom horizontal bar */}
-      <rect x="2.5" y="18.5" width="15" height="3.5" rx="1.75" />
-      {/* Tick marks at open end — suggest measurement / CAD */}
-      <rect x="17" y="2" width="2" height="6.5" rx="1" opacity="0.35" />
-      <rect x="17" y="15.5" width="2" height="6.5" rx="1" opacity="0.35" />
-      {/* Center accent dot */}
-      <circle cx="20.5" cy="12" r="1.5" opacity="0.5" />
+      {/* Right face — brightest (facing viewer) */}
+      <path d="M22 8 L22 16 L12 22 L12 14 Z" fill={color} fillOpacity="0.55" />
+      {/* Left face — in partial shadow */}
+      <path d="M2 8 L12 14 L12 22 L2 16 Z" fill={color} fillOpacity="0.22" />
+      {/* Top face — lit from above */}
+      <path d="M12 2 L22 8 L12 14 L2 8 Z" fill={color} fillOpacity="0.85" />
+      {/* All visible edges */}
+      <path
+        d="M12 2 L22 8 L12 14 L2 8 Z M22 8 L22 16 L12 22 L12 14 M2 8 L2 16 L12 22"
+        stroke={color}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
     </svg>
   );
 }
@@ -39,7 +44,7 @@ export default function CadioLogo({
   const content = (
     <>
       <span className="shrink-0 text-cadio-accent">
-        <CadioMark size={28} />
+        <CadioMark size={26} />
       </span>
       {!compact && (
         <div className="min-w-0 flex flex-col justify-center leading-none">

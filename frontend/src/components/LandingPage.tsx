@@ -4,7 +4,7 @@
  */
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { loginCadioAccount } from "../utils/auth";
 import CadioLogo from "./CadioLogo";
@@ -144,59 +144,9 @@ const ACCENT_DIM = "rgba(43,184,220,";
 const BG = "#080c10";
 
 // ─── 3D MODELS ──────────────────────────────────────────────────────────────
+// Popular prints: Gyroscope (precision rings), Rocket, Twisted Vase, Flexi Coil
 
-/** Geodesic lattice sphere — classic CAD topology */
-function LatticeSphere() {
-  const groupRef = useRef<THREE.Group>(null);
-  const solidRef = useRef<THREE.Mesh>(null);
-  const wireRef = useRef<THREE.Mesh>(null);
-
-  const geo = useMemo(() => new THREE.IcosahedronGeometry(1.35, 3), []);
-
-  const solidMat = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: "#1a2a35",
-        roughness: 0.12,
-        metalness: 0.88,
-        clearcoat: 0.9,
-        clearcoatRoughness: 0.08,
-        emissive: ACCENT,
-        emissiveIntensity: 0.04,
-      }),
-    [],
-  );
-
-  const wireMat = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: ACCENT,
-        wireframe: true,
-        opacity: 0.35,
-        transparent: true,
-      }),
-    [],
-  );
-
-  useFrame(({ clock }) => {
-    if (!groupRef.current) return;
-    const t = clock.elapsedTime;
-    groupRef.current.rotation.y = t * 0.14;
-    groupRef.current.rotation.x = Math.sin(t * 0.08) * 0.18;
-    groupRef.current.position.y = Math.sin(t * 0.5) * 0.08;
-    const s = 1 + Math.sin(t * 0.45) * 0.012;
-    if (wireRef.current) wireRef.current.scale.setScalar(s * 1.008);
-  });
-
-  return (
-    <group ref={groupRef}>
-      <mesh ref={solidRef} geometry={geo} material={solidMat} castShadow />
-      <mesh ref={wireRef} geometry={geo} material={wireMat} />
-    </group>
-  );
-}
-
-/** Gyroscope — nested precision rings, signature CAD piece */
+/** Gyroscope — nested precision rings, most popular mechanical print */
 function Gyroscope() {
   const outer = useRef<THREE.Group>(null);
   const mid = useRef<THREE.Group>(null);
@@ -260,119 +210,242 @@ function Gyroscope() {
   );
 }
 
-/** Turbine impeller — swept blade geometry */
-function TurbineShell() {
+/** Rocket — classic maker print, clean engineering silhouette */
+function Rocket() {
   const groupRef = useRef<THREE.Group>(null);
 
-  const bladeMat = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: "#111820",
-        roughness: 0.06,
-        metalness: 0.97,
-        clearcoat: 1,
-        clearcoatRoughness: 0.08,
-        emissive: ACCENT,
-        emissiveIntensity: 0.03,
-      }),
-    [],
-  );
+  const metalMat = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: "#c8d2dc",
+    roughness: 0.18,
+    metalness: 0.82,
+    clearcoat: 0.85,
+    clearcoatRoughness: 0.08,
+  }), []);
 
-  const bladeGeo = useMemo(() => {
+  const accentMat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: ACCENT,
+    roughness: 0.12,
+    metalness: 0.9,
+    emissive: ACCENT,
+    emissiveIntensity: 0.2,
+  }), []);
+
+  const noseConeGeo = useMemo(() => new THREE.ConeGeometry(0.42, 1.3, 28), []);
+  const bodyGeo = useMemo(() => new THREE.CylinderGeometry(0.42, 0.42, 2.1, 28), []);
+  const nozzleGeo = useMemo(() => new THREE.CylinderGeometry(0.38, 0.54, 0.52, 28), []);
+  const windowRingGeo = useMemo(() => new THREE.TorusGeometry(0.16, 0.045, 10, 28), []);
+
+  const finGeo = useMemo(() => {
     const shape = new THREE.Shape();
     shape.moveTo(0, 0);
-    shape.bezierCurveTo(0.05, 0.3, 0.25, 0.5, 0.1, 0.9);
-    shape.bezierCurveTo(0.0, 1.0, -0.1, 0.9, -0.05, 0.7);
-    shape.bezierCurveTo(-0.2, 0.4, -0.08, 0.15, 0, 0);
-    return new THREE.ExtrudeGeometry(shape, {
-      depth: 0.06,
-      bevelEnabled: true,
-      bevelSize: 0.012,
-      bevelThickness: 0.012,
-      bevelSegments: 3,
-    });
+    shape.lineTo(0.72, -0.85);
+    shape.lineTo(0, -0.85);
+    shape.closePath();
+    return new THREE.ExtrudeGeometry(shape, { depth: 0.07, bevelEnabled: false });
   }, []);
-
-  const hubGeo = useMemo(() => new THREE.CylinderGeometry(0.18, 0.22, 0.12, 32), []);
-
-  useFrame(({ clock }) => {
-    if (!groupRef.current) return;
-    groupRef.current.rotation.z = clock.elapsedTime * 0.24;
-    groupRef.current.rotation.y = Math.sin(clock.elapsedTime * 0.1) * 0.22;
-    groupRef.current.position.y = Math.sin(clock.elapsedTime * 0.55) * 0.09;
-  });
-
-  const BLADES = 8;
-  return (
-    <group ref={groupRef} scale={1.3}>
-      {Array.from({ length: BLADES }, (_, i) => (
-        <mesh
-          key={i}
-          geometry={bladeGeo}
-          material={bladeMat}
-          rotation={[Math.PI / 2, 0, (Math.PI * 2 * i) / BLADES]}
-          castShadow
-        />
-      ))}
-      <mesh geometry={hubGeo} material={bladeMat} castShadow />
-    </group>
-  );
-}
-
-/** Phone stand — the everyday hero of 3D printing */
-function PhoneStand() {
-  const groupRef = useRef<THREE.Group>(null);
-
-  const mat = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: "#0d1a22",
-        roughness: 0.15,
-        metalness: 0.7,
-        clearcoat: 0.6,
-        clearcoatRoughness: 0.1,
-        emissive: ACCENT,
-        emissiveIntensity: 0.05,
-      }),
-    [],
-  );
-
-  const baseMesh = useMemo(
-    () => new THREE.BoxGeometry(2.2, 0.22, 1.6, 1, 1, 1),
-    [],
-  );
-  const backMesh = useMemo(
-    () => new THREE.BoxGeometry(2.0, 2.6, 0.2, 1, 1, 1),
-    [],
-  );
-  const lipMesh = useMemo(
-    () => new THREE.BoxGeometry(2.0, 0.4, 0.3, 1, 1, 1),
-    [],
-  );
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
     const t = clock.elapsedTime;
-    groupRef.current.rotation.y = t * 0.18;
-    groupRef.current.position.y = Math.sin(t * 0.5) * 0.07;
+    groupRef.current.rotation.y = t * 0.22;
+    groupRef.current.rotation.x = Math.sin(t * 0.28) * 0.12;
+    groupRef.current.position.y = Math.sin(t * 0.5) * 0.1;
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.2, 0]}>
-      {/* Base plate */}
-      <mesh geometry={baseMesh} material={mat} castShadow position={[0, 0, 0]} />
-      {/* Angled back support */}
-      <mesh
-        geometry={backMesh}
-        material={mat}
-        castShadow
-        position={[0, 1.0, -0.55]}
-        rotation={[-0.35, 0, 0]}
-      />
-      {/* Front lip */}
-      <mesh geometry={lipMesh} material={mat} castShadow position={[0, 0.3, 0.65]} />
+    <group ref={groupRef} scale={0.92}>
+      <mesh geometry={noseConeGeo} material={metalMat} position={[0, 2.05, 0]} castShadow />
+      <mesh geometry={bodyGeo} material={metalMat} position={[0, 0.55, 0]} castShadow />
+      <mesh geometry={nozzleGeo} material={metalMat} position={[0, -0.77, 0]} castShadow />
+      <mesh position={[0, -0.77, 0]}>
+        <cylinderGeometry args={[0.22, 0.32, 0.38, 20]} />
+        <meshStandardMaterial color="#060a10" roughness={0.9} />
+      </mesh>
+      {/* Accent ring */}
+      <mesh position={[0, 0.55, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.43, 0.045, 10, 34]} />
+        <meshStandardMaterial color={ACCENT} emissive={ACCENT} emissiveIntensity={0.35} roughness={0.15} metalness={0.85} />
+      </mesh>
+      {/* Window */}
+      <mesh geometry={windowRingGeo} material={accentMat} position={[0, 1.35, 0.40]} rotation={[Math.PI / 2, 0, 0]} castShadow />
+      <mesh position={[0, 1.35, 0.43]}>
+        <circleGeometry args={[0.12, 18]} />
+        <meshBasicMaterial color={ACCENT} transparent opacity={0.45} />
+      </mesh>
+      {/* 3 Fins */}
+      {[0, 1, 2].map((i) => (
+        <mesh
+          key={i}
+          geometry={finGeo}
+          material={metalMat}
+          position={[
+            Math.sin((i / 3) * Math.PI * 2) * 0.41,
+            -0.52,
+            Math.cos((i / 3) * Math.PI * 2) * 0.41,
+          ]}
+          rotation={[0, -(i / 3) * Math.PI * 2, 0]}
+          castShadow
+        />
+      ))}
     </group>
   );
+}
+
+/** Twisted Vase — #1 most printed decorative item worldwide */
+function TwistedVase() {
+  const groupRef = useRef<THREE.Group>(null);
+
+  const vaseMat = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: "#14202c",
+    roughness: 0.06,
+    metalness: 0.88,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.04,
+    emissive: ACCENT,
+    emissiveIntensity: 0.05,
+  }), []);
+
+  const vasePts = useMemo(() => {
+    const pts: THREE.Vector2[] = [];
+    for (let i = 0; i <= 48; i++) {
+      const t = i / 48;
+      const y = t * 3.4 - 0.5;
+      let r: number;
+      if (t < 0.08) r = 0.08 + t * 5.5;
+      else if (t < 0.38) r = 0.52 + (t - 0.08) * 0.35;
+      else if (t < 0.62) r = 0.62 - (t - 0.38) * 0.25;
+      else if (t < 0.82) r = 0.56 + (t - 0.62) * 0.85;
+      else r = 0.73 + (t - 0.82) * 1.5;
+      r += Math.sin(t * Math.PI * 14) * 0.022;
+      pts.push(new THREE.Vector2(Math.max(0, r), y));
+    }
+    return pts;
+  }, []);
+
+  const vaseGeo = useMemo(() => new THREE.LatheGeometry(vasePts, 72), [vasePts]);
+
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    const t = clock.elapsedTime;
+    groupRef.current.rotation.y = t * 0.24;
+    groupRef.current.position.y = Math.sin(t * 0.48) * 0.09;
+  });
+
+  return (
+    <group ref={groupRef} scale={0.82} position={[0, -0.45, 0]}>
+      <mesh geometry={vaseGeo} material={vaseMat} castShadow />
+      <mesh geometry={vaseGeo}>
+        <meshBasicMaterial color={ACCENT} wireframe opacity={0.1} transparent />
+      </mesh>
+    </group>
+  );
+}
+
+/** Flexi Coil — articulated segments, inspired by Flexi Rex / Flexi Dragon */
+function FlexiCoil() {
+  const groupRef = useRef<THREE.Group>(null);
+  const segRefs = useRef<Array<THREE.Group | null>>([]);
+
+  const bodyMat = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: "#0e1920",
+    roughness: 0.22,
+    metalness: 0.78,
+    clearcoat: 0.65,
+    clearcoatRoughness: 0.18,
+    emissive: "#091218",
+    emissiveIntensity: 0.4,
+  }), []);
+
+  const jointMat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: ACCENT,
+    roughness: 0.12,
+    metalness: 0.92,
+    emissive: ACCENT,
+    emissiveIntensity: 0.18,
+  }), []);
+
+  const segGeo = useMemo(() => new THREE.SphereGeometry(1, 22, 16), []);
+  const jointGeo = useMemo(() => new THREE.SphereGeometry(0.32, 14, 10), []);
+
+  const SEGS = 11;
+  const baseData = useMemo(() =>
+    Array.from({ length: SEGS }, (_, i) => {
+      const t = i / (SEGS - 1);
+      const angle = t * Math.PI * 2.4 - 0.3;
+      const radius = 0.48 + t * 0.32;
+      return {
+        x: Math.cos(angle) * radius,
+        baseY: (1 - t) * 2.1 - 0.9,
+        z: Math.sin(angle) * radius,
+        scale: 0.44 - (i / SEGS) * 0.22,
+      };
+    }),
+  []);
+
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    const t = clock.elapsedTime;
+    groupRef.current.rotation.y = t * 0.2;
+    groupRef.current.position.y = Math.sin(t * 0.52) * 0.1;
+    segRefs.current.forEach((seg: THREE.Group | null, i: number) => {
+      if (seg) {
+        const wave = Math.sin(t * 2.0 + i * 0.7) * 0.07;
+        seg.position.y = baseData[i].baseY + wave;
+      }
+    });
+  });
+
+  return (
+    <group ref={groupRef}>
+      {baseData.map((pos: { x: number; baseY: number; z: number; scale: number }, i: number) => (
+        <group
+          key={i}
+          ref={(el: THREE.Group | null) => { segRefs.current[i] = el; }}
+          position={[pos.x, pos.baseY, pos.z]}
+          scale={pos.scale}
+        >
+          <mesh geometry={segGeo} material={bodyMat} castShadow />
+          <mesh geometry={jointGeo} material={jointMat} castShadow />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** ModelStage — wraps a model and drives spin-morph transition animation */
+function ModelStage({
+  children,
+  isExiting,
+  isEntering,
+}: {
+  children: ReactNode;
+  isExiting?: boolean;
+  isEntering?: boolean;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  const elapsed = useRef(0);
+  const DURATION = 0.46;
+
+  useEffect(() => {
+    elapsed.current = 0;
+  }, [isExiting, isEntering]);
+
+  useFrame((_, delta) => {
+    if (!ref.current || (!isExiting && !isEntering)) return;
+    elapsed.current += delta;
+    const t = Math.min(elapsed.current / DURATION, 1);
+
+    if (isExiting) {
+      ref.current.scale.setScalar(Math.max(0, 1 - t * t));
+      ref.current.rotation.y += delta * (3 + t * 26);
+    } else if (isEntering) {
+      const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      ref.current.scale.setScalar(eased);
+      ref.current.rotation.y += delta * (22 * (1 - t) + 0.4);
+    }
+  });
+
+  return <group ref={ref}>{children}</group>;
 }
 
 /** Camera — smooth push-in + gentle look-at drift */
@@ -414,8 +487,23 @@ function GroundGrid() {
   return <mesh ref={ref} geometry={geo} material={mat} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.6, 0]} />;
 }
 
-/** The full Three.js hero scene — spotlight from top, model centered */
-function HeroScene({ activeModel }: { activeModel: number }) {
+function renderLandingModel(index: number) {
+  if (index === 0) return <Gyroscope />;
+  if (index === 1) return <Rocket />;
+  if (index === 2) return <TwistedVase />;
+  return <FlexiCoil />;
+}
+
+/** The full Three.js hero scene — spotlight from top, spin-morph transitions */
+function HeroScene({
+  displayModel,
+  exitingModel,
+  inTransition,
+}: {
+  displayModel: number;
+  exitingModel: number | null;
+  inTransition: boolean;
+}) {
   return (
     <div className="absolute inset-0">
       <Canvas
@@ -426,36 +514,45 @@ function HeroScene({ activeModel }: { activeModel: number }) {
           antialias: true,
           alpha: false,
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.25,
+          toneMappingExposure: 1.3,
         }}
       >
         <color attach="background" args={[BG]} />
-        <fog attach="fog" args={[BG, 12, 24]} />
+        <fog attach="fog" args={[BG, 14, 26]} />
 
-        {/* Cinematic spotlight from top — the key light */}
+        {/* Key spotlight from top — hard cone, cinematic */}
         <spotLight
-          position={[0, 7, 1]}
-          angle={0.28}
-          penumbra={0.85}
-          intensity={12}
+          position={[0, 8, 1]}
+          angle={0.25}
+          penumbra={0.8}
+          intensity={16}
           color="#ffffff"
           castShadow
           shadow-mapSize={[2048, 2048]}
+          shadow-bias={-0.0004}
         />
-        {/* Cyan fill from below — gives the "glow pool" feel */}
-        <pointLight position={[0, -2.5, 0]} intensity={3} color={ACCENT} />
-        {/* Subtle blue rim from behind */}
-        <pointLight position={[-4, 2, -4]} intensity={1.5} color="#0a3a50" />
-        {/* Warm rim right */}
-        <pointLight position={[5, 3, 2]} intensity={0.8} color="#1a3040" />
-        {/* Very dim ambient so shadows stay dramatic */}
-        <ambientLight intensity={0.08} color="#0a1520" />
+        {/* Cyan underlight — the glow pool */}
+        <pointLight position={[0, -2.8, 0]} intensity={4} color={ACCENT} />
+        {/* Rim from behind-left */}
+        <pointLight position={[-5, 2, -5]} intensity={2} color="#083848" />
+        {/* Subtle fill from front-right */}
+        <pointLight position={[4, 4, 3]} intensity={0.6} color="#0a1e28" />
+        {/* Very dim ambient — keep shadows dramatic */}
+        <ambientLight intensity={0.06} color="#060e14" />
 
         <GroundGrid />
-        {activeModel === 0 && <LatticeSphere />}
-        {activeModel === 1 && <Gyroscope />}
-        {activeModel === 2 && <TurbineShell />}
-        {activeModel === 3 && <PhoneStand />}
+
+        {/* Exiting model — spin fast and shrink */}
+        {exitingModel !== null && (
+          <ModelStage key={`exit-${exitingModel}`} isExiting={true}>
+            {renderLandingModel(exitingModel)}
+          </ModelStage>
+        )}
+
+        {/* Current model — entering (if transition just started) or idle */}
+        <ModelStage key={`show-${displayModel}`} isEntering={inTransition && exitingModel !== null}>
+          {renderLandingModel(displayModel)}
+        </ModelStage>
 
         <CameraRig />
       </Canvas>
@@ -646,10 +743,10 @@ function AuthDialog({
 // ─── MODEL SELECTOR LABELS ───────────────────────────────────────────────────
 
 const MODELS = [
-  { label: "Lattice Shell", description: "Geodesic parametric structure" },
-  { label: "Gyroscope", description: "Nested precision rings" },
-  { label: "Turbine", description: "Swept blade geometry" },
-  { label: "Phone Stand", description: "Everyday 3D print object" },
+  { label: "Gyroscope", description: "Precision mechanical rings" },
+  { label: "Rocket", description: "Classic maker print" },
+  { label: "Twisted Vase", description: "#1 most printed decoration" },
+  { label: "Flexi Coil", description: "Articulated flexi print" },
 ];
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
@@ -658,14 +755,33 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
   const [language, setLanguage] = useState<Language>("en");
   const [authMode, setAuthMode] = useState<AuthMode>(null);
   const [scrolled, setScrolled] = useState(false);
-  const [activeModel, setActiveModel] = useState(0);
+  const [displayModel, setDisplayModel] = useState(0);
+  const [exitingModel, setExitingModel] = useState<number | null>(null);
+  const [inTransition, setInTransition] = useState(false);
+  const transitionLock = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const text = copy[language];
 
+  const switchModel = useCallback((next: number) => {
+    if (transitionLock.current || next === displayModel) return;
+    transitionLock.current = true;
+    setExitingModel(displayModel);
+    setDisplayModel(next);
+    setInTransition(true);
+    setTimeout(() => {
+      setExitingModel(null);
+      setInTransition(false);
+      transitionLock.current = false;
+    }, 520);
+  }, [displayModel]);
+
   useEffect(() => {
-    const id = setInterval(() => setActiveModel((m) => (m + 1) % MODELS.length), 5500);
+    const id = setInterval(
+      () => switchModel((displayModel + 1) % MODELS.length),
+      5200,
+    );
     return () => clearInterval(id);
-  }, []);
+  }, [displayModel, switchModel]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -776,7 +892,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
         {/* ── HERO ──────────────────────────────────────────────────────── */}
         <section className="relative min-h-screen overflow-hidden">
           {/* 3D scene fills entire hero */}
-          <HeroScene activeModel={activeModel} />
+          <HeroScene displayModel={displayModel} exitingModel={exitingModel} inTransition={inTransition} />
 
           {/* Hero text — centered, above the model */}
           <div className="relative z-10 flex min-h-screen flex-col items-center justify-center pt-16 pb-32">
@@ -855,13 +971,13 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
             {MODELS.map((m, i) => (
               <button
                 key={i}
-                onClick={() => setActiveModel(i)}
+                onClick={() => switchModel(i)}
                 title={m.label}
                 className="transition-all duration-300 rounded-full"
                 style={{
-                  width: activeModel === i ? "28px" : "8px",
+                  width: displayModel === i ? "28px" : "8px",
                   height: "8px",
-                  background: activeModel === i ? ACCENT : "rgba(255,255,255,0.2)",
+                  background: displayModel === i ? ACCENT : "rgba(255,255,255,0.2)",
                 }}
               />
             ))}
@@ -869,9 +985,9 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
 
           {/* Active model label */}
           <div className="absolute bottom-10 right-8 z-10 hidden lg:flex flex-col items-end gap-1">
-            <p className="text-xs font-semibold text-white">{MODELS[activeModel].label}</p>
+            <p className="text-xs font-semibold text-white">{MODELS[displayModel].label}</p>
             <p className="text-[10px]" style={{ color: "rgba(232,237,242,0.35)" }}>
-              {MODELS[activeModel].description}
+              {MODELS[displayModel].description}
             </p>
           </div>
 

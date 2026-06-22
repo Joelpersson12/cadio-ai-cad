@@ -2,34 +2,34 @@
  
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls } from "@react-three/drei";
+import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
 
 const VIEW_COLORS = {
   background: "#111418",
-  plate: "#1e2a3a",
+  plate: "#1a2530",
   plateEdge: "#2bb8dc",
-  gridCell: "#252d38",
+  gridCell: "#1e2832",
   gridSection: "#2bb8dc",
-  neutralBody: "#94a3b8",
-  selectedBody: "#3b82f6",
-  hoveredBody: "#cbd5e1",
-  edgeSubtle: "#0f172a",
-  edgeStrong: "#3b82f6",
+  neutralBody: "#d2d6da",
+  selectedBody: "#2bb8dc",
+  hoveredBody: "#e2e6ea",
+  edgeSubtle: "#1a2530",
+  edgeStrong: "#2bb8dc",
   edgeSelected: "#ffffff",
-  edgeSelectedInk: "#1e3a8a",
-  edgeSelectedDetail: "#93c5fd",
-  edgeHover: "#60a5fa",
-  measure: "#f8fafc",
-  measureAccent: "#3b82f6",
+  edgeSelectedInk: "#0c3d50",
+  edgeSelectedDetail: "#7dd3e8",
+  edgeHover: "#5ac8e0",
+  measure: "#f0f4f8",
+  measureAccent: "#2bb8dc",
 };
 const SKETCH_GRID_STEP_MM = 5;
 
-function visibleBodyColor(obj: CadObject, selected: boolean, hovered: boolean) {
+function visibleBodyColor(_obj: CadObject, selected: boolean, hovered: boolean) {
   if (selected) return VIEW_COLORS.selectedBody;
-  if (hovered) return obj.color && obj.color !== "#a9aaad" ? obj.color : VIEW_COLORS.hoveredBody;
-  return obj.color && obj.color !== "#a9aaad" ? obj.color : VIEW_COLORS.neutralBody;
+  if (hovered) return VIEW_COLORS.hoveredBody;
+  return VIEW_COLORS.neutralBody;
 }
 
 function holeTargetsFromParams(params: Record<string, number>) {
@@ -459,12 +459,13 @@ function ScaledMesh({
     >
       <meshPhysicalMaterial
         color={visibleBodyColor(obj, selected, hovered)}
-        roughness={selected ? 0.35 : 0.5}
-        metalness={selected ? 0.2 : 0.1}
-        clearcoat={selected ? 0.2 : 0}
-        clearcoatRoughness={0.25}
-        emissive={selected ? "#1e40af" : hovered ? "#1e293b" : "#000000"}
-        emissiveIntensity={selected ? 0.2 : hovered ? 0.1 : 0}
+        roughness={selected ? 0.38 : 0.60}
+        metalness={selected ? 0.06 : 0.02}
+        clearcoat={selected ? 0.45 : 0.1}
+        clearcoatRoughness={0.35}
+        envMapIntensity={selected ? 1.2 : 0.6}
+        emissive={selected ? "#2bb8dc" : hovered ? "#2bb8dc" : "#000000"}
+        emissiveIntensity={selected ? 0.07 : hovered ? 0.025 : 0}
         polygonOffset
         polygonOffsetFactor={1}
         polygonOffsetUnits={1}
@@ -911,17 +912,25 @@ export default function CadViewport({
         }}
         onPointerUp={() => setTransformDragging(false)}
       >
-      {/* Premium Studio Lighting */}
-      <hemisphereLight intensity={0.5} color="#ffffff" groundColor="#0f172a" />
-      <ambientLight intensity={0.3} />
+      {/* Studio environment — drives reflections and IBL */}
+      <Environment preset="studio" />
+      {/* Key light — hard shadow from upper-right */}
       <spotLight
-        position={[400, 500, 400]}
-        angle={0.2}
-        penumbra={0.8}
-        intensity={2.5}
+        position={[350, 600, 350]}
+        angle={0.18}
+        penumbra={0.65}
+        intensity={3.5}
+        color="#f0f6ff"
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0005}
       />
-      <directionalLight position={[-400, 300, -200]} intensity={0.8} color="#93c5fd" />
-      <pointLight position={[0, 400, 0]} intensity={0.4} color="#ffffff" />
+      {/* Fill light — soft cool from left */}
+      <directionalLight position={[-400, 300, -200]} intensity={0.9} color="#a8d4f0" />
+      {/* Rim light from behind — accent cyan glow on edges */}
+      <pointLight position={[0, 200, -600]} intensity={1.2} color="#2bb8dc" />
+      {/* Top ambient */}
+      <hemisphereLight intensity={0.35} color="#e8f0ff" groundColor="#0a1520" />
  
       {/* Refined Grid */}
       <Grid
@@ -938,6 +947,15 @@ export default function CadViewport({
         position={[0, 0.05, 0]}
       />
  
+      <ContactShadows
+        position={[0, 0.02, 0]}
+        opacity={0.55}
+        scale={[printerVolume[0] * 1.5, printerVolume[1] * 1.5]}
+        blur={2.5}
+        far={80}
+        color="#000000"
+        resolution={512}
+      />
       <BuildPlate volume={printerVolume} />
       <SketchPlane
         active={expertMode}
