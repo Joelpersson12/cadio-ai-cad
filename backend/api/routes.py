@@ -992,6 +992,7 @@ def stripe_checkout(
 async def stripe_webhook(request: Request) -> dict[str, Any] | JSONResponse:
     import json
     import os
+    import hashlib
 
     stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
@@ -1007,10 +1008,8 @@ async def stripe_webhook(request: Request) -> dict[str, Any] | JSONResponse:
         body = await request.body()
         sig = request.headers.get("stripe-signature", "")
 
-        # Verifierar att webhooken verkligen kommer från Stripe
         stripe_lib.Webhook.construct_event(body, sig, webhook_secret)
 
-        # Läser Stripe-eventet som vanlig JSON
         event = json.loads(body.decode("utf-8"))
         event_type = event.get("type", "")
 
@@ -1027,29 +1026,29 @@ async def stripe_webhook(request: Request) -> dict[str, Any] | JSONResponse:
                     stripe_customer_id=session.get("customer", ""),
                     stripe_subscription_id=session.get("subscription", ""),
                 )
-elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
-    sub = event["data"]["object"]
 
-    # Hämta plan från priset
-    price_id = sub["items"]["data"][0]["price"]["id"]
-    if price_id == os.environ.get("STRIPE_PRICE_UNLIMITED", ""):
-        plan = "unlimited"
-    else:
-        plan = "pro"
+        elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
+            sub = event["data"]["object"]
 
-    # Hitta konto via kundens e-post
-    customer_id = sub.get("customer", "")
-    customer = stripe_lib.Customer.retrieve(customer_id)
-    email = customer.get("email", "")
+            price_id = sub["items"]["data"][0]["price"]["id"]
+            plan = "unlimited" if price_id == os.environ.get("STRIPE_PRICE_UNLIMITED", "") else "pro"
 
-    if email:
-        account_id = "acct_" + __import__("hashlib").sha256(f"email:{email.strip().lower()}".encode("utf-8")).hexdigest()[:24]
-        upgrade_plan(
-            account_id,
-            plan,
-            stripe_customer_id=customer_id,
-            stripe_subscription_id=sub.get("id", ""),
-        )
+            customer_id = sub.get("customer", "")
+            customer = stripe_lib.Customer.retrieve(customer_id)
+            email = customer.get("email", "")
+
+            if email:
+                account_id = "acct_" + hashlib.sha256(
+                    f"email:{email.strip().lower()}".encode("utf-8")
+                ).hexdigest()[:24]
+
+                upgrade_plan(
+                    account_id,
+                    plan,
+                    stripe_customer_id=customer_id,
+                    stripe_subscription_id=sub.get("id", ""),
+                )
+
         elif event_type == "customer.subscription.deleted":
             sub = event["data"]["object"]
             metadata = sub.get("metadata", {})
@@ -1063,7 +1062,6 @@ elif event_type in ("customer.subscription.created", "customer.subscription.upda
     except Exception as exc:
         traceback.print_exc()
         return _error(400, str(exc))
-
 
 # ---------------------------------------------------------------------------
 # WebSocket
