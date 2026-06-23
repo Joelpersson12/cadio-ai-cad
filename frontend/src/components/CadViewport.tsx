@@ -297,7 +297,7 @@ function CameraController({
 
     // Calculate appropriate distance to frame the entire model
     const size = Math.max(bounds.x, bounds.y, bounds.z, 50);
-    const distance = Math.max(size * 2.5, 200);
+    const distance = Math.max(size * 2.5, 380);
     
     // Better camera positioning for isometric-like view
     camera.position.set(distance * 0.7, distance * 0.7, distance * 0.7);
@@ -912,7 +912,7 @@ export default function CadViewport({
 
       <Canvas
         dpr={[1, 1.5]}
-        camera={{ position: [300, 220, 300], fov: 35, near: 1, far: 5000 }}
+        camera={{ position: [500, 380, 500], fov: 45, near: 1, far: 5000 }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl, scene }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
