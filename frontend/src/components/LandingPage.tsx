@@ -639,12 +639,13 @@ function useReveal(threshold = 0.12) {
 // ─── AUTH DIALOG ─────────────────────────────────────────────────────────────
 
 function AuthDialog({
-  mode, text, onClose, onStartBuilding, pendingPlan,
+  mode, text, onClose, onStartBuilding, onSwitchToSignup, pendingPlan,
 }: {
   mode: AuthMode;
   text: typeof copy.en;
   onClose: () => void;
   onStartBuilding: () => void;
+  onSwitchToSignup: () => void;
   pendingPlan?: string | null;
 }) {
   const [err, setErr] = useState("");
@@ -831,9 +832,9 @@ function AuthDialog({
               <button
                 type="button"
                 className="text-[#2bb8dc] hover:text-white transition-colors underline"
-                onClick={() => { /* mode is controlled by parent */ }}
+                onClick={onSwitchToSignup}
               >
-                {text.auth.hint}
+                Sign up for free
               </button>
             </p>
           )}
@@ -1513,6 +1514,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
         text={text}
         pendingPlan={pendingPlan}
         onClose={() => { setAuthMode(null); setPendingPlan(null); }}
+        onSwitchToSignup={() => setAuthMode("signup")}
         onStartBuilding={() => {
           setAuthMode(null);
           if (pendingPlan) {
