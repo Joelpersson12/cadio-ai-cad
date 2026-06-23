@@ -16,14 +16,21 @@ const pages: Record<
   terms: {
     title: "Terms of Service",
     eyebrow: "Cadio legal",
-    updated: "Effective June 22, 2026",
+    updated: "Effective June 23, 2026",
     icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
     sections: [
+      {
+        heading: "Company Information",
+        body: [
+          "Cadio is operated by Cadio Engineering (org. nr. [ORG_NR]), Sweden. Contact: support@cadio.net.",
+          "These Terms of Service constitute a binding agreement between you and Cadio Engineering when you use cadio.net or any associated services.",
+        ],
+      },
       {
         heading: "What Cadio Is",
         body: [
           "Cadio is an AI-assisted CAD and 3D-printing platform. It helps users generate printable model concepts, remix designs, and edit CAD-style geometry using natural language.",
-          "Outputs should be treated as drafts that require review before use.",
+          "Outputs should be treated as drafts that require review before use. Cadio is currently in early access beta.",
         ],
       },
       {
@@ -36,11 +43,28 @@ const pages: Record<
       {
         heading: "Subscriptions and Billing",
         body: [
-          "Cadio offers paid subscription plans (Pro and Unlimited) in addition to a Free tier. All prices are in USD and billed monthly.",
-          "Free accounts include 3 total file downloads. Pro accounts include 20 downloads per calendar month. Unused monthly downloads do not roll over.",
-          "Paid subscriptions renew automatically each month. You can cancel at any time from your account settings — cancellation takes effect at the end of the current billing period.",
-          "All payments are processed by Stripe, Inc. Refunds are available within 7 days of a charge if no files have been downloaded during that billing period. Contact support@cadio.net to request a refund.",
-          "Cadio reserves the right to change subscription prices with 30 days notice. Continued use after the notice period constitutes acceptance of the new price.",
+          "Cadio offers paid subscription plans (Pro and Unlimited) in addition to a Free tier. All prices are in USD and billed monthly. Prices exclude VAT where applicable — VAT may be added at checkout based on your country of residence.",
+          "Free accounts include 3 total file downloads. Pro accounts include 20 downloads per calendar month. Unlimited accounts have no download limit. Unused monthly downloads do not roll over.",
+          "Paid subscriptions renew automatically each month on the same date the subscription started. You will receive access to the plan immediately upon payment.",
+          "You can cancel your subscription at any time by contacting support@cadio.net or through your account settings. Cancellation takes effect at the end of the current billing period — you retain access until then. No partial refunds are issued for the remaining period.",
+          "All payments are processed by Stripe, Inc. Cadio does not store your card details. Stripe's terms and privacy policy apply to payment processing.",
+          "Cadio reserves the right to change subscription prices with 30 days' written notice by email. Continued use after the notice period constitutes acceptance of the new price.",
+        ],
+      },
+      {
+        heading: "Right of Withdrawal — Digital Services",
+        body: [
+          "Under the EU Consumer Rights Directive and Swedish Distansavtalslag (2005:59), consumers normally have a 14-day right to withdraw from contracts made at a distance without giving a reason.",
+          "However, by completing checkout and starting your Cadio subscription, you expressly request that the digital service begins immediately. You acknowledge and agree that by doing so you waive your right of withdrawal once the service has commenced, in accordance with Article 16(m) of Directive 2011/83/EU.",
+          "If you have not yet used the service (no downloads, no sessions) within 14 days of purchase, you may still request a full refund by contacting support@cadio.net. We will honor refund requests on a case-by-case basis at our discretion.",
+        ],
+      },
+      {
+        heading: "Refunds",
+        body: [
+          "Refunds are available within 7 days of a charge if no files have been downloaded and no substantial use of the platform has occurred during that billing period. Contact support@cadio.net to request a refund.",
+          "After 7 days, or if the service has been used, refunds are at Cadio's discretion.",
+          "Chargebacks initiated without first contacting Cadio support may result in account suspension.",
         ],
       },
       {
@@ -62,6 +86,15 @@ const pages: Record<
         body: [
           "Cadio is not liable for failed prints, printer damage, material waste, unsafe use, injury, product defects, or losses caused by generated models or user modifications.",
           "Use Cadio outputs with care, especially for load-bearing, electrical, mechanical, automotive, medical, or safety-critical parts.",
+          "To the extent permitted by law, Cadio's total liability to you for any claim is limited to the amount you paid to Cadio in the 3 months preceding the claim.",
+        ],
+      },
+      {
+        heading: "Governing Law and Dispute Resolution",
+        body: [
+          "These terms are governed by Swedish law. Any disputes that cannot be resolved amicably shall be submitted to the Swedish general courts (allmän domstol) as the court of first instance.",
+          "If you are a consumer in the EU, you may also refer a dispute to the Swedish National Board for Consumer Disputes (Allmänna Reklamationsnämnden, ARN) at www.arn.se, or use the EU Online Dispute Resolution platform at ec.europa.eu/consumers/odr.",
+          "Cadio commits to participating in ARN proceedings and to follow ARN's recommendations.",
         ],
       },
       {
@@ -73,35 +106,44 @@ const pages: Record<
   privacy: {
     title: "Privacy Policy",
     eyebrow: "Cadio privacy",
-    updated: "Effective June 22, 2026",
+    updated: "Effective June 23, 2026",
     icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
     sections: [
       {
-        heading: "Data Cadio May Process",
+        heading: "Data Controller",
+        body: [
+          "Cadio Engineering (org. nr. [ORG_NR]), Sweden, is the data controller for personal data processed through cadio.net. Contact: support@cadio.net.",
+          "This policy describes how we collect, use, and protect your personal data in accordance with the EU General Data Protection Regulation (GDPR) and the Swedish Data Protection Act (2018:218).",
+        ],
+      },
+      {
+        heading: "Data Cadio Processes",
         body: [
           "Cadio may process prompts, uploaded images, generated models, selected examples, saved model data, export choices, printer/material selections, and basic usage data.",
-          "This data is used to provide the product, improve model generation, troubleshoot issues, and make Cadio more useful.",
+          "This data is used to provide the product, improve model generation, troubleshoot issues, and make Cadio more useful. Legal basis: contract performance and legitimate interest.",
         ],
       },
       {
         heading: "Account Data",
         body: [
           "When you create an account, Cadio stores your email address, a hashed (non-reversible) version of your password, your subscription plan, and your download usage count.",
-          "Your email may be used to send transactional messages such as receipts and account notifications. Cadio does not send marketing emails without your consent.",
+          "Your email may be used to send transactional messages such as receipts and account notifications. Cadio does not send marketing emails without your explicit consent. Legal basis: contract performance and legitimate interest.",
+          "Account data is retained for as long as your account is active, plus a maximum of 2 years after deletion for legal compliance purposes.",
         ],
       },
       {
         heading: "Payment Processing",
         body: [
-          "Payments are processed by Stripe, Inc. Cadio does not store your full card number, CVV, or other sensitive payment details — these are handled entirely by Stripe under their PCI-compliant infrastructure.",
-          "Cadio may store your Stripe Customer ID and subscription ID to link your account to an active plan. Stripe's privacy policy applies to data processed on their platform.",
+          "Payments are processed by Stripe, Inc. (USA). Cadio does not store your full card number, CVV, or other sensitive payment details — these are handled entirely by Stripe under their PCI-compliant infrastructure.",
+          "Cadio may store your Stripe Customer ID and subscription ID to link your account to an active plan. Stripe acts as a data processor under our agreement with them. Stripe's privacy policy applies to data processed on their platform.",
+          "Transfer of data to Stripe (USA) is covered by Standard Contractual Clauses.",
         ],
       },
       {
         heading: "Analytics",
         body: [
-          "If analytics are enabled, Cadio may collect basic usage analytics such as page views and product interaction events.",
-          "Analytics are optional in the codebase and are only activated when analytics environment variables are configured.",
+          "If analytics are enabled, Cadio may collect basic usage analytics such as page views and product interaction events. Legal basis: legitimate interest.",
+          "Analytics are optional in the codebase and are only activated when analytics environment variables are configured. No data is sold to third parties.",
         ],
       },
       {
@@ -111,14 +153,23 @@ const pages: Record<
         ],
       },
       {
+        heading: "Your Rights Under GDPR",
+        body: [
+          "You have the right to: access your personal data (Art. 15), correct inaccurate data (Art. 16), delete your data (Art. 17), restrict processing (Art. 18), data portability (Art. 20), and object to processing (Art. 21).",
+          "To exercise any of these rights, email support@cadio.net. We will respond within 30 days.",
+          "You also have the right to lodge a complaint with the Swedish Data Protection Authority (Integritetsskyddsmyndigheten, IMY) at imy.se.",
+        ],
+      },
+      {
         heading: "Data Deletion",
         body: [
-          "You may request deletion of your account and associated data at any time by emailing support@cadio.net. Deletion removes your email, hashed password, saved models, and session tokens.",
+          "You may request deletion of your account and associated data at any time by emailing support@cadio.net. Deletion removes your email, hashed password, saved models, and session tokens within 30 days.",
+          "Some data may be retained longer if required by law (e.g. accounting records for 7 years under Swedish Bokföringslag).",
         ],
       },
       {
         heading: "Contact",
-        body: ["For privacy questions, contact support@cadio.net."],
+        body: ["For privacy questions or to exercise your rights, contact support@cadio.net."],
       },
     ],
   },
