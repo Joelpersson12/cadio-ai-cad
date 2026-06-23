@@ -975,7 +975,7 @@ def stripe_checkout(
                 customer_email=account.get("email") or None,
                 line_items=[{"price": price_id, "quantity": 1}],
                 metadata={"account_id": account["accountId"], "plan": plan},
-                return_url="https://cadio.net/app?upgrade=success&session_id={CHECKOUT_SESSION_ID}",
+                return_url="https://cadio.net/?upgrade=success&session_id={CHECKOUT_SESSION_ID}",
             )
             return {"status": "ok", "client_secret": session.client_secret}
         except Exception as se:
