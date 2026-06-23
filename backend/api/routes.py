@@ -942,6 +942,9 @@ def stripe_checkout(
             logger.error("Stripe API error: type=%s param=%s msg=%s", type(se).__name__, getattr(se, 'param', None), se.user_message if hasattr(se, 'user_message') else str(se))
             return _error(400, f"Stripe [{type(se).__name__}] param={getattr(se, 'param', '?')}: {se.user_message if hasattr(se, 'user_message') else str(se)}")
         return {"status": "ok", "url": session.url}
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
 
 
 @router.post("/api/stripe/webhook", response_model=None)
