@@ -22,6 +22,7 @@ from backend.models.schema import (
     FeatureToggleRequest,
     ExpertOperationRequest,
     GenerateRequest,
+    GoogleAuthRequest,
     ObjectDeleteRequest,
     ObjectSelectRequest,
     ParameterUpdateRequest,
@@ -55,6 +56,7 @@ from backend.services.account_store import (
     get_account_profile,
     load_saved_library,
     login_or_create_account,
+    login_or_create_with_google,
     save_saved_library,
     upgrade_plan,
 )
@@ -164,6 +166,32 @@ def auth_login(data: AuthRequest) -> dict[str, Any] | JSONResponse:
             phone=data.phone,
             password=data.password,
             agreed_terms=data.agreed_terms,
+        )
+        return {"status": "ok", **result}
+    except ValueError as exc:
+        return _error(400, str(exc))
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.post("/api/auth/google", response_model=None)
+def auth_google(data: GoogleAuthRequest) -> dict[str, Any] | JSONResponse:
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+    if not client_id:
+        return _error(503, "Google Sign-In not configured")
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+        idinfo = id_token.verify_oauth2_token(
+            data.credential,
+            google_requests.Request(),
+            client_id,
+        )
+        result = login_or_create_with_google(
+            google_sub=idinfo["sub"],
+            email=idinfo.get("email", ""),
+            name=idinfo.get("name", ""),
         )
         return {"status": "ok", **result}
     except ValueError as exc:

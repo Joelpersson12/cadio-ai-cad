@@ -1,4 +1,4 @@
-import { authLogin, type AuthPayload, type AccountProfile } from "./api";
+import { authLogin, authGoogleLogin, type AuthPayload, type AccountProfile } from "./api";
 
 const CADIO_AUTH_KEY = "cadio_auth_ready";
 const CADIO_ACCOUNT_KEY = "cadio_account_profile_v1";
@@ -80,6 +80,12 @@ export function getCadioAuthToken() {
 
 export async function loginCadioAccount(payload: AuthPayload): Promise<AccountProfile> {
   const result = await authLogin(payload);
+  storeAccount(result.account, result.token);
+  return result.account;
+}
+
+export async function loginWithGoogle(credential: string): Promise<AccountProfile> {
+  const result = await authGoogleLogin(credential);
   storeAccount(result.account, result.token);
   return result.account;
 }

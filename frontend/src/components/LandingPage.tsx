@@ -6,7 +6,8 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { loginCadioAccount, isCadioAuthenticated, getCadioAuthToken, getCadioAccount } from "../utils/auth";
+import { loginCadioAccount, loginWithGoogle, isCadioAuthenticated, getCadioAuthToken, getCadioAccount } from "../utils/auth";
+import { GoogleLogin } from "@react-oauth/google";
 import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
 import ProfilePanel, { ProfileAvatar } from "./ProfilePanel";
@@ -776,6 +777,33 @@ function AuthDialog({
               {busy ? "…" : text.auth.continue}
             </button>
           </form>
+          <div className="mt-4 flex items-center gap-3">
+            <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.08)" }} />
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-white/20">or</span>
+            <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.08)" }} />
+          </div>
+          <div className="mt-4 flex justify-center">
+            <GoogleLogin
+              onSuccess={async (res) => {
+                if (!res.credential) return;
+                setErr(""); setBusy(true);
+                try {
+                  await loginWithGoogle(res.credential);
+                  onStartBuilding();
+                } catch (ex) {
+                  setErr(ex instanceof Error ? ex.message : "Google sign-in failed.");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              onError={() => setErr("Google sign-in failed.")}
+              theme="filled_black"
+              size="large"
+              width="340"
+              text="signin_with"
+              shape="rectangular"
+            />
+          </div>
           {!isSignup && (
             <p className="mt-4 text-center text-xs leading-relaxed text-white/25">
               No account?{" "}
