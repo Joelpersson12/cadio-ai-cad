@@ -1,6 +1,8 @@
 /** Cadio App shell - Shapr3D-inspired layout with mobile support. */
 
 import { useEffect, useState } from "react";
+import { GoogleLogin } from "@react-oauth/google";
+import { loginCadioAccount, loginWithGoogle } from "./utils/auth";
 import { useCadStore } from "./stores/cadStore";
 import { useWebSocket } from "./hooks/useWebSocket";
 import CadViewport from "./components/CadViewport";
@@ -880,13 +882,16 @@ function AuthRequiredDialog({
   onClose: () => void;
   onAuthenticated: () => void;
 }) {
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl border border-cadio-border/50 bg-cadio-surface p-6 text-white shadow-2xl">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold">Authentication Required</h2>
+            <h2 className="text-lg font-bold">Sign In to Download</h2>
             <p className="mt-1 text-xs font-medium text-cadio-muted">
               Sign in to export and download your models.
             </p>
@@ -901,25 +906,75 @@ function AuthRequiredDialog({
         </div>
         <form
           className="space-y-4"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault();
-            onAuthenticated();
+            const fd = new FormData(event.currentTarget);
+            setErr(""); setBusy(true);
+            try {
+              await loginCadioAccount({
+                email: String(fd.get("email") || ""),
+                password: String(fd.get("password") || ""),
+              });
+              onAuthenticated();
+            } catch (ex) {
+              setErr(ex instanceof Error ? ex.message : "Sign in failed.");
+            } finally {
+              setBusy(false);
+            }
           }}
         >
           <input
+            name="email"
             type="email"
             placeholder="Email address"
+            required
             className="h-11 w-full rounded-lg border border-cadio-border bg-cadio-bg px-3 text-sm text-white outline-none focus:border-cadio-accent"
           />
           <input
+            name="password"
             type="password"
             placeholder="Password"
+            required
             className="h-11 w-full rounded-lg border border-cadio-border bg-cadio-bg px-3 text-sm text-white outline-none focus:border-cadio-accent"
           />
-          <button className="h-11 w-full rounded-lg bg-white font-bold text-cadio-bg hover:bg-cadio-text transition-all">
-            Continue to Download
+          {err && (
+            <p className="rounded-lg px-3 py-2 text-xs text-red-300" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
+              {err}
+            </p>
+          )}
+          <button
+            disabled={busy}
+            className="h-11 w-full rounded-lg bg-white font-bold text-cadio-bg hover:bg-cadio-text transition-all disabled:opacity-50"
+          >
+            {busy ? "…" : "Continue to Download"}
           </button>
         </form>
+        <div className="my-4 flex items-center gap-3">
+          <div className="h-px flex-1 bg-cadio-border/50" />
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-cadio-muted">or</span>
+          <div className="h-px flex-1 bg-cadio-border/50" />
+        </div>
+        <div className="flex justify-center">
+          <GoogleLogin
+            onSuccess={async (res) => {
+              if (!res.credential) return;
+              setErr(""); setBusy(true);
+              try {
+                await loginWithGoogle(res.credential);
+                onAuthenticated();
+              } catch (ex) {
+                setErr(ex instanceof Error ? ex.message : "Google sign-in failed.");
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onError={() => setErr("Google sign-in failed.")}
+            theme="filled_black"
+            size="large"
+            text="signin_with"
+            shape="rectangular"
+          />
+        </div>
       </div>
     </div>
   );

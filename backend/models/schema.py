@@ -174,3 +174,7 @@ class ExpertOperationRequest(BaseModel):
     operation: str
     amount: float = 2.0
     target: str = "body"
+
+
+class GoogleAuthRequest(BaseModel):
+    credential: str  # Google ID token (JWT) from frontend

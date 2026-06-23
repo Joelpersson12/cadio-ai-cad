@@ -6,7 +6,9 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { loginCadioAccount, isCadioAuthenticated, getCadioAuthToken, getCadioAccount } from "../utils/auth";
+import { loginCadioAccount, loginWithGoogle, isCadioAuthenticated, getCadioAuthToken, getCadioAccount } from "../utils/auth";
+import { API_BASE } from "../utils/api";
+import { GoogleLogin } from "@react-oauth/google";
 import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
 import ProfilePanel, { ProfileAvatar } from "./ProfilePanel";
@@ -776,6 +778,33 @@ function AuthDialog({
               {busy ? "…" : text.auth.continue}
             </button>
           </form>
+          <div className="mt-4 flex items-center gap-3">
+            <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.08)" }} />
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-white/20">or</span>
+            <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.08)" }} />
+          </div>
+          <div className="mt-4 flex justify-center">
+            <GoogleLogin
+              onSuccess={async (res) => {
+                if (!res.credential) return;
+                setErr(""); setBusy(true);
+                try {
+                  await loginWithGoogle(res.credential);
+                  onStartBuilding();
+                } catch (ex) {
+                  setErr(ex instanceof Error ? ex.message : "Google sign-in failed.");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              onError={() => setErr("Google sign-in failed.")}
+              theme="filled_black"
+              size="large"
+              width="340"
+              text="signin_with"
+              shape="rectangular"
+            />
+          </div>
           {!isSignup && (
             <p className="mt-4 text-center text-xs leading-relaxed text-white/25">
               No account?{" "}
@@ -807,7 +836,7 @@ const MODELS = [
 
 async function startCheckout(plan: string): Promise<void> {
   const token = getCadioAuthToken();
-  const res = await fetch("/api/stripe/checkout", {
+  const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
@@ -828,6 +857,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
   const [profileOpen, setProfileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isAuthed, setIsAuthed] = useState(isCadioAuthenticated);
+  const [checkoutErr, setCheckoutErr] = useState("");
 
   useEffect(() => {
     const update = () => setIsAuthed(isCadioAuthenticated());
@@ -843,7 +873,10 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
 
   const handlePlanClick = (plan: string) => {
     if (isCadioAuthenticated()) {
-      void startCheckout(plan);
+      setCheckoutErr("");
+      startCheckout(plan).catch((err) => {
+        setCheckoutErr(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      });
     } else {
       setPendingPlan(plan);
       setAuthMode("signup");
@@ -1336,6 +1369,12 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   Get Started
                 </button>
               </div>
+
+              {checkoutErr && (
+                <div className="col-span-3 rounded-xl px-4 py-3 text-sm text-red-300 text-center" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
+                  {checkoutErr}
+                </div>
+              )}
 
               {/* Pro — highlighted */}
               <div

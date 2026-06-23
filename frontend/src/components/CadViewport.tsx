@@ -362,6 +362,7 @@ function ScaledMesh({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
+  const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
 
   const geometry = useMemo(() => {
     if (!obj.mesh) return null;
@@ -445,6 +446,22 @@ function ScaledMesh({
         if (pointerType !== "touch") {
           e.stopPropagation();
         }
+        pointerDownPos.current = { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY };
+      }}
+      onPointerUp={(e) => {
+        if (e.button !== 0) return;
+        if (sketchToolActive) return;
+        if (suppressSelection) return;
+        const pointerType = (e.nativeEvent as PointerEvent).pointerType;
+        if (pointerType !== "touch") {
+          e.stopPropagation();
+        }
+        const down = pointerDownPos.current;
+        pointerDownPos.current = null;
+        if (!down) return;
+        const dx = e.nativeEvent.clientX - down.x;
+        const dy = e.nativeEvent.clientY - down.y;
+        if (Math.hypot(dx, dy) > 6) return;
         onSelect();
         if (expertMode && selectionMode === "edge") {
           const localPoint = groupRef.current
@@ -797,7 +814,7 @@ export default function CadViewport({
       style={{ touchAction: "none" }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-6 top-6 z-10 w-64 flex-col gap-2 rounded-2xl border border-cadio-border/50 bg-cadio-surface/90 p-3 shadow-2xl backdrop-blur-xl transition-all`}>
+      <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-6 top-[72px] z-10 w-64 flex-col gap-2 rounded-2xl border border-cadio-border/50 bg-cadio-surface/90 p-3 shadow-2xl backdrop-blur-xl transition-all`}>
         <div className="flex items-center justify-between px-2 py-1 mb-2">
           <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted">
             Expert Tools
@@ -978,9 +995,9 @@ export default function CadViewport({
         minPolarAngle={0}
         maxPolarAngle={Math.PI}
         mouseButtons={{
-          LEFT: undefined,
+          LEFT: THREE.MOUSE.ROTATE,
           MIDDLE: THREE.MOUSE.PAN,
-          RIGHT: THREE.MOUSE.ROTATE,
+          RIGHT: THREE.MOUSE.PAN,
         }}
         touches={{
           ONE: THREE.TOUCH.ROTATE,

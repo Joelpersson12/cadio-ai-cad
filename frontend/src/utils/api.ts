@@ -120,6 +120,17 @@ export async function authLogin(payload: AuthPayload): Promise<{
   });
 }
 
+export async function authGoogleLogin(credential: string): Promise<{
+  status: string;
+  token: string;
+  account: AccountProfile;
+}> {
+  return request("/api/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ credential }),
+  });
+}
+
 export async function getAccountProfile(token: string): Promise<{
   status: string;
   account: AccountProfile;

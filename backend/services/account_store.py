@@ -88,6 +88,8 @@ def _init(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "accounts", "agreed_terms", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "accounts", "stripe_customer_id", "TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "accounts", "stripe_subscription_id", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "accounts", "oauth_provider", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "accounts", "oauth_provider_id", "TEXT NOT NULL DEFAULT ''")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -333,6 +335,88 @@ def login_or_create_account(
             INSERT INTO sessions (token, account_id, created_at, last_seen)
             VALUES (?, ?, ?, ?)
             """,
+            (token, account_id, now, now),
+        )
+        conn.commit()
+    return {"token": token, "account": account}
+
+
+def login_or_create_with_google(
+    *,
+    google_sub: str,
+    email: str,
+    name: str | None = None,
+) -> dict[str, Any]:
+    """Create or log in via a verified Google identity."""
+    clean_email = _clean_email(email)
+    if not clean_email:
+        raise ValueError("Google account must have an email address")
+    account_id = _account_id(clean_email, None)
+    token = secrets.token_urlsafe(32)
+    now = _now()
+
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        if row:
+            if not _row_value(row, "oauth_provider_id", ""):
+                conn.execute(
+                    "UPDATE accounts SET oauth_provider = 'google', oauth_provider_id = ?, updated_at = ? WHERE id = ?",
+                    (google_sub, now, account_id),
+                )
+            if name and not row["name"]:
+                conn.execute(
+                    "UPDATE accounts SET name = ?, updated_at = ? WHERE id = ?",
+                    (name.strip(), now, account_id),
+                )
+            account = _account_from_row(
+                conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO accounts (
+                    id, name, email, phone, password_hash,
+                    plan, downloads_used, download_limit,
+                    monthly_downloads_used, monthly_reset_date, agreed_terms,
+                    stripe_customer_id, stripe_subscription_id,
+                    oauth_provider, oauth_provider_id,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    account_id,
+                    (name or "").strip(),
+                    clean_email,
+                    "",
+                    "oauth:google",
+                    "free",
+                    0,
+                    FREE_DOWNLOAD_LIMIT,
+                    0,
+                    "",
+                    1,
+                    "",
+                    "",
+                    "google",
+                    google_sub,
+                    now,
+                    now,
+                ),
+            )
+            account = {
+                "accountId": account_id,
+                "name": (name or "").strip(),
+                "email": clean_email,
+                "phone": "",
+                "plan": "free",
+                "downloadsUsed": 0,
+                "downloadLimit": FREE_DOWNLOAD_LIMIT,
+                "monthlyDownloadsUsed": 0,
+                "downloadsRemaining": FREE_DOWNLOAD_LIMIT,
+                "canDownload": True,
+            }
+        conn.execute(
+            "INSERT INTO sessions (token, account_id, created_at, last_seen) VALUES (?, ?, ?, ?)",
             (token, account_id, now, now),
         )
         conn.commit()
