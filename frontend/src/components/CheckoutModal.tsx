@@ -8,8 +8,8 @@ const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
 
 const PLAN_LABELS: Record<string, { name: string; price: string }> = {
-  pro: { name: "Pro", price: "$9 / month" },
-  unlimited: { name: "Unlimited", price: "$19 / month" },
+  pro: { name: "Pro", price: "$9.99 / month" },
+  unlimited: { name: "Unlimited", price: "$24.99 / month" },
 };
 
 interface CheckoutModalProps {
