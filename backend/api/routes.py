@@ -1001,6 +1001,8 @@ async def stripe_webhook(request: Request) -> dict[str, Any] | JSONResponse:
         body = await request.body()
         sig = request.headers.get("stripe-signature", "")
         event = stripe_lib.Webhook.construct_event(body, sig, webhook_secret)
+        event = event.to_dict_recursive()
+        
         event_type = event["type"]
         if event_type in ("customer.subscription.created", "customer.subscription.updated"):
             sub = event["data"]["object"]
