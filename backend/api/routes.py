@@ -948,6 +948,7 @@ def stripe_checkout(
                 customer_email=account.get("email") or None,
                 line_items=[{"price": price_id, "quantity": 1}],
                 metadata={"account_id": account["accountId"], "plan": plan},
+                payment_method_configuration=os.environ.get("STRIPE_PMC_ID", "pmc_1TlTMUHDdcZgkSfU21jXM28g"),
                 return_url="https://cadio.net/app?upgrade=success&session_id={CHECKOUT_SESSION_ID}",
             )
             return {"status": "ok", "client_secret": session.client_secret}
