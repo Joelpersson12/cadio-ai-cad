@@ -8,6 +8,7 @@ import ScalePercentInput from "./ScalePercentInput";
 const EXPORT_FORMATS = [
   { value: "stl", label: "STL", hint: "Most slicers" },
   { value: "3mf", label: "3MF", hint: "Modern slicers" },
+  { value: "step", label: "STEP", hint: "CAD software" },
   { value: "obj", label: "OBJ", hint: "Mesh editors" },
   { value: "amf", label: "AMF", hint: "Legacy printers" },
 ];

@@ -141,6 +141,17 @@ const copy = {
   },
 };
 
+// ─── CURRENCY PER LANGUAGE ──────────────────────────────────────────────────
+const CURRENCY: Record<Language, { pro: string; unlimited: string; period: string; taxNote: string }> = {
+  en: { pro: "$9.99", unlimited: "$24.99", period: "/mo", taxNote: "incl. tax" },
+  sv: { pro: "99 kr", unlimited: "249 kr", period: "/mån", taxNote: "inkl. moms" },
+  fr: { pro: "9,99 €", unlimited: "24,99 €", period: "/mois", taxNote: "TVA incluse" },
+  de: { pro: "9,99 €", unlimited: "24,99 €", period: "/Monat", taxNote: "inkl. MwSt." },
+  es: { pro: "9,99 €", unlimited: "24,99 €", period: "/mes", taxNote: "IVA incluido" },
+  it: { pro: "9,99 €", unlimited: "24,99 €", period: "/mese", taxNote: "IVA inclusa" },
+  pt: { pro: "9,99 €", unlimited: "24,99 €", period: "/mês", taxNote: "IVA incluído" },
+};
+
 // ─── ACCENT COLOR ───────────────────────────────────────────────────────────
 const ACCENT = "#2bb8dc";
 const ACCENT_DIM = "rgba(43,184,220,";
@@ -1330,6 +1341,12 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               {text.pricingBody}
             </p>
 
+            {checkoutErr && (
+              <div className="mb-6 rounded-xl px-4 py-3 text-sm text-red-300 text-center" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
+                {checkoutErr}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 max-w-4xl">
               {/* Free */}
               <div
@@ -1342,11 +1359,11 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                 <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em] text-white/40">Free</p>
                 <div className="mb-1 flex items-end gap-2">
                   <span className="text-5xl font-black text-white">$0</span>
-                  <span className="mb-1.5 text-sm text-white/30">/mo</span>
+                  <span className="mb-1.5 text-sm text-white/30">{CURRENCY[language].period}</span>
                 </div>
                 <p className="mb-7 text-sm text-white/30">3 downloads to get started</p>
                 <ul className="mb-7 space-y-2.5">
-                  {["AI model generation", "STL & 3MF export", "Manual CAD tools", "3 downloads total"].map((f) => (
+                  {["AI model generation", "All export formats", "Manual CAD tools", "3 downloads total"].map((f) => (
                     <li key={f} className="flex items-center gap-2.5 text-sm text-white/55">
                       <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: ACCENT }} />
                       {f}
@@ -1361,12 +1378,6 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   Get Started
                 </button>
               </div>
-
-              {checkoutErr && (
-                <div className="col-span-3 rounded-xl px-4 py-3 text-sm text-red-300 text-center" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
-                  {checkoutErr}
-                </div>
-              )}
 
               {/* Pro — highlighted */}
               <div
@@ -1385,12 +1396,13 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                 </div>
                 <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>Pro</p>
                 <div className="mb-1 flex items-end gap-2">
-                  <span className="text-5xl font-black text-white">$9</span>
-                  <span className="mb-1.5 text-sm text-white/40">/mo</span>
+                  <span className="text-4xl font-black text-white">{CURRENCY[language].pro}</span>
+                  <span className="mb-1.5 text-sm text-white/40">{CURRENCY[language].period}</span>
                 </div>
-                <p className="mb-7 text-sm text-white/40">20 downloads per month</p>
+                <p className="mb-1 text-xs text-white/25">{CURRENCY[language].taxNote}</p>
+                <p className="mb-6 text-sm text-white/40">20 downloads per month</p>
                 <ul className="mb-7 space-y-2.5">
-                  {["Everything in Free", "20 downloads / month", "STEP export", "Priority AI speed"].map((f) => (
+                  {["Everything in Free", "20 downloads / month", "Priority AI speed", "Email support"].map((f) => (
                     <li key={f} className="flex items-center gap-2.5 text-sm" style={{ color: "rgba(232,237,242,0.72)" }}>
                       <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: ACCENT }} />
                       {f}
@@ -1416,12 +1428,13 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               >
                 <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em] text-white/40">Unlimited</p>
                 <div className="mb-1 flex items-end gap-2">
-                  <span className="text-5xl font-black text-white">$19</span>
-                  <span className="mb-1.5 text-sm text-white/30">/mo</span>
+                  <span className="text-4xl font-black text-white">{CURRENCY[language].unlimited}</span>
+                  <span className="mb-1.5 text-sm text-white/30">{CURRENCY[language].period}</span>
                 </div>
-                <p className="mb-7 text-sm text-white/30">Unlimited downloads</p>
+                <p className="mb-1 text-xs text-white/25">{CURRENCY[language].taxNote}</p>
+                <p className="mb-6 text-sm text-white/30">Unlimited downloads</p>
                 <ul className="mb-7 space-y-2.5">
-                  {["Everything in Pro", "Unlimited downloads", "All export formats", "Early feature access"].map((f) => (
+                  {["Everything in Pro", "Unlimited downloads", "Early feature access", "Priority support"].map((f) => (
                     <li key={f} className="flex items-center gap-2.5 text-sm text-white/55">
                       <span className="h-1.5 w-1.5 rounded-full flex-shrink-0 bg-white/30" />
                       {f}

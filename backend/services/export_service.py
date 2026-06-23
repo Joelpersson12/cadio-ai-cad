@@ -11,7 +11,7 @@ from xml.sax.saxutils import escape
 from backend.services.cad_engine import TriMesh, apply_transform, make_box
 from backend.services.session_manager import Session
 
-SUPPORTED_FORMATS = {"stl", "obj", "3mf", "amf"}
+SUPPORTED_FORMATS = {"stl", "obj", "3mf", "amf", "step"}
 
 
 def _assemble_scene(session: Session) -> TriMesh:
@@ -67,8 +67,36 @@ def export_assembly(session: Session, fmt: str) -> str:
             zf.writestr("[Content_Types].xml", _content_types_3mf())
             zf.writestr("_rels/.rels", _rels_3mf())
             zf.writestr("3D/3dmodel.model", _model_3mf(mesh))
+    elif fmt == "step":
+        _export_step(mesh, path)
 
     return path
+
+
+def _export_step(mesh: TriMesh, path: str) -> None:
+    """Export TriMesh as STEP via OCP (bundled with CadQuery)."""
+    stl_tmp = path[:-5] + "_tmp.stl"
+    try:
+        with open(stl_tmp, "wb") as f:
+            f.write(mesh.to_binary_stl())
+
+        from OCP.StlAPI import StlAPI_Reader
+        from OCP.TopoDS import TopoDS_Shape
+        from OCP.STEPControl import STEPControl_Writer, STEPControl_AsIs
+        from OCP.IFSelect import IFSelect_RetDone
+
+        reader = StlAPI_Reader()
+        shape = TopoDS_Shape()
+        reader.Read(shape, stl_tmp)
+
+        writer = STEPControl_Writer()
+        writer.Transfer(shape, STEPControl_AsIs)
+        status = writer.Write(path)
+        if status != IFSelect_RetDone:
+            raise RuntimeError("STEP writer returned non-OK status")
+    finally:
+        if os.path.exists(stl_tmp):
+            os.unlink(stl_tmp)
 
 
 def _content_types_3mf() -> str:
@@ -126,4 +154,5 @@ def media_type_for(fmt: str) -> str:
         "obj": "model/obj",
         "3mf": "model/3mf",
         "amf": "application/amf+xml",
+        "step": "application/step",
     }.get(fmt, "application/octet-stream")
