@@ -4,6 +4,5 @@ pydantic
 websockets
 openai
 cadquery==2.7.0
-libsql-experimental
 google-auth
 stripe
