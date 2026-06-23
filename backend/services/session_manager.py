@@ -2620,6 +2620,7 @@ def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
                     rotation=[0.0, 0.0, -90.0],
                     style=style,
                     target_color=target_color,
+                    mirror_x=True,
                 ),
             ]
         )
@@ -2636,7 +2637,6 @@ def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
                     rotation=[0.0, 0.0, 180.0],
                     style=style,
                     target_color=target_color,
-                    mirror_x=True,
                 ),
                 _create_text_label_object(
                     label,
