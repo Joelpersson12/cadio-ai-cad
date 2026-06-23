@@ -686,7 +686,11 @@ function AuthDialog({
                   password: String(fd.get("password") || ""),
                   agreed_terms: isSignup ? agreedTerms : undefined,
                 });
-                onStartBuilding();
+                if (pendingPlan) {
+                  onStartBuilding();
+                } else {
+                  onClose();
+                }
               } catch (ex) {
                 setErr(ex instanceof Error ? ex.message : "Could not sign in.");
               } finally {
@@ -776,7 +780,7 @@ function AuthDialog({
               className="mt-1 h-12 w-full rounded-xl text-sm font-bold transition-all disabled:opacity-50"
               style={{ background: ACCENT, color: "#050709", boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
             >
-              {busy ? "…" : text.auth.continue}
+              {busy ? "…" : pendingPlan ? "Create account & continue" : isSignup ? "Create account" : "Sign in"}
             </button>
           </form>
           <div className="mt-4 flex items-center gap-3">
@@ -791,7 +795,11 @@ function AuthDialog({
                 setErr(""); setBusy(true);
                 try {
                   await loginWithGoogle(res.credential);
-                  onStartBuilding();
+                  if (pendingPlan) {
+                    onStartBuilding();
+                  } else {
+                    onClose();
+                  }
                 } catch (ex) {
                   setErr(ex instanceof Error ? ex.message : "Google sign-in failed.");
                 } finally {
