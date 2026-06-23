@@ -131,6 +131,24 @@ export async function authGoogleLogin(credential: string): Promise<{
   });
 }
 
+export async function requestPasswordReset(email: string): Promise<{ status: string; message: string }> {
+  return request("/api/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{
+  status: string;
+  token: string;
+  account: AccountProfile;
+}> {
+  return request("/api/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+}
+
 export async function getAccountProfile(token: string): Promise<{
   status: string;
   account: AccountProfile;

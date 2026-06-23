@@ -6,7 +6,7 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { loginCadioAccount, loginWithGoogle, isCadioAuthenticated, getCadioAccount } from "../utils/auth";
+import { loginCadioAccount, loginWithGoogle, sendPasswordReset, confirmPasswordReset, isCadioAuthenticated, getCadioAccount } from "../utils/auth";
 import { GoogleLogin } from "@react-oauth/google";
 import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
@@ -14,7 +14,7 @@ import ProfilePanel, { ProfileAvatar } from "./ProfilePanel";
 import CheckoutModal from "./CheckoutModal";
 
 type Language = "en" | "sv" | "es" | "fr" | "it" | "de" | "pt";
-type AuthMode = "login" | "signup" | null;
+type AuthMode = "login" | "signup" | "forgot" | null;
 
 const languageOptions: Array<{ value: Language; label: string }> = [
   { value: "en", label: "EN" },
@@ -639,20 +639,34 @@ function useReveal(threshold = 0.12) {
 // ─── AUTH DIALOG ─────────────────────────────────────────────────────────────
 
 function AuthDialog({
-  mode, text, onClose, onStartBuilding, onSwitchToSignup, pendingPlan,
+  mode, text, onClose, onStartBuilding, onSwitchToSignup, onForgotPassword, onBackToLogin, pendingPlan,
 }: {
   mode: AuthMode;
   text: typeof copy.en;
   onClose: () => void;
   onStartBuilding: () => void;
   onSwitchToSignup: () => void;
+  onForgotPassword: () => void;
+  onBackToLogin: () => void;
   pendingPlan?: string | null;
 }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [agreedTerms, setAgreedTerms] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+
   if (!mode) return null;
   const isSignup = mode === "signup";
+  const isForgot = mode === "forgot";
+
+  const dialogTitle = isForgot
+    ? "Reset your password"
+    : pendingPlan
+    ? "Create account to upgrade"
+    : isSignup
+    ? text.auth.signupTitle
+    : text.auth.loginTitle;
+
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-center px-4"
@@ -669,9 +683,7 @@ function AuthDialog({
           }}
         >
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">
-              {pendingPlan ? `Create account to upgrade` : isSignup ? text.auth.signupTitle : text.auth.loginTitle}
-            </h2>
+            <h2 className="text-xl font-semibold text-white">{dialogTitle}</h2>
             <button
               onClick={onClose}
               className="rounded-lg p-2 text-white/30 transition-colors hover:text-white hover:bg-white/8"
@@ -681,162 +693,356 @@ function AuthDialog({
               </svg>
             </button>
           </div>
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (isSignup && !agreedTerms) {
-                setErr("You must agree to the Terms of Service to create an account.");
-                return;
-              }
-              const fd = new FormData(e.currentTarget);
-              setErr(""); setBusy(true);
-              try {
-                await loginCadioAccount({
-                  name: String(fd.get("name") || ""),
-                  email: String(fd.get("email") || ""),
-                  password: String(fd.get("password") || ""),
-                  agreed_terms: isSignup ? agreedTerms : undefined,
-                });
-                if (pendingPlan) {
-                  onStartBuilding();
-                } else {
-                  onClose();
-                }
-              } catch (ex) {
-                setErr(ex instanceof Error ? ex.message : "Could not sign in.");
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            {isSignup && (
-              <div>
-                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-widest text-white/40">
-                  {text.auth.name}
-                </label>
-                <input
-                  name="name"
-                  className="h-11 w-full rounded-xl px-4 text-sm text-white placeholder-white/20 outline-none transition-all"
-                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-                />
+
+          {/* ── Forgot password view ── */}
+          {isForgot ? (
+            forgotSent ? (
+              <div className="flex flex-col gap-4">
+                <p className="text-sm text-white/60 leading-relaxed">
+                  If that email has an account, we've sent a reset link. Check your inbox (and spam folder).
+                </p>
+                <button
+                  type="button"
+                  className="mt-2 h-12 w-full rounded-xl text-sm font-bold transition-all"
+                  style={{ background: ACCENT, color: "#050709", boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
+                  onClick={onBackToLogin}
+                >
+                  Back to sign in
+                </button>
               </div>
-            )}
-            <div>
-              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-widest text-white/40">
-                {text.auth.email}
-              </label>
-              <input
-                name="email"
-                type="email"
-                required
-                className="h-11 w-full rounded-xl px-4 text-sm text-white outline-none transition-all"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-widest text-white/40">
-                {text.auth.password}
-              </label>
-              <input
-                name="password"
-                type="password"
-                minLength={4}
-                required
-                className="h-11 w-full rounded-xl px-4 text-sm text-white outline-none transition-all"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-              />
-            </div>
-            {isSignup && (
-              <label className="flex cursor-pointer items-start gap-3">
-                <div className="relative mt-0.5 shrink-0">
+            ) : (
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const fd = new FormData(e.currentTarget);
+                  setErr(""); setBusy(true);
+                  try {
+                    await sendPasswordReset(String(fd.get("email") || ""));
+                    setForgotSent(true);
+                  } catch {
+                    // Always show success to prevent email enumeration
+                    setForgotSent(true);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                <p className="text-sm text-white/50 leading-relaxed -mt-2">
+                  Enter your email and we'll send you a reset link.
+                </p>
+                <div>
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-widest text-white/40">
+                    {text.auth.email}
+                  </label>
                   <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={agreedTerms}
-                    onChange={(e) => setAgreedTerms(e.target.checked)}
+                    name="email"
+                    type="email"
+                    required
+                    autoFocus
+                    className="h-11 w-full rounded-xl px-4 text-sm text-white outline-none transition-all"
+                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
                   />
-                  <div
-                    className="h-5 w-5 rounded transition-all"
-                    style={{
-                      background: agreedTerms ? ACCENT : "rgba(255,255,255,0.06)",
-                      border: `1.5px solid ${agreedTerms ? ACCENT : "rgba(255,255,255,0.18)"}`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {agreedTerms && (
-                      <svg className="h-3 w-3" fill="none" viewBox="0 0 12 12" stroke="#050709" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
-                      </svg>
+                </div>
+                {err && (
+                  <p className="rounded-xl px-4 py-2.5 text-xs text-red-300" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
+                    {err}
+                  </p>
+                )}
+                <button
+                  disabled={busy}
+                  className="mt-1 h-12 w-full rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                  style={{ background: ACCENT, color: "#050709", boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
+                >
+                  {busy ? "…" : "Send reset link"}
+                </button>
+                <p className="text-center text-xs text-white/25">
+                  <button type="button" className="text-[#2bb8dc] hover:text-white transition-colors underline" onClick={onBackToLogin}>
+                    Back to sign in
+                  </button>
+                </p>
+              </form>
+            )
+          ) : (
+            /* ── Login / Signup view ── */
+            <>
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (isSignup && !agreedTerms) {
+                    setErr("You must agree to the Terms of Service to create an account.");
+                    return;
+                  }
+                  const fd = new FormData(e.currentTarget);
+                  setErr(""); setBusy(true);
+                  try {
+                    await loginCadioAccount({
+                      name: String(fd.get("name") || ""),
+                      email: String(fd.get("email") || ""),
+                      password: String(fd.get("password") || ""),
+                      agreed_terms: isSignup ? agreedTerms : undefined,
+                    });
+                    if (pendingPlan) {
+                      onStartBuilding();
+                    } else {
+                      onClose();
+                    }
+                  } catch (ex) {
+                    setErr(ex instanceof Error ? ex.message : "Could not sign in.");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {isSignup && (
+                  <div>
+                    <label className="mb-2 block text-[11px] font-semibold uppercase tracking-widest text-white/40">
+                      {text.auth.name}
+                    </label>
+                    <input
+                      name="name"
+                      className="h-11 w-full rounded-xl px-4 text-sm text-white placeholder-white/20 outline-none transition-all"
+                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-widest text-white/40">
+                    {text.auth.email}
+                  </label>
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    className="h-11 w-full rounded-xl px-4 text-sm text-white outline-none transition-all"
+                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/40">
+                      {text.auth.password}
+                    </label>
+                    {!isSignup && (
+                      <button
+                        type="button"
+                        className="text-[11px] text-white/30 hover:text-[#2bb8dc] transition-colors"
+                        onClick={onForgotPassword}
+                      >
+                        Forgot password?
+                      </button>
                     )}
                   </div>
+                  <input
+                    name="password"
+                    type="password"
+                    minLength={4}
+                    required
+                    className="h-11 w-full rounded-xl px-4 text-sm text-white outline-none transition-all"
+                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                  />
                 </div>
-                <span className="text-xs leading-5 text-white/40">
-                  I agree to Cadio's{" "}
-                  <a href="/terms" className="text-[#2bb8dc] hover:text-white underline transition-colors" onClick={(e) => e.stopPropagation()}>Terms of Service</a>
-                  {" "}and{" "}
-                  <a href="/privacy" className="text-[#2bb8dc] hover:text-white underline transition-colors" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>.
-                  {" "}I confirm I am 13 years or older. If I subscribe, I understand the service starts immediately and I waive my right of withdrawal.
-                </span>
-              </label>
-            )}
-            {err && (
-              <p className="rounded-xl px-4 py-2.5 text-xs text-red-300" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
-                {err}
+                {isSignup && (
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <div className="relative mt-0.5 shrink-0">
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={agreedTerms}
+                        onChange={(e) => setAgreedTerms(e.target.checked)}
+                      />
+                      <div
+                        className="h-5 w-5 rounded transition-all"
+                        style={{
+                          background: agreedTerms ? ACCENT : "rgba(255,255,255,0.06)",
+                          border: `1.5px solid ${agreedTerms ? ACCENT : "rgba(255,255,255,0.18)"}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {agreedTerms && (
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 12 12" stroke="#050709" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-xs leading-5 text-white/40">
+                      I agree to Cadio's{" "}
+                      <a href="/terms" className="text-[#2bb8dc] hover:text-white underline transition-colors" onClick={(e) => e.stopPropagation()}>Terms of Service</a>
+                      {" "}and{" "}
+                      <a href="/privacy" className="text-[#2bb8dc] hover:text-white underline transition-colors" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>.
+                      {" "}I confirm I am 13 years or older. If I subscribe, I understand the service starts immediately and I waive my right of withdrawal.
+                    </span>
+                  </label>
+                )}
+                {err && (
+                  <p className="rounded-xl px-4 py-2.5 text-xs text-red-300" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
+                    {err}
+                  </p>
+                )}
+                <button
+                  disabled={busy || (isSignup && !agreedTerms)}
+                  className="mt-1 h-12 w-full rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                  style={{ background: ACCENT, color: "#050709", boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
+                >
+                  {busy ? "…" : pendingPlan ? "Create account & continue" : isSignup ? "Create account" : "Sign in"}
+                </button>
+              </form>
+              <div className="mt-4 flex items-center gap-3">
+                <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.08)" }} />
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-white/20">or</span>
+                <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.08)" }} />
+              </div>
+              <div className="mt-4 flex justify-center">
+                <GoogleLogin
+                  onSuccess={async (res) => {
+                    if (!res.credential) return;
+                    setErr(""); setBusy(true);
+                    try {
+                      await loginWithGoogle(res.credential);
+                      if (pendingPlan) {
+                        onStartBuilding();
+                      } else {
+                        onClose();
+                      }
+                    } catch (ex) {
+                      setErr(ex instanceof Error ? ex.message : "Google sign-in failed.");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  onError={() => setErr("Google sign-in failed.")}
+                  theme="filled_black"
+                  size="large"
+                  width="340"
+                  text="signin_with"
+                  shape="rectangular"
+                />
+              </div>
+              {!isSignup && (
+                <p className="mt-4 text-center text-xs leading-relaxed text-white/25">
+                  No account?{" "}
+                  <button
+                    type="button"
+                    className="text-[#2bb8dc] hover:text-white transition-colors underline"
+                    onClick={onSwitchToSignup}
+                  >
+                    Sign up for free
+                  </button>
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordDialog({
+  resetToken,
+  onClose,
+  onDone,
+}: {
+  resetToken: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center px-4"
+      style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(16px)" }}
+    >
+      <div className="w-full max-w-md">
+        <div
+          className="rounded-2xl p-8 shadow-2xl"
+          style={{
+            background: "#0d1318",
+            border: `1px solid rgba(43,184,220,0.2)`,
+            boxShadow: `0 0 60px rgba(43,184,220,0.08)`,
+          }}
+        >
+          <h2 className="mb-6 text-xl font-semibold text-white">Choose a new password</h2>
+          {done ? (
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-white/60 leading-relaxed">
+                Your password has been updated and you're now signed in.
               </p>
-            )}
-            <button
-              disabled={busy || (isSignup && !agreedTerms)}
-              className="mt-1 h-12 w-full rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-              style={{ background: ACCENT, color: "#050709", boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
-            >
-              {busy ? "…" : pendingPlan ? "Create account & continue" : isSignup ? "Create account" : "Sign in"}
-            </button>
-          </form>
-          <div className="mt-4 flex items-center gap-3">
-            <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.08)" }} />
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-white/20">or</span>
-            <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.08)" }} />
-          </div>
-          <div className="mt-4 flex justify-center">
-            <GoogleLogin
-              onSuccess={async (res) => {
-                if (!res.credential) return;
+              <button
+                className="mt-2 h-12 w-full rounded-xl text-sm font-bold transition-all"
+                style={{ background: "#2bb8dc", color: "#050709", boxShadow: "0 4px 24px rgba(43,184,220,0.4)" }}
+                onClick={onDone}
+              >
+                Continue to Cadio
+              </button>
+            </div>
+          ) : (
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.currentTarget);
+                const pw = String(fd.get("password") || "");
+                const pw2 = String(fd.get("password2") || "");
+                if (pw !== pw2) { setErr("Passwords don't match"); return; }
                 setErr(""); setBusy(true);
                 try {
-                  await loginWithGoogle(res.credential);
-                  if (pendingPlan) {
-                    onStartBuilding();
-                  } else {
-                    onClose();
-                  }
+                  await confirmPasswordReset(resetToken, pw);
+                  setDone(true);
                 } catch (ex) {
-                  setErr(ex instanceof Error ? ex.message : "Google sign-in failed.");
+                  setErr(ex instanceof Error ? ex.message : "Could not reset password.");
                 } finally {
                   setBusy(false);
                 }
               }}
-              onError={() => setErr("Google sign-in failed.")}
-              theme="filled_black"
-              size="large"
-              width="340"
-              text="signin_with"
-              shape="rectangular"
-            />
-          </div>
-          {!isSignup && (
-            <p className="mt-4 text-center text-xs leading-relaxed text-white/25">
-              No account?{" "}
+            >
+              <div>
+                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-widest text-white/40">
+                  New password
+                </label>
+                <input
+                  name="password"
+                  type="password"
+                  minLength={4}
+                  required
+                  autoFocus
+                  className="h-11 w-full rounded-xl px-4 text-sm text-white outline-none transition-all"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-widest text-white/40">
+                  Confirm new password
+                </label>
+                <input
+                  name="password2"
+                  type="password"
+                  minLength={4}
+                  required
+                  className="h-11 w-full rounded-xl px-4 text-sm text-white outline-none transition-all"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                />
+              </div>
+              {err && (
+                <p className="rounded-xl px-4 py-2.5 text-xs text-red-300" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
+                  {err}
+                </p>
+              )}
               <button
-                type="button"
-                className="text-[#2bb8dc] hover:text-white transition-colors underline"
-                onClick={onSwitchToSignup}
+                disabled={busy}
+                className="mt-1 h-12 w-full rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                style={{ background: "#2bb8dc", color: "#050709", boxShadow: "0 4px 24px rgba(43,184,220,0.4)" }}
               >
-                Sign up for free
+                {busy ? "…" : "Set new password"}
               </button>
-            </p>
+            </form>
           )}
         </div>
       </div>
@@ -864,6 +1070,19 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
   const [scrolled, setScrolled] = useState(false);
   const [isAuthed, setIsAuthed] = useState(isCadioAuthenticated);
   const [checkoutErr, setCheckoutErr] = useState("");
+  const [resetToken, setResetToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tok = params.get("reset_token");
+    if (tok) {
+      setResetToken(tok);
+      // Clean the token from URL without triggering a reload
+      const url = new URL(window.location.href);
+      url.searchParams.delete("reset_token");
+      window.history.replaceState(null, "", url.toString());
+    }
+  }, []);
 
   useEffect(() => {
     const update = () => setIsAuthed(isCadioAuthenticated());
@@ -1515,6 +1734,8 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
         pendingPlan={pendingPlan}
         onClose={() => { setAuthMode(null); setPendingPlan(null); }}
         onSwitchToSignup={() => setAuthMode("signup")}
+        onForgotPassword={() => setAuthMode("forgot")}
+        onBackToLogin={() => setAuthMode("login")}
         onStartBuilding={() => {
           setAuthMode(null);
           if (pendingPlan) {
@@ -1526,6 +1747,14 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
           }
         }}
       />
+
+      {resetToken && (
+        <ResetPasswordDialog
+          resetToken={resetToken}
+          onClose={() => setResetToken(null)}
+          onDone={() => { setResetToken(null); onStartBuilding(); }}
+        />
+      )}
 
       {checkoutPlan && (
         <CheckoutModal

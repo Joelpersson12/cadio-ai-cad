@@ -12,7 +12,8 @@ import json
 import os
 import secrets
 import sqlite3
-from datetime import datetime, timezone
+import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -107,6 +108,18 @@ def _init(conn: sqlite3.Connection) -> None:
             account_id TEXT PRIMARY KEY,
             library_json TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            token TEXT PRIMARY KEY,
+            account_id TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
             FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
         )
         """
@@ -583,3 +596,136 @@ def save_saved_library(token: str, library: Any) -> dict[str, Any]:
         )
         conn.commit()
     return {"account": account, "library": clean}
+
+
+# ---------------------------------------------------------------------------
+# Password reset
+# ---------------------------------------------------------------------------
+
+RESET_TOKEN_TTL_HOURS = 1
+
+
+def _send_reset_email(to_email: str, to_name: str, reset_token: str) -> None:
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
+        return  # email not configured; token still written to DB
+
+    app_url = os.environ.get("APP_URL", "https://cadio.net")
+    reset_url = f"{app_url}/?reset_token={reset_token}"
+    display_name = to_name.strip() or "there"
+
+    payload = {
+        "from": "Cadio <no-reply@cadio.net>",
+        "to": [to_email],
+        "subject": "Reset your Cadio password",
+        "html": (
+            f"<p>Hi {display_name},</p>"
+            f"<p>Click the link below to reset your password. "
+            f"The link expires in {RESET_TOKEN_TTL_HOURS} hour.</p>"
+            f'<p><a href="{reset_url}">{reset_url}</a></p>'
+            f"<p>If you didn't request this, you can safely ignore this email.</p>"
+            f"<p>— The Cadio team</p>"
+        ),
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()
+    except Exception:
+        pass  # silently swallow; token is in DB regardless
+
+
+def create_password_reset_token(email: str) -> None:
+    """Create a reset token and email it. Always returns without revealing existence."""
+    clean_email = _clean_email(email)
+    if not clean_email:
+        return
+
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM accounts WHERE email = ?",
+            (clean_email,),
+        ).fetchone()
+        if row is None:
+            return  # no account — don't reveal this
+
+        account_id = row["id"]
+        name = row["name"] or ""
+
+        reset_token = secrets.token_urlsafe(32)
+        now = _now()
+        expires_at = (
+            datetime.now(timezone.utc) + timedelta(hours=RESET_TOKEN_TTL_HOURS)
+        ).isoformat()
+
+        conn.execute(
+            """
+            INSERT INTO password_reset_tokens (token, account_id, expires_at, used, created_at)
+            VALUES (?, ?, ?, 0, ?)
+            """,
+            (reset_token, account_id, expires_at, now),
+        )
+        conn.commit()
+
+    _send_reset_email(clean_email, name, reset_token)
+
+
+def reset_password_with_token(reset_token: str, new_password: str) -> dict[str, Any]:
+    """Validate reset token, set new password, return auth session."""
+    if not reset_token:
+        raise ValueError("Invalid or expired reset link")
+    if len(new_password) < 4:
+        raise ValueError("Password must be at least 4 characters")
+
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    session_token = secrets.token_urlsafe(32)
+
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM password_reset_tokens WHERE token = ?",
+            (reset_token,),
+        ).fetchone()
+
+        if row is None:
+            raise ValueError("Invalid or expired reset link")
+        if row["used"]:
+            raise ValueError("This reset link has already been used")
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if now_dt > expires_at:
+            raise ValueError("Reset link has expired — please request a new one")
+
+        account_id = row["account_id"]
+        password_hash = _hash_password(new_password)
+
+        conn.execute(
+            "UPDATE accounts SET password_hash = ?, updated_at = ? WHERE id = ?",
+            (password_hash, now, account_id),
+        )
+        conn.execute(
+            "UPDATE password_reset_tokens SET used = 1 WHERE token = ?",
+            (reset_token,),
+        )
+        conn.execute(
+            "INSERT INTO sessions (token, account_id, created_at, last_seen) VALUES (?, ?, ?, ?)",
+            (session_token, account_id, now, now),
+        )
+        conn.commit()
+
+        account_row = conn.execute(
+            "SELECT * FROM accounts WHERE id = ?",
+            (account_id,),
+        ).fetchone()
+
+    return {"token": session_token, "account": _account_from_row(account_row)}

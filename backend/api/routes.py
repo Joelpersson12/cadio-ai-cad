@@ -21,6 +21,7 @@ from backend.models.schema import (
     AuthRequest,
     FeatureToggleRequest,
     ExpertOperationRequest,
+    ForgotPasswordRequest,
     GenerateRequest,
     GoogleAuthRequest,
     ObjectDeleteRequest,
@@ -28,6 +29,7 @@ from backend.models.schema import (
     ParameterUpdateRequest,
     PrinterUpdateRequest,
     PrimitiveCreateRequest,
+    ResetPasswordRequest,
     SavedLibraryRequest,
     ScenePayload,
     SourceModelSwitchRequest,
@@ -53,10 +55,12 @@ from backend.services.print_profiles import material_profiles_response, normaliz
 from backend.services.account_store import (
     account_from_token,
     consume_download,
+    create_password_reset_token,
     get_account_profile,
     load_saved_library,
     login_or_create_account,
     login_or_create_with_google,
+    reset_password_with_token,
     save_saved_library,
     upgrade_plan,
 )
@@ -203,6 +207,29 @@ def auth_google(data: GoogleAuthRequest) -> dict[str, Any] | JSONResponse:
             email=idinfo.get("email", ""),
             name=idinfo.get("name", ""),
         )
+        return {"status": "ok", **result}
+    except ValueError as exc:
+        return _error(400, str(exc))
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.post("/api/auth/forgot-password", response_model=None)
+def auth_forgot_password(data: ForgotPasswordRequest) -> dict[str, Any] | JSONResponse:
+    try:
+        create_password_reset_token(data.email)
+        # Always return success to avoid email enumeration
+        return {"status": "ok", "message": "If that email is registered, a reset link has been sent"}
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.post("/api/auth/reset-password", response_model=None)
+def auth_reset_password(data: ResetPasswordRequest) -> dict[str, Any] | JSONResponse:
+    try:
+        result = reset_password_with_token(data.token, data.new_password)
         return {"status": "ok", **result}
     except ValueError as exc:
         return _error(400, str(exc))

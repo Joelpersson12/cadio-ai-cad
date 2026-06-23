@@ -178,3 +178,12 @@ class ExpertOperationRequest(BaseModel):
 
 class GoogleAuthRequest(BaseModel):
     credential: str  # Google ID token (JWT) from frontend
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str

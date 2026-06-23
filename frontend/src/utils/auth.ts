@@ -1,4 +1,4 @@
-import { authLogin, authGoogleLogin, type AuthPayload, type AccountProfile } from "./api";
+import { authLogin, authGoogleLogin, requestPasswordReset, resetPassword, type AuthPayload, type AccountProfile } from "./api";
 
 const CADIO_AUTH_KEY = "cadio_auth_ready";
 const CADIO_ACCOUNT_KEY = "cadio_account_profile_v1";
@@ -111,4 +111,14 @@ export function signOutCadioAccount() {
   window.localStorage.removeItem(CADIO_ACCOUNT_KEY);
   window.localStorage.removeItem(CADIO_AUTH_TOKEN_KEY);
   window.dispatchEvent(new Event("cadio-auth-changed"));
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  await requestPasswordReset(email);
+}
+
+export async function confirmPasswordReset(token: string, newPassword: string): Promise<AccountProfile> {
+  const result = await resetPassword(token, newPassword);
+  storeAccount(result.account, result.token);
+  return result.account;
 }
