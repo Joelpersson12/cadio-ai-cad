@@ -154,7 +154,17 @@ def _bearer_token(authorization: str | None) -> str:
 
 @router.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"status": "ok", "service": "cadio-v2"}
+    stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
+    price_pro = os.environ.get("STRIPE_PRICE_PRO", "")
+    price_unlimited = os.environ.get("STRIPE_PRICE_UNLIMITED", "")
+    return {
+        "status": "ok",
+        "service": "cadio-v2",
+        "build": "2026-06-23-r3",
+        "stripe_key_prefix": stripe_key[:14] if stripe_key else "NOT_SET",
+        "stripe_price_pro_prefix": price_pro[:12] if price_pro else "NOT_SET",
+        "stripe_price_unlimited_prefix": price_unlimited[:12] if price_unlimited else "NOT_SET",
+    }
 
 
 @router.post("/api/auth/login", response_model=None)
@@ -927,8 +937,10 @@ def stripe_checkout(
         }
         price_id = price_ids.get(plan, "")
         if not price_id:
-            return _error(400, f"Unknown plan: {plan}")
-        logger.info("Stripe checkout: plan=%s price_id=%r key_prefix=%s", plan, price_id, stripe_key[:12])
+            return _error(400, f"Unknown plan: {plan}. Set STRIPE_PRICE_PRO and STRIPE_PRICE_UNLIMITED env vars.")
+        if not price_id.startswith("price_"):
+            return _error(400, f"Invalid price ID format (must start with 'price_'): {price_id[:16]}...")
+        logger.info("Stripe checkout: plan=%s price_id=%r key_prefix=%s", plan, price_id, stripe_key[:14])
         try:
             session = stripe_lib.checkout.Session.create(
                 mode="subscription",
@@ -938,13 +950,15 @@ def stripe_checkout(
                 success_url="https://cadio.net/app?upgrade=success",
                 cancel_url="https://cadio.net/",
             )
-        except stripe_lib.error.StripeError as se:
-            logger.error("Stripe API error: type=%s param=%s msg=%s", type(se).__name__, getattr(se, 'param', None), se.user_message if hasattr(se, 'user_message') else str(se))
-            return _error(400, f"Stripe [{type(se).__name__}] param={getattr(se, 'param', '?')}: {se.user_message if hasattr(se, 'user_message') else str(se)}")
-        return {"status": "ok", "url": session.url}
+            return {"status": "ok", "url": session.url}
+        except Exception as se:
+            param = getattr(se, 'param', None)
+            msg = getattr(se, 'user_message', None) or str(se)
+            logger.error("Stripe error type=%s param=%s msg=%s", type(se).__name__, param, msg)
+            return _error(400, f"[{type(se).__name__}] param={param}: {msg}")
     except Exception as exc:
         traceback.print_exc()
-        return _error(500, str(exc))
+        return _error(500, f"{type(exc).__name__}: {exc}")
 
 
 @router.post("/api/stripe/webhook", response_model=None)
