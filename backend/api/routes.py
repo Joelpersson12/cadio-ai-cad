@@ -928,8 +928,9 @@ def stripe_checkout(
         price_id = price_ids.get(plan, "")
         if not price_id:
             return _error(400, f"Unknown plan: {plan}")
-        success_url = str(data.get("success_url", "https://cadio.net/app?upgrade=success"))
-        cancel_url = str(data.get("cancel_url", "https://cadio.net/app"))
+        success_url = "https://cadio.net/app?upgrade=success"
+        cancel_url = "https://cadio.net/"
+        logger.info("Stripe checkout: plan=%s price_id=%s email=%s", plan, price_id, account.get("email"))
         session = stripe_lib.checkout.Session.create(
             mode="subscription",
             customer_email=account.get("email") or None,
@@ -941,7 +942,8 @@ def stripe_checkout(
         return {"status": "ok", "url": session.url}
     except Exception as exc:
         traceback.print_exc()
-        return _error(500, str(exc))
+        logger.error("Stripe checkout error: %s", repr(exc))
+        return _error(500, f"Stripe error: {exc}")
 
 
 @router.post("/api/stripe/webhook", response_model=None)
