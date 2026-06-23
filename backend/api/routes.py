@@ -944,13 +944,13 @@ def stripe_checkout(
         try:
             session = stripe_lib.checkout.Session.create(
                 mode="subscription",
+                ui_mode="embedded",
                 customer_email=account.get("email") or None,
                 line_items=[{"price": price_id, "quantity": 1}],
                 metadata={"account_id": account["accountId"], "plan": plan},
-                success_url="https://cadio.net/app?upgrade=success",
-                cancel_url="https://cadio.net/",
+                return_url="https://cadio.net/app?upgrade=success&session_id={CHECKOUT_SESSION_ID}",
             )
-            return {"status": "ok", "url": session.url}
+            return {"status": "ok", "client_secret": session.client_secret}
         except Exception as se:
             param = getattr(se, 'param', None)
             msg = getattr(se, 'user_message', None) or str(se)

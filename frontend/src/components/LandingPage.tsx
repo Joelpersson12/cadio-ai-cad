@@ -6,12 +6,12 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { loginCadioAccount, loginWithGoogle, isCadioAuthenticated, getCadioAuthToken, getCadioAccount } from "../utils/auth";
-import { API_BASE } from "../utils/api";
+import { loginCadioAccount, loginWithGoogle, isCadioAuthenticated, getCadioAccount } from "../utils/auth";
 import { GoogleLogin } from "@react-oauth/google";
 import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
 import ProfilePanel, { ProfileAvatar } from "./ProfilePanel";
+import CheckoutModal from "./CheckoutModal";
 
 type Language = "en" | "sv" | "es" | "fr" | "it" | "de" | "pt";
 type AuthMode = "login" | "signup" | null;
@@ -834,26 +834,11 @@ const MODELS = [
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
-async function startCheckout(plan: string): Promise<void> {
-  const token = getCadioAuthToken();
-  const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      plan,
-      success_url: `${window.location.origin}/app?upgrade=success`,
-      cancel_url: window.location.href,
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok || data.status === "error") throw new Error(data.message || "Stripe not configured yet");
-  window.location.href = data.url as string;
-}
-
 export default function LandingPage({ onStartBuilding }: { onStartBuilding: () => void }) {
   const [language, setLanguage] = useState<Language>("en");
   const [authMode, setAuthMode] = useState<AuthMode>(null);
   const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+  const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isAuthed, setIsAuthed] = useState(isCadioAuthenticated);
@@ -874,9 +859,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
   const handlePlanClick = (plan: string) => {
     if (isCadioAuthenticated()) {
       setCheckoutErr("");
-      startCheckout(plan).catch((err) => {
-        setCheckoutErr(err instanceof Error ? err.message : "Something went wrong. Try again.");
-      });
+      setCheckoutPlan(plan);
     } else {
       setPendingPlan(plan);
       setAuthMode("signup");
@@ -1500,7 +1483,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
       <ProfilePanel
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
-        onUpgrade={() => { setProfileOpen(false); setAuthMode(null); setPendingPlan("pro"); void startCheckout("pro"); }}
+        onUpgrade={() => { setProfileOpen(false); setCheckoutPlan("pro"); }}
       />
 
       <AuthDialog
@@ -1513,12 +1496,19 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
           if (pendingPlan) {
             const plan = pendingPlan;
             setPendingPlan(null);
-            void startCheckout(plan);
+            setCheckoutPlan(plan);
           } else {
             onStartBuilding();
           }
         }}
       />
+
+      {checkoutPlan && (
+        <CheckoutModal
+          plan={checkoutPlan}
+          onClose={() => setCheckoutPlan(null)}
+        />
+      )}
     </>
   );
 }
