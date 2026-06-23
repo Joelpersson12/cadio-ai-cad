@@ -1035,7 +1035,7 @@ async def stripe_webhook(request: Request) -> dict[str, Any] | JSONResponse:
 
             customer_id = sub.get("customer", "")
             customer = stripe_lib.Customer.retrieve(customer_id)
-            email = customer.get("email", "")
+            email = customer["email"] if "email" in customer else ""
 
             if email:
                 account_id = "acct_" + hashlib.sha256(
