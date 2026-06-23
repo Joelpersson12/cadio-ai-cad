@@ -130,7 +130,7 @@ const copy = {
     product: { label: "Produto", title: "Precisão de engenharia com velocidade de IA", body: "Descreva o que você quer construir. A IA da Cadio gera geometria paramétrica válida." },
     cards: [
       { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Busca IA", body: "Encontre pontos de partida imprimíveis das maiores bibliotecas de modelos 3D." },
-      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Edição direta", body: "Selecione arestas, extrude faces, aplique filetes com controle preciso." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4a2 2 0 012-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Edição direta", body: "Selecione arestas, extrude faces, aplique filetes com controle preciso." },
       { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Exportação inteligente", body: "Arquivos otimizados para FDM, SLA e impressão 3D industrial." },
     ],
     workflow: { label: "Fluxo", title: "Da ideia ao objeto em quatro etapas", steps: [["Busque", "Descreva o que você precisa."], ["Gere", "A IA cria geometria paramétrica válida."], ["Refine", "Ferramentas CAD profissionais para controle preciso."], ["Exporte", "Arquivos prontos para sua impressora e material."]] },

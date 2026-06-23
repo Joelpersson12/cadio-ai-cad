@@ -89,7 +89,7 @@ async def task_health(session: aiohttp.ClientSession, base: str, suite: Suite) -
 
 
 async def task_session_lifecycle(session: aiohttp.ClientSession, base: str, suite: Suite) -> None:
-    """Create a session via /api/generate (light prompt), then read mesh."""
+    """Create a session via /api/object/primitive, then exercise it."""
     sid = str(uuid.uuid4())
 
     # Primitive creation (fast, no AI)
@@ -119,13 +119,13 @@ async def task_session_lifecycle(session: aiohttp.ClientSession, base: str, suit
         suite.record(Result("GET /api/session/{id}/mesh", 0, (time.monotonic()-t0)*1000, str(e)))
 
     # Rapid parameter updates (simulates user dragging a slider)
-    for _ in range(5):
+    for i in range(5):
         t0 = time.monotonic()
         try:
             async with session.post(
                 f"{base}/api/parameters",
                 json={"session_id": sid, "object_id": None,
-                      "parameters": {"width": 20 + _ * 5, "depth": 20, "height": 10}},
+                      "parameters": {"width": 20 + i * 5, "depth": 20, "height": 10}},
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as r:
                 suite.record(Result("POST /api/parameters (rapid)", r.status, (time.monotonic()-t0)*1000))
@@ -159,6 +159,7 @@ async def task_session_lifecycle(session: aiohttp.ClientSession, base: str, suit
 
     # Add a second object and delete it
     t0 = time.monotonic()
+    oid = None
     try:
         async with session.post(
             f"{base}/api/object/primitive",
@@ -170,7 +171,6 @@ async def task_session_lifecycle(session: aiohttp.ClientSession, base: str, suit
             oid = data.get("objects", [{}])[-1].get("id") if r.status < 400 else None
     except Exception as e:
         suite.record(Result("POST /api/object/primitive (cyl)", 0, (time.monotonic()-t0)*1000, str(e)))
-        oid = None
 
     if oid:
         t0 = time.monotonic()
