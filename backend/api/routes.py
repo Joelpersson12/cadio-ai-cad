@@ -990,36 +990,54 @@ def stripe_checkout(
 
 @router.post("/api/stripe/webhook", response_model=None)
 async def stripe_webhook(request: Request) -> dict[str, Any] | JSONResponse:
+    import json
     import os
+
     stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
     if not stripe_key or not webhook_secret:
         return _error(503, "Stripe not configured")
+
     try:
         import stripe as stripe_lib
+
         stripe_lib.api_key = stripe_key
+
         body = await request.body()
         sig = request.headers.get("stripe-signature", "")
-        event = stripe_lib.Webhook.construct_event(body, sig, webhook_secret)
-        event = dict(event)
-        event_type = event["type"]
-        if event_type in ("customer.subscription.created", "customer.subscription.updated"):
-            sub = dict(event["data"]["object"])
-            account_id = sub.get("metadata", {}).get("account_id", "")
-            plan = sub.get("metadata", {}).get("plan", "pro")
-            if account_id and sub.get("status") == "active":
+
+        # Verifierar att webhooken verkligen kommer från Stripe
+        stripe_lib.Webhook.construct_event(body, sig, webhook_secret)
+
+        # Läser Stripe-eventet som vanlig JSON
+        event = json.loads(body.decode("utf-8"))
+        event_type = event.get("type", "")
+
+        if event_type == "checkout.session.completed":
+            session = event["data"]["object"]
+            metadata = session.get("metadata", {})
+            account_id = metadata.get("account_id", "")
+            plan = metadata.get("plan", "pro")
+
+            if account_id:
                 upgrade_plan(
                     account_id,
                     plan,
-                    stripe_customer_id=sub.get("customer", ""),
-                    stripe_subscription_id=sub.get("id", ""),
+                    stripe_customer_id=session.get("customer", ""),
+                    stripe_subscription_id=session.get("subscription", ""),
                 )
+
         elif event_type == "customer.subscription.deleted":
-            sub = dict(event["data"]["object"])
-            account_id = sub.get("metadata", {}).get("account_id", "")
+            sub = event["data"]["object"]
+            metadata = sub.get("metadata", {})
+            account_id = metadata.get("account_id", "")
+
             if account_id:
                 upgrade_plan(account_id, "free")
+
         return {"status": "ok"}
+
     except Exception as exc:
         traceback.print_exc()
         return _error(400, str(exc))
