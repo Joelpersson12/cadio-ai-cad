@@ -762,6 +762,7 @@ function AuthDialog({
                   <a href="/terms" className="text-[#2bb8dc] hover:text-white underline transition-colors" onClick={(e) => e.stopPropagation()}>Terms of Service</a>
                   {" "}and{" "}
                   <a href="/privacy" className="text-[#2bb8dc] hover:text-white underline transition-colors" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>.
+                  {" "}I confirm I am 13 years or older. If I subscribe, I understand the service starts immediately and I waive my right of withdrawal.
                 </span>
               </label>
             )}
