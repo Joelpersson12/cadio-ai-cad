@@ -45,7 +45,6 @@ export function useWebSocket(
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log("[WS] connected:", sid);
         pingRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send("ping");
@@ -64,7 +63,6 @@ export function useWebSocket(
       };
 
       ws.onclose = () => {
-        console.log("[WS] disconnected, reconnecting...");
         if (pingRef.current) clearInterval(pingRef.current);
         reconnectRef.current = setTimeout(() => connectWs(sid), RECONNECT_DELAY);
       };
