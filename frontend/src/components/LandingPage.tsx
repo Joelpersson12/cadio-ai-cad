@@ -130,7 +130,7 @@ const copy = {
     product: { label: "Produto", title: "Precisão de engenharia com velocidade de IA", body: "Descreva o que você quer construir. A IA da Cadio gera geometria paramétrica válida." },
     cards: [
       { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Busca IA", body: "Encontre pontos de partida imprimíveis das maiores bibliotecas de modelos 3D." },
-      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Edição direta", body: "Selecione arestas, extrude faces, aplique filetes com controle preciso." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4a2 2 0 012-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Edição direta", body: "Selecione arestas, extrude faces, aplique filetes com controle preciso." },
       { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Exportação inteligente", body: "Arquivos otimizados para FDM, SLA e impressão 3D industrial." },
     ],
     workflow: { label: "Fluxo", title: "Da ideia ao objeto em quatro etapas", steps: [["Busque", "Descreva o que você precisa."], ["Gere", "A IA cria geometria paramétrica válida."], ["Refine", "Ferramentas CAD profissionais para controle preciso."], ["Exporte", "Arquivos prontos para sua impressora e material."]] },
@@ -139,6 +139,17 @@ const copy = {
     auth: { loginTitle: "Bem-vindo de volta", signupTitle: "Comece a construir hoje", email: "Endereço de e-mail", password: "Senha", name: "Nome completo", continue: "Entrar no Workspace", hint: "Ao continuar, você concorda com nossos termos e política de privacidade." },
     cta: { title: "Comece a construir hoje", body: "Junte-se a engenheiros e makers que constroem mais rápido.", button: "Abrir Workspace" },
   },
+};
+
+// ─── CURRENCY PER LANGUAGE ──────────────────────────────────────────────────
+const CURRENCY: Record<Language, { pro: string; unlimited: string; period: string; taxNote: string }> = {
+  en: { pro: "$9.99", unlimited: "$24.99", period: "/mo", taxNote: "incl. tax" },
+  sv: { pro: "99 kr", unlimited: "249 kr", period: "/mån", taxNote: "inkl. moms" },
+  fr: { pro: "9,99 €", unlimited: "24,99 €", period: "/mois", taxNote: "TVA incluse" },
+  de: { pro: "9,99 €", unlimited: "24,99 €", period: "/Monat", taxNote: "inkl. MwSt." },
+  es: { pro: "9,99 €", unlimited: "24,99 €", period: "/mes", taxNote: "IVA incluido" },
+  it: { pro: "9,99 €", unlimited: "24,99 €", period: "/mese", taxNote: "IVA inclusa" },
+  pt: { pro: "9,99 €", unlimited: "24,99 €", period: "/mês", taxNote: "IVA incluído" },
 };
 
 // ─── ACCENT COLOR ───────────────────────────────────────────────────────────
@@ -1330,6 +1341,12 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               {text.pricingBody}
             </p>
 
+            {checkoutErr && (
+              <div className="mb-6 rounded-xl px-4 py-3 text-sm text-red-300 text-center" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
+                {checkoutErr}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 max-w-4xl">
               {/* Free */}
               <div
@@ -1342,11 +1359,11 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                 <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em] text-white/40">Free</p>
                 <div className="mb-1 flex items-end gap-2">
                   <span className="text-5xl font-black text-white">$0</span>
-                  <span className="mb-1.5 text-sm text-white/30">/mo</span>
+                  <span className="mb-1.5 text-sm text-white/30">{CURRENCY[language].period}</span>
                 </div>
                 <p className="mb-7 text-sm text-white/30">3 downloads to get started</p>
                 <ul className="mb-7 space-y-2.5">
-                  {["AI model generation", "STL & 3MF export", "Manual CAD tools", "3 downloads total"].map((f) => (
+                  {["AI model generation", "All export formats", "Manual CAD tools", "3 downloads total"].map((f) => (
                     <li key={f} className="flex items-center gap-2.5 text-sm text-white/55">
                       <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: ACCENT }} />
                       {f}
@@ -1361,12 +1378,6 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   Get Started
                 </button>
               </div>
-
-              {checkoutErr && (
-                <div className="col-span-3 rounded-xl px-4 py-3 text-sm text-red-300 text-center" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
-                  {checkoutErr}
-                </div>
-              )}
 
               {/* Pro — highlighted */}
               <div
@@ -1385,12 +1396,13 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                 </div>
                 <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>Pro</p>
                 <div className="mb-1 flex items-end gap-2">
-                  <span className="text-5xl font-black text-white">$9</span>
-                  <span className="mb-1.5 text-sm text-white/40">/mo</span>
+                  <span className="text-4xl font-black text-white">{CURRENCY[language].pro}</span>
+                  <span className="mb-1.5 text-sm text-white/40">{CURRENCY[language].period}</span>
                 </div>
-                <p className="mb-7 text-sm text-white/40">20 downloads per month</p>
+                <p className="mb-1 text-xs text-white/25">{CURRENCY[language].taxNote}</p>
+                <p className="mb-6 text-sm text-white/40">20 downloads per month</p>
                 <ul className="mb-7 space-y-2.5">
-                  {["Everything in Free", "20 downloads / month", "STEP export", "Priority AI speed"].map((f) => (
+                  {["Everything in Free", "20 downloads / month", "Priority AI speed", "Email support"].map((f) => (
                     <li key={f} className="flex items-center gap-2.5 text-sm" style={{ color: "rgba(232,237,242,0.72)" }}>
                       <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: ACCENT }} />
                       {f}
@@ -1416,12 +1428,13 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               >
                 <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em] text-white/40">Unlimited</p>
                 <div className="mb-1 flex items-end gap-2">
-                  <span className="text-5xl font-black text-white">$19</span>
-                  <span className="mb-1.5 text-sm text-white/30">/mo</span>
+                  <span className="text-4xl font-black text-white">{CURRENCY[language].unlimited}</span>
+                  <span className="mb-1.5 text-sm text-white/30">{CURRENCY[language].period}</span>
                 </div>
-                <p className="mb-7 text-sm text-white/30">Unlimited downloads</p>
+                <p className="mb-1 text-xs text-white/25">{CURRENCY[language].taxNote}</p>
+                <p className="mb-6 text-sm text-white/30">Unlimited downloads</p>
                 <ul className="mb-7 space-y-2.5">
-                  {["Everything in Pro", "Unlimited downloads", "All export formats", "Early feature access"].map((f) => (
+                  {["Everything in Pro", "Unlimited downloads", "Early feature access", "Priority support"].map((f) => (
                     <li key={f} className="flex items-center gap-2.5 text-sm text-white/55">
                       <span className="h-1.5 w-1.5 rounded-full flex-shrink-0 bg-white/30" />
                       {f}
