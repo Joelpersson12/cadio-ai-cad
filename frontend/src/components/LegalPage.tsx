@@ -22,8 +22,8 @@ const pages: Record<
       {
         heading: "Company Information",
         body: [
-          "Cadio is operated by Cadio Engineering (org. nr. [ORG_NR]), Sweden. Contact: support@cadio.net.",
-          "These Terms of Service constitute a binding agreement between you and Cadio Engineering when you use cadio.net or any associated services.",
+          "Cadio is operated as a sole trader (enskild firma) under the trade name Cadio Engineering, Sweden. Contact: support@cadio.net.",
+          "These Terms of Service constitute a binding agreement between you and the operator of Cadio when you use cadio.net or any associated services.",
         ],
       },
       {
@@ -43,7 +43,7 @@ const pages: Record<
       {
         heading: "Subscriptions and Billing",
         body: [
-          "Cadio offers paid subscription plans (Pro and Unlimited) in addition to a Free tier. All prices are in USD and billed monthly. Prices exclude VAT where applicable — VAT may be added at checkout based on your country of residence.",
+          "Cadio offers paid subscription plans (Pro and Unlimited) in addition to a Free tier. All prices are in USD and billed monthly.",
           "Free accounts include 3 total file downloads. Pro accounts include 20 downloads per calendar month. Unlimited accounts have no download limit. Unused monthly downloads do not roll over.",
           "Paid subscriptions renew automatically each month on the same date the subscription started. You will receive access to the plan immediately upon payment.",
           "You can cancel your subscription at any time by contacting support@cadio.net or through your account settings. Cancellation takes effect at the end of the current billing period — you retain access until then. No partial refunds are issued for the remaining period.",
@@ -112,7 +112,7 @@ const pages: Record<
       {
         heading: "Data Controller",
         body: [
-          "Cadio Engineering (org. nr. [ORG_NR]), Sweden, is the data controller for personal data processed through cadio.net. Contact: support@cadio.net.",
+          "The data controller for personal data processed through cadio.net is the sole trader operating under the trade name Cadio Engineering, Sweden. Contact: support@cadio.net.",
           "This policy describes how we collect, use, and protect your personal data in accordance with the EU General Data Protection Regulation (GDPR) and the Swedish Data Protection Act (2018:218).",
         ],
       },
