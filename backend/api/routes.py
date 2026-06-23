@@ -1001,11 +1001,10 @@ async def stripe_webhook(request: Request) -> dict[str, Any] | JSONResponse:
         body = await request.body()
         sig = request.headers.get("stripe-signature", "")
         event = stripe_lib.Webhook.construct_event(body, sig, webhook_secret)
-        event = event.to_dict_recursive()
-        
+        event = dict(event)
         event_type = event["type"]
         if event_type in ("customer.subscription.created", "customer.subscription.updated"):
-            sub = event["data"]["object"]
+            sub = dict(event["data"]["object"])
             account_id = sub.get("metadata", {}).get("account_id", "")
             plan = sub.get("metadata", {}).get("plan", "pro")
             if account_id and sub.get("status") == "active":
@@ -1016,7 +1015,7 @@ async def stripe_webhook(request: Request) -> dict[str, Any] | JSONResponse:
                     stripe_subscription_id=sub.get("id", ""),
                 )
         elif event_type == "customer.subscription.deleted":
-            sub = event["data"]["object"]
+            sub = dict(event["data"]["object"])
             account_id = sub.get("metadata", {}).get("account_id", "")
             if account_id:
                 upgrade_plan(account_id, "free")
