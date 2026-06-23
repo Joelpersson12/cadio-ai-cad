@@ -7,6 +7,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { loginCadioAccount, loginWithGoogle, isCadioAuthenticated, getCadioAuthToken, getCadioAccount } from "../utils/auth";
+import { API_BASE } from "../utils/api";
 import { GoogleLogin } from "@react-oauth/google";
 import CadioLogo from "./CadioLogo";
 import SiteFooter from "./SiteFooter";
@@ -835,7 +836,7 @@ const MODELS = [
 
 async function startCheckout(plan: string): Promise<void> {
   const token = getCadioAuthToken();
-  const res = await fetch("/api/stripe/checkout", {
+  const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
@@ -856,6 +857,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
   const [profileOpen, setProfileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isAuthed, setIsAuthed] = useState(isCadioAuthenticated);
+  const [checkoutErr, setCheckoutErr] = useState("");
 
   useEffect(() => {
     const update = () => setIsAuthed(isCadioAuthenticated());
@@ -871,7 +873,10 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
 
   const handlePlanClick = (plan: string) => {
     if (isCadioAuthenticated()) {
-      void startCheckout(plan);
+      setCheckoutErr("");
+      startCheckout(plan).catch((err) => {
+        setCheckoutErr(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      });
     } else {
       setPendingPlan(plan);
       setAuthMode("signup");
@@ -1364,6 +1369,12 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   Get Started
                 </button>
               </div>
+
+              {checkoutErr && (
+                <div className="col-span-3 rounded-xl px-4 py-3 text-sm text-red-300 text-center" style={{ background: "rgba(220,50,50,0.08)", border: "1px solid rgba(220,50,50,0.2)" }}>
+                  {checkoutErr}
+                </div>
+              )}
 
               {/* Pro — highlighted */}
               <div
