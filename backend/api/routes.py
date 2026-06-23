@@ -944,7 +944,7 @@ def stripe_checkout(
         try:
             session = stripe_lib.checkout.Session.create(
                 mode="subscription",
-                ui_mode="embedded",
+                ui_mode="embedded_page",
                 customer_email=account.get("email") or None,
                 line_items=[{"price": price_id, "quantity": 1}],
                 metadata={"account_id": account["accountId"], "plan": plan},
