@@ -13,7 +13,7 @@ import re
 import traceback
 from typing import Any
 
-from fastapi import APIRouter, Header, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Header, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 
 from backend.models.schema import (
@@ -989,9 +989,8 @@ def stripe_checkout(
 
 
 @router.post("/api/stripe/webhook", response_model=None)
-async def stripe_webhook(request: Any) -> dict[str, Any] | JSONResponse:
+async def stripe_webhook(request: Request) -> dict[str, Any] | JSONResponse:
     import os
-    from fastapi import Request
     stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     if not stripe_key or not webhook_secret:
