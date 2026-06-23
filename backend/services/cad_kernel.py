@@ -125,24 +125,63 @@ def make_box_body(
         return None
 
     try:
-        def edge_selection(target: str):
+        body = cq.Workplane("XY").box(width, depth, height, centered=(True, True, False))
+
+        size_limit = min(width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1)
+
+        def edge_selectors(target: str):
+            """Ordered list of edge selectors to try for a given target.
+
+            Returns the requested selection first, then progressively safer
+            subsets.  Filleting *every* edge of a box (or any edge set that
+            includes the circular hole rims) frequently throws in OCC, so we
+            fall back to the vertical corner edges and finally the top rim
+            rather than letting the whole operation fail and collapse to a
+            crude mesh approximation.
+            """
             normalized = (target or "all").lower()
             if "hole" in normalized:
-                return body.edges("%CIRCLE")
+                return [lambda: body.edges("%CIRCLE")]
             if "top" in normalized:
-                return body.faces(">Z").edges()
+                return [lambda: body.faces(">Z").edges(), lambda: body.edges("|Z")]
             if "bottom" in normalized or "under" in normalized:
-                return body.faces("<Z").edges()
+                return [lambda: body.faces("<Z").edges(), lambda: body.edges("|Z")]
             if "side" in normalized:
-                return body.faces("|Z").edges()
-            return body.edges()
+                return [lambda: body.edges("|Z"), lambda: body.faces(">Z").edges()]
+            # "all" / unspecified — try every edge first (preserves the fully
+            # rounded box when OCC can do it), then fall back to the vertical
+            # corners and finally the top rim so a box with holes still rounds
+            # cleanly instead of collapsing to the crude mesh fallback.
+            return [
+                lambda: body.edges(),
+                lambda: body.edges("|Z"),
+                lambda: body.faces(">Z").edges(),
+            ]
 
-        body = cq.Workplane("XY").box(width, depth, height, centered=(True, True, False))
+        def apply_round(op: str, target: str, amount: float) -> bool:
+            """Try op on the target with shrinking size and safer edge subsets."""
+            nonlocal body
+            base = max(0.1, min(amount, size_limit))
+            for size in (base, base * 0.6, base * 0.35):
+                if size < 0.1:
+                    continue
+                for make_sel in edge_selectors(target):
+                    try:
+                        selection = make_sel()
+                        body = selection.fillet(size) if op == "fillet" else selection.chamfer(size)
+                        return True
+                    except Exception:
+                        continue
+            return False
+
         body = _cut_vertical_holes(body, params or {}, height)
 
         if shell_wall > 0:
             wall = max(0.5, min(shell_wall, width / 3.0, depth / 3.0, height / 2.0))
-            body = body.faces(">Z").shell(-wall)
+            try:
+                body = body.faces(">Z").shell(-wall)
+            except Exception:
+                pass
 
         applied_edge_history = False
         for item in edge_operations or []:
@@ -151,22 +190,13 @@ def make_box_body(
             amount = max(0.0, float(item.get("amount", 0.0)))
             if amount <= 0 or op not in {"fillet", "chamfer"}:
                 continue
-            try:
-                size = max(0.1, min(amount, width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1))
-                if op == "fillet":
-                    body = edge_selection(target).fillet(size)
-                else:
-                    body = edge_selection(target).chamfer(size)
+            if apply_round(op, target, amount):
                 applied_edge_history = True
-            except Exception:
-                continue
 
         if not applied_edge_history and fillet > 0:
-            radius = max(0.1, min(fillet, width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1))
-            body = edge_selection(edge_target).fillet(radius)
+            apply_round("fillet", edge_target, fillet)
         elif not applied_edge_history and chamfer > 0:
-            size = max(0.1, min(chamfer, width / 2.0 - 0.1, depth / 2.0 - 0.1, height / 2.0 - 0.1))
-            body = edge_selection(edge_target).chamfer(size)
+            apply_round("chamfer", edge_target, chamfer)
 
         return to_trimesh(body)
     except Exception:

@@ -79,6 +79,7 @@ from backend.services.session_manager import (
     create_primitive_object,
     get_object,
     get_or_create_session,
+    get_or_create_empty_session,
     get_selected_object,
     get_session,
     is_bottom_plate_prompt,
@@ -306,7 +307,9 @@ async def update_printer(data: PrinterUpdateRequest) -> ScenePayload | JSONRespo
     try:
         lock = acquire_lock()
         with lock:
-            session = get_or_create_session(data.session_id)
+            # Use the empty-session variant so selecting a printer never
+            # fabricates or resurrects default geometry on a blank plate.
+            session = get_or_create_empty_session(data.session_id)
             save_undo_snapshot(session)
             session["printer"] = normalize_printer(data.printer)
             bump_version(session)

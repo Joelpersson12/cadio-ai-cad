@@ -125,10 +125,37 @@ function meshBounds(obj: CadObject) {
   return { min, max };
 }
 
-function objectScaleFactor(bounds: { min: THREE.Vector3; max: THREE.Vector3 }, printerVolume: [number, number, number]) {
-  const sx = bounds.max.x - bounds.min.x;
-  const sy = bounds.max.y - bounds.min.y;
-  const sz = bounds.max.z - bounds.min.z;
+// Single shared scale for the entire scene.  Computes the union AABB of every
+// object (in three-space, after each object's own transform), then fits that
+// whole bounding box into the printer volume.  Every object is then scaled by
+// this same factor about the origin, so relative positions are preserved.
+function computeSceneScale(objects: CadObject[], printerVolume: [number, number, number]): number {
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  let found = false;
+  for (const obj of objects) {
+    const b = meshBounds(obj);
+    if (!b) continue;
+    found = true;
+    const t = obj.transform;
+    // transform scale/position are stored backend-space; swap to three-space.
+    const tsx = t?.scale?.[0] ?? 1;
+    const tsy = t?.scale?.[2] ?? 1;
+    const tsz = t?.scale?.[1] ?? 1;
+    const tpx = t?.position?.[0] ?? 0;
+    const tpy = t?.position?.[2] ?? 0;
+    const tpz = t?.position?.[1] ?? 0;
+    const xs = [b.min.x * tsx + tpx, b.max.x * tsx + tpx];
+    const ys = [b.min.y * tsy + tpy, b.max.y * tsy + tpy];
+    const zs = [b.min.z * tsz + tpz, b.max.z * tsz + tpz];
+    minX = Math.min(minX, ...xs); maxX = Math.max(maxX, ...xs);
+    minY = Math.min(minY, ...ys); maxY = Math.max(maxY, ...ys);
+    minZ = Math.min(minZ, ...zs); maxZ = Math.max(maxZ, ...zs);
+  }
+  if (!found) return 1;
+  const sx = maxX - minX;
+  const sy = maxY - minY;
+  const sz = maxZ - minZ;
   const [printerWidth, printerDepth, printerHeight] = printerVolume;
   return Math.min(
     printerWidth / (sx || 1),
@@ -138,10 +165,10 @@ function objectScaleFactor(bounds: { min: THREE.Vector3; max: THREE.Vector3 }, p
   );
 }
 
-function makeMeasurementSpec(obj: CadObject, printerVolume: [number, number, number]): MeasurementSpec | null {
+function makeMeasurementSpec(obj: CadObject, printerVolume: [number, number, number], sceneScale: number): MeasurementSpec | null {
   const bounds = meshBounds(obj);
   if (!bounds) return null;
-  const scaleFactor = objectScaleFactor(bounds, printerVolume);
+  const scaleFactor = sceneScale > 0 ? sceneScale : 1;
   const t = obj.transform;
   const sx = t?.scale?.[0] ?? 1;
   const sy = t?.scale?.[1] ?? 1;
@@ -216,8 +243,8 @@ function DimensionLine({
           <meshBasicMaterial color={color} depthTest={false} />
         </mesh>
       ))}
-      <Html position={midpoint} center distanceFactor={28} style={{ pointerEvents: "none" }}>
-        <div className="whitespace-nowrap rounded-lg border border-white/25 bg-[#111]/94 px-3 py-1.5 text-sm font-semibold text-white shadow-2xl">
+      <Html position={midpoint} center zIndexRange={[40, 0]} style={{ pointerEvents: "none" }}>
+        <div className="whitespace-nowrap rounded-lg border border-white/30 bg-[#111]/95 px-3.5 py-2 text-base font-semibold text-white shadow-2xl">
           {label}
         </div>
       </Html>
@@ -262,9 +289,9 @@ function MeasurementOverlay({ specs }: { specs: MeasurementSpec[] }) {
               end={[sideX, max.y, frontZ]}
               label={`Height ${formatMm(spec.heightMm)}`}
             />
-            <Html position={[(min.x + max.x) / 2, max.y + offset, (min.z + max.z) / 2]} center distanceFactor={32} style={{ pointerEvents: "none" }}>
-              <div className="min-w-64 rounded-xl border border-[#3b82f6]/55 bg-[#111]/95 px-4 py-3 text-sm leading-6 text-white shadow-2xl">
-                <div className="mb-1 max-w-72 truncate text-base font-semibold text-[#3b82f6]">{spec.name}</div>
+            <Html position={[(min.x + max.x) / 2, max.y + offset, (min.z + max.z) / 2]} center zIndexRange={[40, 0]} style={{ pointerEvents: "none" }}>
+              <div className="min-w-72 rounded-2xl border border-[#3b82f6]/60 bg-[#111]/96 px-5 py-4 text-base leading-7 text-white shadow-2xl">
+                <div className="mb-1.5 max-w-80 truncate text-lg font-bold text-[#3b82f6]">{spec.name}</div>
                 <div>Long side: <span className="font-semibold">{formatMm(spec.longSideMm)}</span></div>
                 <div>Short side: <span className="font-semibold">{formatMm(spec.shortSideMm)}</span></div>
                 <div>Height: <span className="font-semibold">{formatMm(spec.heightMm)}</span></div>
@@ -336,6 +363,7 @@ function ScaledMesh({
   onEdgeAmount,
   onTransformDrag,
   mobileMode,
+  sceneScale,
 }: {
   obj: CadObject;
   selected: boolean;
@@ -359,6 +387,7 @@ function ScaledMesh({
   onEdgeAmount: (x: number, y: number, operation: string, objectId: string, target: string) => void;
   onTransformDrag: (dragging: boolean) => void;
   mobileMode: boolean;
+  sceneScale: number;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
@@ -389,23 +418,12 @@ function ScaledMesh({
     return new THREE.EdgesGeometry(geometry, 15);
   }, [geometry]);
 
-  // Compute scale factor so model fits printer volume
-  const scaleFactor = useMemo(() => {
-    if (!geometry?.boundingBox) return 1;
-    const bb = geometry.boundingBox;
-    const sx = bb.max.x - bb.min.x;
-    const sy = bb.max.y - bb.min.y;
-    const sz = bb.max.z - bb.min.z;
-    const [printerWidth, printerDepth, printerHeight] = printerVolume;
-    const ratio = Math.min(
-      printerWidth / (sx || 1),
-      printerHeight / (sy || 1),
-      printerDepth / (sz || 1),
-      1,
-    );
-    return ratio;
-  }, [geometry, printerVolume]);
- 
+  // Use the single shared scene scale so every object (model + text labels +
+  // bottom plates + assembly parts) is scaled by the SAME factor about the
+  // origin.  This keeps their relative positions correct — scaling each object
+  // independently makes attached text/plates drift off the model.
+  const scaleFactor = sceneScale > 0 ? sceneScale : 1;
+
   if (!geometry) return null;
  
   const t = obj.transform;
@@ -799,14 +817,16 @@ export default function CadViewport({
   } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
   
+  const sceneScale = useMemo(() => computeSceneScale(objects, printerVolume), [objects, printerVolume]);
+
   const measurementSpecs = useMemo(() => {
     if (!showMeasurements) return [];
     const selectedIds = new Set(selectedObjectIds.length ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : []);
     const targets = selectedIds.size ? objects.filter((obj) => selectedIds.has(obj.id)) : objects;
     return targets
-      .map((obj) => makeMeasurementSpec(obj, printerVolume))
+      .map((obj) => makeMeasurementSpec(obj, printerVolume, sceneScale))
       .filter((spec): spec is MeasurementSpec => Boolean(spec));
-  }, [objects, printerVolume, selectedObjectId, selectedObjectIds, showMeasurements]);
+  }, [objects, printerVolume, selectedObjectId, selectedObjectIds, showMeasurements, sceneScale]);
 
   return (
     <div
@@ -976,6 +996,7 @@ export default function CadViewport({
           }}
           onTransformDrag={setTransformDragging}
           mobileMode={mobileMode}
+          sceneScale={sceneScale}
         />
       ))}
       {showMeasurements && <MeasurementOverlay specs={measurementSpecs} />}
@@ -983,21 +1004,24 @@ export default function CadViewport({
       {/* Camera auto-fit */}
       <CameraController bounds={bounds} fitKey={objects.length ? objects.map((o) => o.id).join("|") : "empty"} />
  
-      {/* Orbit controls */}
+      {/* Orbit controls — RMB orbits (free camera), middle button pans, wheel zooms.
+          LMB is reserved for selection / sketching, so it is intentionally left
+          unbound here. */}
       <OrbitControls
         makeDefault
         enableDamping
         enablePan
-        enabled={!transformDragging && (transformMode === "off" || !selectedObjectId)}
+        enableRotate
+        enableZoom
+        enabled={!transformDragging}
         dampingFactor={0.07}
         minDistance={20}
         maxDistance={2000}
         minPolarAngle={0}
         maxPolarAngle={Math.PI}
         mouseButtons={{
-          LEFT: THREE.MOUSE.ROTATE,
           MIDDLE: THREE.MOUSE.PAN,
-          RIGHT: THREE.MOUSE.PAN,
+          RIGHT: THREE.MOUSE.ROTATE,
         }}
         touches={{
           ONE: THREE.TOUCH.ROTATE,
@@ -1014,13 +1038,27 @@ export default function CadViewport({
       </GizmoHelper>
       </Canvas>
       {showMeasurements && (
-        <div className="pointer-events-none absolute bottom-4 left-4 z-10 max-w-[min(460px,calc(100%-2rem))] rounded-xl border border-[#3b82f6]/45 bg-[#0b0f14]/92 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur">
-          <div className="text-base font-semibold text-[#3b82f6]">Real Measurements</div>
-          <div className="mt-1 text-cadio-muted">
-            {measurementSpecs.length
-              ? `${measurementSpecs.length} ${measurementSpecs.length === 1 ? "part" : "parts"} measured in mm`
-              : "Create or select a model to measure."}
-          </div>
+        <div className="pointer-events-none absolute bottom-6 left-6 z-10 max-w-[min(560px,calc(100%-2rem))] rounded-2xl border border-[#3b82f6]/50 bg-[#0b0f14]/94 px-6 py-5 text-base text-white shadow-2xl backdrop-blur">
+          <div className="text-xl font-bold text-[#3b82f6]">Real Measurements</div>
+          {measurementSpecs.length ? (
+            <div className="mt-3 flex flex-col gap-2">
+              {measurementSpecs.map((spec) => (
+                <div key={spec.id} className="flex flex-col gap-0.5">
+                  <div className="max-w-[28rem] truncate text-sm font-semibold text-white/90">{spec.name}</div>
+                  <div className="text-sm text-cadio-muted">
+                    <span className="font-semibold text-white">{formatMm(spec.widthMm)}</span>
+                    {" × "}
+                    <span className="font-semibold text-white">{formatMm(spec.depthMm)}</span>
+                    {" × "}
+                    <span className="font-semibold text-white">{formatMm(spec.heightMm)}</span>
+                    <span className="ml-1 text-cadio-muted/70">(W × D × H)</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2 text-cadio-muted">Create or select a model to measure.</div>
+          )}
         </div>
       )}
       {edgeInput && (

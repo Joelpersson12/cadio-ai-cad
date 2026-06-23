@@ -425,6 +425,49 @@ function MobileModelVariantBar() {
   );
 }
 
+function DesktopModelVariantBar() {
+  const { objects, switchSourceModel } = useCadStore();
+  const [loadingDirection, setLoadingDirection] = useState<"next" | "previous" | null>(null);
+
+  if (!objects.length) return null;
+
+  const switchModel = async (direction: "next" | "previous") => {
+    if (loadingDirection) return;
+    setLoadingDirection(direction);
+    try {
+      await switchSourceModel(direction);
+    } finally {
+      setLoadingDirection(null);
+    }
+  };
+
+  const loading = Boolean(loadingDirection);
+
+  return (
+    <div className="pointer-events-auto absolute left-1/2 top-16 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-cadio-border/50 bg-cadio-surface/85 px-1.5 py-1.5 shadow-xl backdrop-blur-md">
+      <button
+        onClick={() => void switchModel("previous")}
+        disabled={loading}
+        title="Previous model variation"
+        className="flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-cadio-muted transition-all hover:bg-cadio-border/40 hover:text-white disabled:opacity-40"
+      >
+        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+        {loadingDirection === "previous" ? "…" : "Previous"}
+      </button>
+      <span className="select-none text-[9px] font-black uppercase tracking-widest text-cadio-muted/70">Variations</span>
+      <button
+        onClick={() => void switchModel("next")}
+        disabled={loading}
+        title="Next model variation"
+        className="flex h-8 items-center gap-1.5 rounded-full bg-cadio-accent px-3 text-xs font-bold text-cadio-bg transition-all hover:bg-cadio-accent-hover disabled:opacity-40"
+      >
+        {loadingDirection === "next" ? "…" : "Next model"}
+        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+      </button>
+    </div>
+  );
+}
+
 function isModelBusyStatus(status: string) {
   return /applying|loading|sketching|generating|importing/i.test(status || "");
 }
@@ -602,6 +645,9 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             <button onClick={() => setExportOpen(true)} className="h-8 rounded-lg bg-cadio-accent px-4 text-xs font-bold text-cadio-bg hover:bg-cadio-accent-hover transition-colors">Export</button>
           </div>
         </div>
+
+        {/* Model variations (Next / Previous source model) */}
+        <DesktopModelVariantBar />
 
         {/* Left icon strip */}
         <div className="absolute left-4 top-1/2 z-20 -translate-y-1/2 flex flex-col gap-2">

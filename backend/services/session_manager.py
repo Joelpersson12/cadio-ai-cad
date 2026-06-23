@@ -3504,6 +3504,17 @@ def apply_expert_operation(
     features = obj["feature_tree"]
     actions: list[str] = []
 
+    # Imported source meshes are triangulated geometry, not parametric B-reps,
+    # so fillet/chamfer/shell/extrude can't be applied to them.  Be honest about
+    # it instead of silently rebuilding the mesh unchanged (which looked like the
+    # tool was broken).  Mounting holes still work via add_hole_to_object.
+    is_imported = obj.get("primitive") == "imported_source_mesh" or bool(obj.get("imported_source_mesh"))
+    if is_imported and op in {"fillet", "chamfer", "shell", "extrude"}:
+        return [
+            f"{op} isn't available on imported models — use scale, mounting holes, "
+            "or describe the change to the AI instead"
+        ]
+
     if op == "fillet":
         params["fillet_radius"] = amt
         params["chamfer_size"] = 0.0
@@ -3671,6 +3682,37 @@ def get_or_create_session(session_id: str | None) -> Session:
     # Create outside lock (rebuild_from_features is CPU-bound)
     new_sid = create_session(sid if sid else None)
     with _lock:
+        return _sessions[new_sid]
+
+
+def get_or_create_empty_session(session_id: str | None) -> Session:
+    """Return an existing session, or create one with NO default geometry.
+
+    Unlike :func:`get_or_create_session`, this never seeds a default part.
+    It is used by endpoints such as printer selection that must leave an
+    empty build plate empty — selecting a printer should never fabricate or
+    resurrect model geometry.
+    """
+    sid = (session_id or "").strip()
+    with _lock:
+        if sid and sid in _sessions:
+            return _sessions[sid]
+        new_sid = sid or str(uuid.uuid4())
+        _sessions[new_sid] = {
+            "session_id": new_sid,
+            "objects": {},
+            "object_order": [],
+            "selected_object_id": "",
+            "edit_history": [],
+            "version": 0,
+            "printer": "choose_printer",
+            "fit": True,
+            "created_at": _now_iso(),
+            "updated_at": _now_iso(),
+            "scene_token": _new_scene_token(),
+            "undo_stack": [],
+            "redo_stack": [],
+        }
         return _sessions[new_sid]
 
 
