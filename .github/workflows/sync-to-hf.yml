@@ -14,7 +14,31 @@ jobs:
           fetch-depth: 0
           lfs: true
 
+      - name: Install huggingface_hub
+        run: pip install "huggingface_hub>=0.23.0"
+
       - name: Push to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git remote add hf https://Persson12:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/Persson12/Cadio-ai-cad
-          git push hf main --force
+          python - <<'EOF'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          api.upload_folder(
+              folder_path=".",
+              repo_id="Persson12/Cadio-ai-cad",
+              repo_type="space",
+              ignore_patterns=[
+                  ".git",
+                  ".git/**",
+                  ".github",
+                  ".github/**",
+                  "**/__pycache__/**",
+                  "**/node_modules/**",
+                  "**/*.pyc",
+              ],
+          )
+          print("Upload complete!")
+          EOF
