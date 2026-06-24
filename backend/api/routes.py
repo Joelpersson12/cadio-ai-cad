@@ -1126,14 +1126,14 @@ import json as _json
 
 @router.post("/api/admaker/generate")
 async def admaker_generate(body: AdMakerRequest) -> JSONResponse:
-    """Generate compelling ad copy for a product using OpenAI."""
+    """Generate compelling ad copy for a product using Groq."""
     from openai import OpenAI
 
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
-        return _error(503, "OpenAI API key not configured")
+        return _error(503, "Groq API key not configured — add GROQ_API_KEY to environment")
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
 
     system_prompt = (
         "You are an expert advertising copywriter who creates high-converting ad copy. "
@@ -1159,7 +1159,7 @@ Return a JSON object with exactly these keys:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
