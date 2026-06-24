@@ -82,6 +82,7 @@ class ScenePayload(BaseModel):
     edit_history: list[dict[str, Any]]
     updated_at: str
     model_updated: bool = False
+    source_info: list[Any] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

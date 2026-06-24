@@ -246,4 +246,5 @@ def build_scene_payload(
         edit_history=session["edit_history"][-30:],
         updated_at=session.get("updated_at", ""),
         model_updated=model_updated,
+        source_info=session.get("source_info", []),
     )

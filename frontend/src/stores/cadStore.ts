@@ -72,6 +72,7 @@ interface CadState {
   sketchHeight: number;
   operationAmount: number;
   editHistory: Array<Record<string, unknown>>;
+  sourceInfo: import("../utils/types").SourceExample[];
 
   // Actions
   setTransformMode: (mode: TransformMode) => void;
@@ -148,6 +149,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   sketchHeight: 8,
   operationAmount: 2,
   editHistory: [],
+  sourceInfo: [],
 
   // ---------------------------------------------------------------------------
   // Setters
@@ -233,6 +235,7 @@ export const useCadStore = create<CadState>((set, get) => ({
       printAssistant: payload.print_assistant,
       printSettings: payload.print_settings,
       editHistory: payload.edit_history,
+      sourceInfo: payload.source_info ?? [],
     });
   },
 

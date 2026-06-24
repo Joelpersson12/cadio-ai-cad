@@ -424,12 +424,18 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
                     None if edit_only else parsed.get("template"),
                     parsed["parameters"],
                 )
+                research_brief = parsed.get("research_brief")
+                if research_brief and not edit_only:
+                    examples = research_brief.get("source_examples", [])
+                    if examples:
+                        session["source_info"] = examples[:3]
+
                 research_actions = []
                 if not assembly_actions and not edit_only:
                     research_actions = replace_object_with_research_assembly(
                         session,
                         obj,
-                        parsed.get("research_brief"),
+                        research_brief,
                         parsed["parameters"],
                     )
                 if assembly_actions or research_actions:
