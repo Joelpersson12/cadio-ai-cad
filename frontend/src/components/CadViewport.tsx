@@ -60,7 +60,12 @@ function holeTargetsFromParams(params: Record<string, number>) {
   return holes;
 }
 
-function inferEdgeTarget(obj: CadObject, geometry: THREE.BufferGeometry, localPoint: THREE.Vector3) {
+function inferEdgeTarget(
+  obj: CadObject,
+  geometry: THREE.BufferGeometry,
+  localPoint: THREE.Vector3,
+  faceNormal?: THREE.Vector3 | null,
+) {
   const params = obj.parameters || {};
   const horizontalX = localPoint.x;
   const horizontalY = localPoint.z;
@@ -71,6 +76,26 @@ function inferEdgeTarget(obj: CadObject, geometry: THREE.BufferGeometry, localPo
     }
   }
 
+  // Use face normal to identify the clicked face precisely.
+  // Three.js Y-up space: Y=up/down, X=left/right, Z=front/back.
+  if (faceNormal) {
+    const ax = Math.abs(faceNormal.x);
+    const ay = Math.abs(faceNormal.y);
+    const az = Math.abs(faceNormal.z);
+    const THRESHOLD = 0.65;
+    if (ay >= THRESHOLD && ay >= ax && ay >= az) {
+      return faceNormal.y > 0 ? "edge:top" : "edge:bottom";
+    }
+    if (ax >= THRESHOLD && ax >= ay && ax >= az) {
+      return faceNormal.x > 0 ? "edge:right" : "edge:left";
+    }
+    if (az >= THRESHOLD && az >= ax && az >= ay) {
+      // Three.js Z+ = backend Y+ = CadQuery >Y (back face)
+      return faceNormal.z > 0 ? "edge:back" : "edge:front";
+    }
+  }
+
+  // Position-based fallback for angled faces or missing normals.
   const bounds = geometry.boundingBox;
   if (bounds) {
     const height = Math.max(1, bounds.max.y - bounds.min.y);
@@ -83,9 +108,14 @@ function inferEdgeTarget(obj: CadObject, geometry: THREE.BufferGeometry, localPo
 
 function edgeTargetLabel(target: string) {
   if (target.includes("hole")) return "hole edge";
-  if (target.includes("top")) return "top edge";
-  if (target.includes("bottom")) return "bottom edge";
-  if (target.includes("side")) return "side edge";
+  if (target.includes("top")) return "top face edges";
+  if (target.includes("bottom")) return "bottom face edges";
+  if (target.includes("right")) return "right face edges";
+  if (target.includes("left")) return "left face edges";
+  if (target.includes("front")) return "front face edges";
+  if (target.includes("back")) return "back face edges";
+  if (target.includes("corner")) return "corner edges";
+  if (target.includes("side")) return "side edges";
   return "selected edge";
 }
 
@@ -490,7 +520,7 @@ function ScaledMesh({
             e.nativeEvent.clientY,
             edgeOperation,
             obj.id,
-            inferEdgeTarget(obj, geometry, localPoint),
+            inferEdgeTarget(obj, geometry, localPoint, e.face?.normal ?? null),
           );
         }
       }}
