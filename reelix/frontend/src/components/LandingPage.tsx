@@ -4,6 +4,7 @@ import Footer from './Footer'
 
 interface LandingPageProps {
   onStart: () => void
+  onDemo: () => void
 }
 
 const DEMO_SCENES = [
@@ -176,7 +177,7 @@ function AnimatedHeroPhone() {
   )
 }
 
-export default function LandingPage({ onStart }: LandingPageProps) {
+export default function LandingPage({ onStart, onDemo }: LandingPageProps) {
   return (
     <div className="min-h-screen">
       <Header onStart={onStart} />
@@ -212,11 +213,11 @@ export default function LandingPage({ onStart }: LandingPageProps) {
 
             <div className="flex flex-col sm:flex-row gap-3 mb-10">
               <button onClick={onStart} className="btn-primary text-sm px-7 py-3.5">
-                Create Your First Video Free →
+                Create Ad Video Free →
               </button>
-              <a href="#how-it-works" className="btn-ghost text-sm px-7 py-3.5">
-                See How It Works
-              </a>
+              <button onClick={onDemo} className="btn-ghost text-sm px-7 py-3.5">
+                🎬 Record Website Demo
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-white/35">
