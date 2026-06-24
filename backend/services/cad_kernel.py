@@ -310,6 +310,62 @@ def make_phone_stand_body(params: dict[str, float]) -> TriMesh | None:
         return None
 
 
+def make_text_body(
+    label: str,
+    font_size: float,
+    depth: float,
+    font: str = "Liberation Sans",
+) -> TriMesh | None:
+    """Create high-quality 3D text via CadQuery's TrueType font engine.
+
+    Returns a mesh in canonical text-label space:
+      x = left / right  (centered at 0)
+      y = extrusion / depth direction
+      z = up (letter height)
+
+    Returns None if CadQuery is unavailable or the font cannot be found;
+    the caller falls back to the pixel-grid font in that case.
+    """
+    if not CADQUERY_AVAILABLE:
+        return None
+
+    clean = str(label or "").strip()[:40]
+    if not clean:
+        return None
+
+    font_size = max(1.0, float(font_size))
+    depth = max(0.2, float(depth))
+
+    # Try fonts in order of preference; stop at the first that succeeds.
+    for font_name in (font, "Liberation Sans", "Arial", "FreeSans", "DejaVu Sans"):
+        if not font_name:
+            continue
+        try:
+            solid = (
+                cq.Workplane("XY")
+                .text(
+                    clean,
+                    fontsize=font_size,
+                    distance=depth,
+                    halign="center",
+                    valign="bottom",
+                    font=font_name,
+                )
+            )
+            mesh = to_trimesh(solid, tolerance=0.06)
+            if mesh is None or not mesh.verts:
+                continue
+
+            # CadQuery text lies in the XY plane: x=left-right, y=up, z=extrusion.
+            # Canonical text-label space: x=left-right, y=extrusion, z=up.
+            mesh.verts = [(x, z, y) for x, y, z in mesh.verts]
+            return mesh
+        except Exception:
+            continue
+
+    return None
+
+
 def make_battery_holder_body(params: dict[str, float]) -> TriMesh | None:
     """Create a source-like power-tool battery wall mount from CAD booleans.
 
