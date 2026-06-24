@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic
+httpx
+groq
+playwright
+edge-tts
+python-jose[cryptography]
