@@ -1,3 +1,13 @@
+---
+title: Reelix
+emoji: 🎬
+colorFrom: purple
+colorTo: pink
+sdk: docker
+pinned: false
+app_port: 7860
+---
+
 # Reelix — AI Ad Videos in Seconds
 
 Turn any product into a scroll-stopping ad video using AI. Generate copy, compose visuals, and create real AI-generated video ads — no editing skills required.
