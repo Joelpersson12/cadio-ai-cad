@@ -1,4 +1,4 @@
-"""AI command parser using GPT-4o for natural-language CAD editing."""
+"""AI command parser using Gemini 2.0 Flash for natural-language CAD editing."""
 
 from __future__ import annotations
 
@@ -11,17 +11,17 @@ from backend.models.schema import Feature, Transform
 from backend.services.prompt_translation import normalize_source_query
 from backend.services.session_manager import CadObject, Session
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 
-_openai_client: Any = None
+_gemini_client: Any = None
 
 
-def _get_openai_client() -> Any:
-    global _openai_client
-    if _openai_client is None:
-        from openai import OpenAI
-        _openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    return _openai_client
+def _get_gemini_client() -> Any:
+    global _gemini_client
+    if _gemini_client is None:
+        from google import genai
+        _gemini_client = genai.Client(api_key=GOOGLE_API_KEY)
+    return _gemini_client
 
 CREATE_PATTERNS = (
     r"\b(create|generate|build|design)\b",
@@ -415,15 +415,17 @@ def _apply_research_brief(
     return list(brief.get("actions", []))
 
 
-def _parse_with_gpt(
+def _parse_with_gemini(
     prompt: str,
     current_params: dict,
     current_transform: dict,
     current_features: list | None = None,
 ) -> dict:
-    """Call GPT-4o to parse the prompt into CAD changes."""
+    """Call Gemini 2.0 Flash to parse the prompt into CAD changes."""
     try:
-        client = _get_openai_client()
+        from google.genai import types
+
+        client = _get_gemini_client()
 
         features_summary = ""
         if current_features:
@@ -438,23 +440,22 @@ def _parse_with_gpt(
             f"\nUser instruction: {prompt}"
         )
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
-            temperature=0.1,
-            max_tokens=600,
-            response_format={"type": "json_object"},
-            timeout=12,
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=user_message,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.1,
+                max_output_tokens=600,
+                response_mime_type="application/json",
+            ),
         )
 
-        raw = response.choices[0].message.content or "{}"
+        raw = response.text or "{}"
         return json.loads(raw)
 
     except Exception as e:
-        print(f"[cadio] GPT error: {e}")
+        print(f"[cadio] Gemini error: {e}")
         return {
             "parameters": current_params,
             "features": [],
@@ -468,9 +469,9 @@ def parse_ai_command(
     session: Session,
     obj: CadObject,
 ) -> dict[str, Any]:
-    """Parse a natural-language prompt using GPT-4o into CAD changes.
-    
-    Now also uses product templates to generate more realistic objects.
+    """Parse a natural-language prompt using Gemini 2.0 Flash into CAD changes.
+
+    Also uses product templates to generate more realistic objects.
     """
     from backend.services.product_templates import get_template_for_prompt
     
@@ -523,11 +524,11 @@ def parse_ai_command(
     uses_brief = bool(research_brief and research_brief.get("category") != "generic")
     inference_actions = [] if template or uses_brief else _apply_prompt_shape_inference(prompt, params, features)
 
-    # Call GPT-4o for fine-tuning if not a direct template match
+    # Call Gemini for fine-tuning if not a direct template match
     if quick_actions or inference_actions or brief_actions:
         actions = brief_actions + quick_actions + inference_actions
     elif not template or "modify" in _prompt_match_text(prompt) or "change" in _prompt_match_text(prompt):
-        result = _parse_with_gpt(prompt, params, current_transform, features)
+        result = _parse_with_gemini(prompt, params, current_transform, features)
         
         # Apply parameter changes
         new_params = result.get("parameters", {})
