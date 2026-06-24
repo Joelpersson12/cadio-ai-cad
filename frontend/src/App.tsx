@@ -549,6 +549,17 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
   }, []);
 
   useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (!selectedObjectId) return;
+      void onDeleteObject();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [selectedObjectId, onDeleteObject]);
+
+  useEffect(() => {
     const shared = readProjectShareFromHash();
     if (!shared?.prompt) return;
     const key = `cadio-share-loaded:${window.location.hash}`;

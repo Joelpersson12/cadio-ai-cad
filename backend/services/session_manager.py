@@ -2599,7 +2599,7 @@ def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
                 letter_height=letter_h,
                 depth=text_depth,
                 position=[cx, cy + letter_h / 2.0, maxs[2] + offset],
-                rotation=[90.0, 0.0, 0.0],
+                rotation=[-90.0, 0.0, 0.0],
                 style=style,
                 target_color=target_color,
             )
@@ -2612,7 +2612,7 @@ def add_text_label_from_prompt(session: Session, prompt: str) -> list[str]:
                 letter_height=letter_h,
                 depth=text_depth,
                 position=[cx, cy - letter_h / 2.0, mins[2] - offset],
-                rotation=[-90.0, 0.0, 0.0],
+                rotation=[90.0, 0.0, 0.0],
                 style=style,
                 target_color=target_color,
                 mirror_x=True,
