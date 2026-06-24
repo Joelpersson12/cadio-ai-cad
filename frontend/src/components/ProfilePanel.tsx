@@ -93,6 +93,7 @@ export default function ProfilePanel({
   const plan = account.plan ?? "free";
   const planColor = PLAN_COLORS[plan] ?? PLAN_COLORS.free;
   const isPaid = plan !== "free";
+  const canManageBilling = account.hasStripeSubscription === true;
   const canUpgrade = plan !== "unlimited";
 
   const handlePortal = async () => {
@@ -219,7 +220,7 @@ export default function ProfilePanel({
             </div>
 
             {/* Paid: manage/cancel via Stripe portal */}
-            {isPaid && (
+            {isPaid && canManageBilling && (
               <div className="space-y-2">
                 <button
                   onClick={handlePortal}

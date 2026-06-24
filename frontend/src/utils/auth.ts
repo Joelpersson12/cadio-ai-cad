@@ -14,6 +14,7 @@ export interface CadioAccount {
   downloadLimit?: number;
   downloadsRemaining?: number | null;
   canDownload?: boolean;
+  hasStripeSubscription?: boolean;
 }
 
 function normalizeAccountId(email?: string, phone?: string) {
@@ -36,6 +37,7 @@ function storeAccount(account: Partial<CadioAccount>, token?: string) {
       downloadLimit: account.downloadLimit ?? 3,
       downloadsRemaining: account.downloadsRemaining ?? 3,
       canDownload: account.canDownload ?? true,
+      hasStripeSubscription: account.hasStripeSubscription ?? false,
     }));
   }
   if (token) {
@@ -67,6 +69,7 @@ export function getCadioAccount(): CadioAccount | null {
       downloadLimit: parsed.downloadLimit ?? 3,
       downloadsRemaining: parsed.downloadsRemaining ?? 3,
       canDownload: parsed.canDownload ?? true,
+      hasStripeSubscription: parsed.hasStripeSubscription ?? false,
     };
   } catch {
     return null;
