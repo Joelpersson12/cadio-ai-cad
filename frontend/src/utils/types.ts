@@ -105,6 +105,18 @@ export interface ScenePayload {
   edit_history: Array<Record<string, unknown>>;
   updated_at: string;
   model_updated: boolean;
+  source_info?: SourceExample[];
+}
+
+export interface SourceExample {
+  title: string;
+  source: string;
+  url: string;
+  image_url?: string | null;
+  likes?: number;
+  downloads?: number;
+  description?: string | null;
+  tags?: string[];
 }
 
 export interface PrinterProfile {

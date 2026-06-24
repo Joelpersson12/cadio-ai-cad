@@ -3,6 +3,75 @@
 import { useMemo, useRef, useEffect, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCadStore } from "../stores/cadStore";
+import type { SourceExample } from "../utils/types";
+
+function SourceInfoModal({ sources, onClose }: { sources: SourceExample[]; onClose: () => void }) {
+  if (!sources.length) return null;
+  const top = sources[0];
+  const SOURCE_LABELS: Record<string, string> = {
+    printables: "Printables",
+    makerworld: "MakerWorld",
+    thingiverse: "Thingiverse",
+    thangs: "Thangs",
+  };
+  return (
+    <div
+      className="fixed inset-0 z-[200] grid place-items-center px-4 py-6"
+      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl shadow-2xl"
+        style={{ background: "#0d1318", border: "1px solid rgba(43,184,220,0.18)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/7">
+          <p className="text-xs font-bold uppercase tracking-widest text-white/30">Inspiration source</p>
+          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          {sources.slice(0, 3).map((src, i) => (
+            <div key={i} className="rounded-xl p-4 space-y-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-white leading-snug">{src.title}</p>
+                <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(43,184,220,0.15)", color: "#2bb8dc" }}>
+                  {SOURCE_LABELS[src.source] ?? src.source}
+                </span>
+              </div>
+              {src.description && (
+                <p className="text-xs text-white/50 leading-relaxed line-clamp-4">{src.description}</p>
+              )}
+              <div className="flex items-center gap-4 text-[11px] text-white/30">
+                {(src.likes ?? 0) > 0 && <span>♥ {src.likes?.toLocaleString()}</span>}
+                {(src.downloads ?? 0) > 0 && <span>↓ {src.downloads?.toLocaleString()}</span>}
+                {src.tags?.slice(0, 3).map((t) => (
+                  <span key={t} className="rounded bg-white/5 px-1.5 py-px">{t}</span>
+                ))}
+              </div>
+              {src.url && (
+                <a
+                  href={src.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] text-cadio-accent hover:underline"
+                >
+                  View on {SOURCE_LABELS[src.source] ?? src.source}
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const QUICK_COMMANDS = [
   "Add mounting holes",
@@ -27,8 +96,9 @@ export default function AiPanel({ floating = false }: { floating?: boolean }) {
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showSourceInfo, setShowSourceInfo] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { status, runPrompt, editHistory, objects, switchSourceModel } = useCadStore();
+  const { status, runPrompt, editHistory, objects, switchSourceModel, sourceInfo } = useCadStore();
 
   const latestActions = useMemo(() => {
     const latest = editHistory[editHistory.length - 1];
@@ -178,10 +248,29 @@ export default function AiPanel({ floating = false }: { floating?: boolean }) {
   return (
     <div className="flex h-full flex-col bg-cadio-bg">
 
+      {/* Source info modal */}
+      {showSourceInfo && sourceInfo.length > 0 && (
+        <SourceInfoModal sources={sourceInfo} onClose={() => setShowSourceInfo(false)} />
+      )}
+
       {/* AI output — last actions */}
       {latestActions.length > 0 && (
         <div className="border-b border-cadio-border/30 px-5 py-4">
-          <p className="mb-3 text-[11px] font-semibold text-cadio-muted">Last generation</p>
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-cadio-muted">Last generation</p>
+            {sourceInfo.length > 0 && (
+              <button
+                onClick={() => setShowSourceInfo(true)}
+                title="View source inspiration"
+                className="flex items-center gap-1 rounded-lg border border-cadio-border/40 bg-cadio-bg/60 px-2 py-1 text-[10px] text-cadio-muted transition-colors hover:border-cadio-accent/40 hover:text-cadio-accent"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Source
+              </button>
+            )}
+          </div>
           <div className="space-y-2">
             {latestActions.map((a) => (
               <div key={a} className="flex items-start gap-2 text-sm text-cadio-text/80">
