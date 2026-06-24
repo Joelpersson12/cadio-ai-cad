@@ -224,6 +224,9 @@ def _account_from_row(row: sqlite3.Row) -> dict[str, Any]:
         can_download = downloads_used < download_limit
         downloads_remaining = max(0, download_limit - downloads_used)
 
+    stripe_customer_id = _row_value(row, "stripe_customer_id", "")
+    stripe_subscription_id = _row_value(row, "stripe_subscription_id", "")
+
     return {
         "accountId": row["id"],
         "name": row["name"],
@@ -235,6 +238,7 @@ def _account_from_row(row: sqlite3.Row) -> dict[str, Any]:
         "monthlyDownloadsUsed": monthly_downloads_used,
         "downloadsRemaining": downloads_remaining,
         "canDownload": can_download,
+        "hasStripeSubscription": bool(stripe_customer_id and stripe_subscription_id),
     }
 
 
