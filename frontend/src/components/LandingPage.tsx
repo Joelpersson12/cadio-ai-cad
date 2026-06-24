@@ -1572,19 +1572,20 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               <div
                 className="rounded-2xl p-7"
                 style={{
-                  background: "rgba(255,255,255,0.025)",
-                  border: "1px solid rgba(255,255,255,0.09)",
+                  background: `${ACCENT_DIM}0.06)`,
+                  border: `1.5px solid ${ACCENT_DIM}0.35)`,
+                  boxShadow: `0 0 60px ${ACCENT_DIM}0.08)`,
                 }}
               >
-                <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em] text-white/40">Free</p>
+                <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>Free</p>
                 <div className="mb-1 flex items-end gap-2">
                   <span className="text-5xl font-black text-white">$0</span>
                   <span className="mb-1.5 text-sm text-white/30">{CURRENCY[language].period}</span>
                 </div>
-                <p className="mb-7 text-sm text-white/30">3 downloads to get started</p>
+                <p className="mb-7 text-sm text-white/40">3 downloads to get started</p>
                 <ul className="mb-7 space-y-2.5">
                   {["AI model generation", "All export formats", "Manual CAD tools", "3 downloads total"].map((f) => (
-                    <li key={f} className="flex items-center gap-2.5 text-sm text-white/55">
+                    <li key={f} className="flex items-center gap-2.5 text-sm" style={{ color: "rgba(232,237,242,0.72)" }}>
                       <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: ACCENT }} />
                       {f}
                     </li>
@@ -1593,13 +1594,13 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                 <button
                   onClick={() => onStartBuilding()}
                   className="w-full rounded-xl py-3 text-sm font-bold transition-all hover:scale-[1.01]"
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(232,237,242,0.7)" }}
+                  style={{ background: ACCENT, color: BG, boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
                 >
                   Get Started
                 </button>
               </div>
 
-              {/* Pro — highlighted */}
+              {/* Pro */}
               <div
                 className="rounded-2xl p-7 relative"
                 style={{
@@ -1608,12 +1609,6 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   boxShadow: `0 0 60px ${ACCENT_DIM}0.08)`,
                 }}
               >
-                <div
-                  className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest"
-                  style={{ background: ACCENT, color: BG }}
-                >
-                  Popular
-                </div>
                 <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>Pro</p>
                 <div className="mb-1 flex items-end gap-2">
                   <span className="text-4xl font-black text-white">{CURRENCY[language].pro}</span>
@@ -1642,21 +1637,22 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
               <div
                 className="rounded-2xl p-7"
                 style={{
-                  background: "rgba(255,255,255,0.025)",
-                  border: "1px solid rgba(255,255,255,0.09)",
+                  background: `${ACCENT_DIM}0.06)`,
+                  border: `1.5px solid ${ACCENT_DIM}0.35)`,
+                  boxShadow: `0 0 60px ${ACCENT_DIM}0.08)`,
                 }}
               >
-                <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em] text-white/40">Unlimited</p>
+                <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>Unlimited</p>
                 <div className="mb-1 flex items-end gap-2">
                   <span className="text-4xl font-black text-white">{CURRENCY[language].unlimited}</span>
-                  <span className="mb-1.5 text-sm text-white/30">{CURRENCY[language].period}</span>
+                  <span className="mb-1.5 text-sm text-white/40">{CURRENCY[language].period}</span>
                 </div>
                 <p className="mb-1 text-xs text-white/25">{CURRENCY[language].taxNote}</p>
-                <p className="mb-6 text-sm text-white/30">Unlimited downloads</p>
+                <p className="mb-6 text-sm text-white/40">Unlimited downloads</p>
                 <ul className="mb-7 space-y-2.5">
                   {["Everything in Pro", "Unlimited downloads", "Early feature access", "Priority support"].map((f) => (
-                    <li key={f} className="flex items-center gap-2.5 text-sm text-white/55">
-                      <span className="h-1.5 w-1.5 rounded-full flex-shrink-0 bg-white/30" />
+                    <li key={f} className="flex items-center gap-2.5 text-sm" style={{ color: "rgba(232,237,242,0.72)" }}>
+                      <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: ACCENT }} />
                       {f}
                     </li>
                   ))}
@@ -1664,7 +1660,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                 <button
                   onClick={() => handlePlanClick("unlimited")}
                   className="w-full rounded-xl py-3 text-sm font-bold transition-all hover:scale-[1.01]"
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(232,237,242,0.7)" }}
+                  style={{ background: ACCENT, color: BG, boxShadow: `0 4px 24px ${ACCENT_DIM}0.4)` }}
                 >
                   Go Unlimited
                 </button>
