@@ -17,6 +17,7 @@ from fastapi import APIRouter, Header, Query, Request, WebSocket, WebSocketDisco
 from fastapi.responses import FileResponse, JSONResponse
 
 from backend.models.schema import (
+    AdMakerRequest,
     AppearanceUpdateRequest,
     AuthRequest,
     FeatureToggleRequest,
@@ -1114,6 +1115,65 @@ def stripe_billing_portal(
     except Exception as exc:
         traceback.print_exc()
         return _error(500, f"{type(exc).__name__}: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# AdForge AI – Ad copy generation
+# ---------------------------------------------------------------------------
+
+import json as _json
+
+
+@router.post("/api/admaker/generate")
+async def admaker_generate(body: AdMakerRequest) -> JSONResponse:
+    """Generate compelling ad copy for a product using OpenAI."""
+    from openai import OpenAI
+
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        return _error(503, "OpenAI API key not configured")
+
+    client = OpenAI(api_key=api_key)
+
+    system_prompt = (
+        "You are an expert advertising copywriter who creates high-converting ad copy. "
+        "Always return valid JSON only, no markdown, no extra text."
+    )
+    user_prompt = f"""Create ad copy for the following product:
+
+Product name: {body.product_name}
+Description: {body.description}
+Target audience: {body.target_audience}
+Tone: {body.tone}
+Platform: {body.platform}
+Ad goal: {body.goal}
+
+Return a JSON object with exactly these keys:
+- headlines: array of exactly 3 short, punchy headlines (max 10 words each)
+- subheadlines: array of exactly 3 supporting lines (max 20 words each)
+- ctas: array of exactly 3 call-to-action button texts (max 5 words each)
+- body_copy: one paragraph of ad body copy (40-60 words)
+- hashtags: array of exactly 8 relevant hashtags without the # symbol
+- hook: one ultra-short attention-grabbing opening line for a video reel (max 10 words, make it surprising or provocative)
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.85,
+            max_tokens=800,
+        )
+        content = response.choices[0].message.content or "{}"
+        data = _json.loads(content)
+        return JSONResponse(content={"status": "ok", "data": data})
+    except Exception as exc:
+        logger.error("AdMaker generate error: %s", exc)
+        return _error(500, f"Generation failed: {exc}")
 
 
 # ---------------------------------------------------------------------------

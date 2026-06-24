@@ -188,3 +188,17 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+
+
+# ---------------------------------------------------------------------------
+# AdForge AI - Ad maker
+# ---------------------------------------------------------------------------
+
+
+class AdMakerRequest(BaseModel):
+    product_name: str
+    description: str
+    target_audience: str
+    tone: str = "professional"
+    platform: str = "instagram"
+    goal: str = "sales"
