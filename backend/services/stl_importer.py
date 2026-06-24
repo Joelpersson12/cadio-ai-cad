@@ -126,6 +126,24 @@ def _orient_smallest_axis_to_z(mesh: TriMesh) -> TriMesh:
     return oriented
 
 
+def _flip_depth_axis(mesh: TriMesh) -> TriMesh:
+    """Negate the depth (Y) axis of a mesh.
+
+    The viewport converts Z-up backend coordinates to Three.js' Y-up frame by
+    swapping the Y and Z axes.  Swapping two axes is a *reflection* (it mirrors
+    the model front-to-back), which is invisible on roughly symmetric parts but
+    makes embossed / engraved text on imported models render backwards.
+
+    Pre-negating depth here turns the net viewport transform from a reflection
+    into a proper -90° rotation about X, so imported geometry — including text —
+    is shown the right way round without flipping the model upside down.
+    """
+    flipped = TriMesh()
+    flipped.verts = [(x, -y, z) for x, y, z in mesh.verts]
+    flipped.tris = list(mesh.tris)
+    return flipped
+
+
 def import_stl_from_url(
     url: str,
     *,
@@ -142,7 +160,13 @@ def import_stl_from_url(
         if mesh is None or not mesh.verts or not mesh.tris:
             return None
         if prefer_flat:
+            # The reorientation here is itself a reflection, which already
+            # cancels the viewport's Y/Z swap — leave it as the single flip.
             mesh = _orient_smallest_axis_to_z(mesh)
+        else:
+            # Cancel the viewport's reflective Y/Z swap so imported text and
+            # asymmetric detail render the right way round (not mirrored).
+            mesh = _flip_depth_axis(mesh)
         if center_xy:
             mesh = _center_xy(mesh)
         if shift_to_plate:

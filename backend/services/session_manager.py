@@ -2266,7 +2266,7 @@ def _sanitize_label_text(text: str) -> str:
     folded = re.sub(r"\s+", " ", folded).strip(" ._-")
     if not folded:
         return "TEXT"
-    return folded[:28].upper()
+    return folded[:28]
 
 
 def _extract_label_text(prompt: str) -> str:
@@ -2401,6 +2401,9 @@ def _label_placement(prompt: str, width: float, depth: float) -> str:
         return "x_sides" if width >= depth else "y_sides"
     if any(token in text for token in ("long side", "long sides", "langsida", "langsidorna")):
         return "y_sides" if width >= depth else "x_sides"
+    # "both sides" / "both faces" → place on the two largest vertical faces
+    if re.search(r"\b(?:both|b[aå]da)\b", text) and re.search(r"\b(?:side|sides|sida|sidor|sidorna|face|faces)\b", text):
+        return "y_sides" if width >= depth else "x_sides"
     if re.search(r"\b(?:side|sides|sida|sidor|sidorna)\b", text):
         return "y_sides" if width >= depth else "x_sides"
     if any(token in text for token in ("left", "right", "vanster", "hoger")):
@@ -2425,7 +2428,25 @@ def _fit_label_height(label: str, available_width: float, available_height: floa
 
 
 def _make_block_text_mesh(label: str, letter_height: float, depth: float, *, mirror_x: bool = False) -> tuple[TriMesh, float, float]:
-    label = _sanitize_label_text(label)
+    # Try CadQuery TrueType rendering first — produces smooth, professional text.
+    try:
+        from backend.services.cad_kernel import make_text_body, is_available as _cq_available
+        if _cq_available():
+            cq_mesh = make_text_body(label, letter_height, depth)
+            if cq_mesh and cq_mesh.verts:
+                xs = [v[0] for v in cq_mesh.verts]
+                zs = [v[2] for v in cq_mesh.verts]
+                w = max(xs) - min(xs)
+                h = max(zs) - min(zs)
+                if mirror_x:
+                    cq_mesh.verts = [(-x, y, z) for x, y, z in cq_mesh.verts]
+                return cq_mesh, w, h
+    except Exception:
+        pass
+
+    # Pixel-grid fallback for environments without CadQuery.
+    # The glyph table only has uppercase entries, so force uppercase here.
+    label = _sanitize_label_text(label).upper()
     cell = max(0.25, float(letter_height) / 7.0)
     pixel = cell * 0.86
     advance = cell * 6.0
@@ -3504,6 +3525,23 @@ def apply_expert_operation(
     features = obj["feature_tree"]
     actions: list[str] = []
 
+    # Imported source meshes are triangulated geometry, not parametric B-reps,
+    # so fillet/chamfer/shell/extrude can't be applied to them.  Be honest about
+    # it instead of silently rebuilding the mesh unchanged (which looked like the
+    # tool was broken).  Mounting holes still work via add_hole_to_object.
+    is_imported = obj.get("primitive") == "imported_source_mesh" or bool(obj.get("imported_source_mesh"))
+    if is_imported and op in {"fillet", "chamfer", "shell", "extrude"}:
+        return [
+            f"{op} isn't available on imported models — use scale, mounting holes, "
+            "or describe the change to the AI instead"
+        ]
+
+    # Template-generated (non-manual) objects support fillet and chamfer via
+    # their build functions, but shell and extrude don't have a template path.
+    is_template = not obj.get("manual") and not is_imported
+    if is_template and op == "shell":
+        return ["shell isn't supported on generated models — convert to a manual body first by drawing a rectangle"]
+
     if op == "fillet":
         params["fillet_radius"] = amt
         params["chamfer_size"] = 0.0
@@ -3671,6 +3709,37 @@ def get_or_create_session(session_id: str | None) -> Session:
     # Create outside lock (rebuild_from_features is CPU-bound)
     new_sid = create_session(sid if sid else None)
     with _lock:
+        return _sessions[new_sid]
+
+
+def get_or_create_empty_session(session_id: str | None) -> Session:
+    """Return an existing session, or create one with NO default geometry.
+
+    Unlike :func:`get_or_create_session`, this never seeds a default part.
+    It is used by endpoints such as printer selection that must leave an
+    empty build plate empty — selecting a printer should never fabricate or
+    resurrect model geometry.
+    """
+    sid = (session_id or "").strip()
+    with _lock:
+        if sid and sid in _sessions:
+            return _sessions[sid]
+        new_sid = sid or str(uuid.uuid4())
+        _sessions[new_sid] = {
+            "session_id": new_sid,
+            "objects": {},
+            "object_order": [],
+            "selected_object_id": "",
+            "edit_history": [],
+            "version": 0,
+            "printer": "choose_printer",
+            "fit": True,
+            "created_at": _now_iso(),
+            "updated_at": _now_iso(),
+            "scene_token": _new_scene_token(),
+            "undo_stack": [],
+            "redo_stack": [],
+        }
         return _sessions[new_sid]
 
 
