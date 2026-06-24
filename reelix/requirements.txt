@@ -5,3 +5,4 @@ httpx
 openai
 playwright
 edge-tts
+python-jose[cryptography]

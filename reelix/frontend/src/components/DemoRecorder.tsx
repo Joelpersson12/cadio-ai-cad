@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import Header from './Header'
+import type { User } from '../hooks/useAuth'
 
 interface Props {
   onBack: () => void
+  user?: User | null
+  onSignIn?: () => void
+  onSignOut?: () => void
 }
 
 type Phase = 'form' | 'planning' | 'recording' | 'encoding' | 'done' | 'error'
@@ -15,15 +19,35 @@ const PHASE_LABELS: Record<string, string> = {
   done: 'Done!',
 }
 
-const EXAMPLE_SCRIPTS = [
+
+const EXAMPLES = [
   {
+    label: '🔩 Cadio — CAD models',
     url: 'https://cadio.net',
-    description: 'Show the homepage, then click to create a new model, type "a simple L-bracket", wait for it to generate, rotate the 3D model, then download the file.',
-    voiceover: "Did you know you can generate editable CAD models with AI? Just go to Cadio.net, describe what you need, and it creates a real 3D model in seconds. You can edit it and download it right away — completely free to try.",
+    description: 'Show the homepage, click to create a new model, type "a simple L-bracket", wait for the 3D model to generate, rotate it to show it off, then click download.',
+    voiceover: "Did you know you can generate editable CAD models using AI? Just go to Cadio.net, describe the part you need, and it builds a real 3D model in seconds. You can edit it, rotate it, and download the file — completely free to try.",
+  },
+  {
+    label: '🛍️ E-commerce store',
+    url: 'https://example-shop.com',
+    description: 'Show the homepage hero, scroll down to the product grid, click on a featured product, show the product details and images, then click Add to Cart.',
+    voiceover: "Shopping has never been easier. Browse thousands of products, see detailed photos and reviews, and add to your cart in one click. Fast shipping, easy returns — shop smarter today.",
+  },
+  {
+    label: '📊 SaaS dashboard',
+    url: 'https://example-saas.com',
+    description: 'Show the landing page, click Get Started, show the dashboard with charts and metrics, navigate to the reports section, then show an export button.',
+    voiceover: "Stop spending hours on manual reports. Our dashboard gives you real-time insights at a glance — track your key metrics, generate reports in one click, and make data-driven decisions faster than ever.",
+  },
+  {
+    label: '📱 Mobile app website',
+    url: 'https://example-app.com',
+    description: 'Show the app landing page, scroll through features section, show testimonials, then scroll to the download buttons.',
+    voiceover: "The app that changes how you work. Thousands of users already use it daily to save time and stay organized. Download it free on App Store or Google Play.",
   },
 ]
 
-export default function DemoRecorder({ onBack }: Props) {
+export default function DemoRecorder({ onBack, user, onSignIn, onSignOut }: Props) {
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
   const [voiceover, setVoiceover] = useState('')
@@ -35,13 +59,6 @@ export default function DemoRecorder({ onBack }: Props) {
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current) }, [])
-
-  function loadExample() {
-    const ex = EXAMPLE_SCRIPTS[0]
-    setUrl(ex.url)
-    setDescription(ex.description)
-    setVoiceover(ex.voiceover)
-  }
 
   async function submit() {
     if (!url.trim() || !description.trim() || !voiceover.trim()) return
@@ -96,7 +113,7 @@ export default function DemoRecorder({ onBack }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header onStart={onBack} minimal onBack={onBack} />
+      <Header onStart={onBack} minimal onBack={onBack} user={user} onSignIn={onSignIn} onSignOut={onSignOut} />
 
       <div className="flex-1 pt-24 pb-12 px-6">
         <div className="max-w-2xl mx-auto">
@@ -111,10 +128,16 @@ export default function DemoRecorder({ onBack }: Props) {
 
           {phase === 'form' && (
             <div className="space-y-5">
-              <div className="flex justify-end">
-                <button onClick={loadExample} className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
-                  ✦ Load Cadio example
-                </button>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-white/35 mb-2">Quick examples</p>
+                <div className="flex flex-wrap gap-2">
+                  {EXAMPLES.map((ex, i) => (
+                    <button key={i} onClick={() => { setUrl(ex.url); setDescription(ex.description); setVoiceover(ex.voiceover) }}
+                      className="text-xs px-3 py-1.5 rounded-full border border-white/10 bg-white/3 text-white/55 hover:border-brand-400/50 hover:text-white/90 hover:bg-brand-500/10 transition-all">
+                      {ex.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="card">

@@ -6,10 +6,11 @@ import json
 import logging
 import os
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
+from backend.auth_service import get_user, login, register, verify_token
 from backend.video_service import (
     build_video_prompt,
     has_fal_key,
@@ -48,6 +49,17 @@ class VideoRequest(BaseModel):
     duration: str = "5"
 
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
 class DemoRequest(BaseModel):
     url: str
     description: str
@@ -58,6 +70,42 @@ def _error(status: int, message: str) -> JSONResponse:
     return JSONResponse(
         status_code=status, content={"status": "error", "message": message}
     )
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/auth/register")
+def auth_register(body: RegisterRequest) -> JSONResponse:
+    try:
+        result = register(body.email, body.password, body.name)
+        return JSONResponse(content=result)
+    except ValueError as e:
+        return _error(400, str(e))
+
+
+@router.post("/api/auth/login")
+def auth_login(body: LoginRequest) -> JSONResponse:
+    try:
+        result = login(body.email, body.password)
+        return JSONResponse(content=result)
+    except ValueError as e:
+        return _error(401, str(e))
+
+
+@router.get("/api/auth/me")
+def auth_me(authorization: str | None = Header(default=None)) -> JSONResponse:
+    if not authorization or not authorization.startswith("Bearer "):
+        return _error(401, "No token")
+    payload = verify_token(authorization[7:])
+    if not payload:
+        return _error(401, "Invalid or expired token")
+    user = get_user(int(payload["sub"]))
+    if not user:
+        return _error(404, "User not found")
+    return JSONResponse(content={"user": user})
 
 
 # ---------------------------------------------------------------------------

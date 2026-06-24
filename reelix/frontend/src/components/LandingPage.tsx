@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react'
 import Header from './Header'
 import Footer from './Footer'
+import type { User } from '../hooks/useAuth'
 
 interface LandingPageProps {
   onStart: () => void
   onDemo: () => void
+  user?: User | null
+  onSignIn?: () => void
+  onSignOut?: () => void
 }
 
 const DEMO_SCENES = [
@@ -177,10 +181,10 @@ function AnimatedHeroPhone() {
   )
 }
 
-export default function LandingPage({ onStart, onDemo }: LandingPageProps) {
+export default function LandingPage({ onStart, onDemo, user, onSignIn, onSignOut }: LandingPageProps) {
   return (
     <div className="min-h-screen">
-      <Header onStart={onStart} />
+      <Header onStart={onStart} user={user} onSignIn={onSignIn} onSignOut={onSignOut} />
 
       {/* ── HERO ─────────────────────────────────── */}
       <section className="relative pt-32 pb-20 px-6 overflow-hidden">
