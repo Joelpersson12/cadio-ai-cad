@@ -1,0 +1,33 @@
+name: Sync Reelix to HF Spaces
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'reelix/**'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push Reelix to HF Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+
+          mkdir /tmp/reelix-push
+          cp -r reelix/. /tmp/reelix-push/
+
+          cd /tmp/reelix-push
+          git init
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          git add .
+          git commit -m "Sync from GitHub ${GITHUB_SHA::7}"
+          git remote add hf https://Persson12:${HF_TOKEN}@huggingface.co/spaces/Persson12/Reelix
+          git push hf main --force
