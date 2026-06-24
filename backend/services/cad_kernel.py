@@ -146,6 +146,18 @@ def make_box_body(
                 return [lambda: body.faces(">Z").edges(), lambda: body.edges("|Z")]
             if "bottom" in normalized or "under" in normalized:
                 return [lambda: body.faces("<Z").edges(), lambda: body.edges("|Z")]
+            if "right" in normalized:
+                return [lambda: body.faces(">X").edges()]
+            if "left" in normalized:
+                return [lambda: body.faces("<X").edges()]
+            if "back" in normalized:
+                # Three.js Z+ → backend Y+ → CadQuery >Y
+                return [lambda: body.faces(">Y").edges()]
+            if "front" in normalized:
+                # Three.js Z- → backend Y- → CadQuery <Y
+                return [lambda: body.faces("<Y").edges()]
+            if "corner" in normalized:
+                return [lambda: body.edges("|Z")]
             if "side" in normalized:
                 return [lambda: body.edges("|Z"), lambda: body.faces(">Z").edges()]
             # "all" / unspecified — try every edge first (preserves the fully
