@@ -159,6 +159,13 @@ export async function getAccountProfile(token: string): Promise<{
   });
 }
 
+export async function createBillingPortalSession(token: string): Promise<{ status: string; url: string }> {
+  return request("/api/stripe/billing-portal", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export async function loadAccountSavedLibrary(token: string): Promise<{
   status: string;
   account: AccountProfile;

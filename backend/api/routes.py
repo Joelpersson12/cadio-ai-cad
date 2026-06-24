@@ -1066,6 +1066,50 @@ async def stripe_webhook(request: Request) -> dict[str, Any] | JSONResponse:
         traceback.print_exc()
         return _error(400, str(exc))
 
+
+@router.post("/api/stripe/billing-portal", response_model=None)
+def stripe_billing_portal(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any] | JSONResponse:
+    import os
+    stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
+    if not stripe_key:
+        return _error(503, "Payment processing not configured")
+    try:
+        import stripe as stripe_lib
+        stripe_lib.api_key = stripe_key
+        token = _bearer_token(authorization)
+        if not token:
+            return _error(401, "Login required")
+
+        # Fetch stripe_customer_id directly — it's not in the public account profile.
+        from backend.services import account_store as _as
+        with _as._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT accounts.stripe_customer_id
+                FROM sessions
+                JOIN accounts ON accounts.id = sessions.account_id
+                WHERE sessions.token = ?
+                """,
+                (token,),
+            ).fetchone()
+        stripe_customer_id = row["stripe_customer_id"] if row else ""
+
+        if not stripe_customer_id:
+            return _error(400, "No billing account found — contact support if you have an active subscription")
+
+        return_url = os.environ.get("FRONTEND_URL", "https://cadio.net") + "/"
+        portal = stripe_lib.billing_portal.Session.create(
+            customer=stripe_customer_id,
+            return_url=return_url,
+        )
+        return {"status": "ok", "url": portal.url}
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, f"{type(exc).__name__}: {exc}")
+
+
 # ---------------------------------------------------------------------------
 # WebSocket
 # ---------------------------------------------------------------------------
