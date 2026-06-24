@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 pydantic
 websockets
-openai
+google-genai
 cadquery==2.7.0
 google-auth
 stripe
