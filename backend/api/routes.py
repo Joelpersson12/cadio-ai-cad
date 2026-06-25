@@ -176,7 +176,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-25T16:05Z-printables-search-inline-enum"
+BUILD_MARKER = "2026-06-25T16:20Z-printables-search-field-probe"
 
 
 @router.get("/api/debug/version")
@@ -299,19 +299,50 @@ def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict
             return {"error": str(exc), "body": body}
 
     gql_trace: dict[str, Any] = {}
-    # List every root Query field whose name hints at search.
-    gql_trace["query_fields"] = _gql({
-        "query": "{ __schema { queryType { fields { name args { name type { name kind ofType { name kind } } } } } } }"
+    # Compact list of every root Query field name with its arg names, so we can
+    # spot the real search field (and any required args searchPrints2 needs).
+    fields_probe = _gql({
+        "query": "{ __schema { queryType { fields { name args { name } } } } }"
     })
-    # The exact query the live provider uses: enums inlined as literals.
-    candidates = [
-        ("searchPrints2_inline", {
-            "query": "query S($q:String!,$limit:Int!,$offset:Int!){searchPrints2(query:$q,limit:$limit,offset:$offset,ordering:rating,printType:print){items{... on PrintType{id name slug likesCount downloadCount}}}}",
-            "variables": {"q": q, "limit": 5, "offset": 0},
-        }),
+    body = fields_probe.get("body", "")
+    try:
+        import json as _json2
+        parsed = _json2.loads(body)
+        all_fields = parsed["data"]["__schema"]["queryType"]["fields"]
+        gql_trace["search_like_fields"] = [
+            {"name": f["name"], "args": [a["name"] for a in f.get("args", [])]}
+            for f in all_fields
+            if any(tok in f["name"].lower() for tok in ("search", "print", "model", "discover", "explore"))
+        ]
+        gql_trace["all_field_names"] = [f["name"] for f in all_fields]
+    except Exception as exc:
+        gql_trace["fields_error"] = str(exc)
+        gql_trace["fields_raw"] = body[:2000]
+
+    # Test searchPrints2 against several queries to learn whether it does free
+    # text search at all (vs. the specific phrase simply having no matches).
+    def _search_probe(qs: str, with_filters: bool) -> dict[str, Any]:
+        filt = "ordering:rating,printType:print," if with_filters else ""
+        gq = (
+            "query S($q:String!){searchPrints2(" + filt +
+            "query:$q,limit:5,offset:0){items{... on PrintType{id name slug likesCount downloadCount}}}}"
+        )
+        res = _gql({"query": gq, "variables": {"q": qs}})
+        body = res.get("body", "")
+        try:
+            import json as _json3
+            items = _json3.loads(body).get("data", {}).get("searchPrints2", {}).get("items", [])
+            return {"q": qs, "count": len(items), "titles": [it.get("name") for it in items[:3]], "raw": body[:200] if not items else None}
+        except Exception:
+            return {"q": qs, "raw": body[:300], "error": res.get("error")}
+
+    gql_trace["search_tests"] = [
+        _search_probe("pressure washer hose guide", True),
+        _search_probe("pressure washer", True),
+        _search_probe("phone stand", True),
+        _search_probe("phone stand", False),
+        _search_probe("hose holder", True),
     ]
-    for label, payload in candidates:
-        gql_trace[label] = _gql(payload)
     trace["printables_gql"] = gql_trace
 
     # 1) Cross-provider search (what the real generation path uses).
