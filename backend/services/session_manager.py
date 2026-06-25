@@ -598,11 +598,66 @@ def _mesh_extents(mesh: TriMesh) -> tuple[list[float], list[float]]:
     return mins, maxs
 
 
+def _xy_overlap_ratio(a: tuple[list[float], list[float]], b: tuple[list[float], list[float]]) -> float:
+    """Fraction of the smaller part's XY footprint that overlaps the other."""
+    (a_min, a_max), (b_min, b_max) = a, b
+    ox = max(0.0, min(a_max[0], b_max[0]) - max(a_min[0], b_min[0]))
+    oy = max(0.0, min(a_max[1], b_max[1]) - max(a_min[1], b_min[1]))
+    inter = ox * oy
+    area_a = max(0.0, a_max[0] - a_min[0]) * max(0.0, a_max[1] - a_min[1])
+    area_b = max(0.0, b_max[0] - b_min[0]) * max(0.0, b_max[1] - b_min[1])
+    smaller = min(area_a, area_b)
+    return inter / smaller if smaller > 0 else 0.0
+
+
+def _layout_parts_side_by_side(meshes: list[TriMesh]) -> list[TriMesh]:
+    """Place separate parts in a row on the plate, each centred in Y, on z=0."""
+    gap = 0.0
+    widths = []
+    for mesh in meshes:
+        if mesh.verts:
+            mins, maxs = _mesh_extents(mesh)
+            widths.append(maxs[0] - mins[0])
+    if widths:
+        gap = max(2.0, 0.12 * (sum(widths) / len(widths)))
+
+    laid: list[TriMesh] = []
+    cursor_x = 0.0
+    for mesh in meshes:
+        if not mesh.verts:
+            laid.append(mesh)
+            continue
+        mins, maxs = _mesh_extents(mesh)
+        width = maxs[0] - mins[0]
+        cy = (mins[1] + maxs[1]) / 2.0
+        # Shift so this part starts at cursor_x, is centred in Y, sits on z=0.
+        laid.append(_translate_mesh(mesh, cursor_x - mins[0], -cy, -mins[2]))
+        cursor_x += width + gap
+    return laid
+
+
 def _normalize_mesh_group(meshes: list[TriMesh]) -> list[TriMesh]:
-    """Center an imported source assembly while preserving part offsets."""
+    """Centre an imported source assembly.
+
+    Creators export multi-part models two ways: parts already positioned in
+    their assembled world coordinates (keep the relative offsets), or every
+    part individually centred at the origin (which would stack them on top of
+    each other). Detect heavy overlap and lay those out side-by-side instead.
+    """
     non_empty = [mesh for mesh in meshes if mesh.verts]
     if not non_empty:
         return meshes
+
+    boxes = [_mesh_extents(mesh) for mesh in non_empty]
+    stacked = any(
+        _xy_overlap_ratio(boxes[i], boxes[j]) > 0.35
+        for i in range(len(boxes))
+        for j in range(i + 1, len(boxes))
+    )
+    if stacked:
+        meshes = _layout_parts_side_by_side(meshes)
+        non_empty = [mesh for mesh in meshes if mesh.verts]
+
     mins = [float("inf")] * 3
     maxs = [float("-inf")] * 3
     for mesh in non_empty:
