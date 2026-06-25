@@ -176,7 +176,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-25T15:50Z-printables-graphql-search"
+BUILD_MARKER = "2026-06-25T16:05Z-printables-search-inline-enum"
 
 
 @router.get("/api/debug/version")
@@ -217,7 +217,25 @@ def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict
     from urllib.parse import quote_plus as _qp
     from urllib.request import Request as _Req, urlopen as _open
 
-    trace: dict[str, Any] = {"query": q}
+    trace: dict[str, Any] = {"query": q, "build": BUILD_MARKER}
+
+    # 0a2) Call the REAL Printables provider directly so we see whether the
+    #      deployed search code returns results (and any exception), decoupled
+    #      from the cross-provider fan-out below.
+    try:
+        import traceback as _tb
+        from backend.services.design_providers import PrintablesProvider
+        prov = PrintablesProvider()
+        try:
+            hits = prov._search_api(q, 5)
+            trace["printables_provider"] = {
+                "api_count": len(hits),
+                "top": [{"title": h.title, "likes": h.likes, "downloads": h.downloads, "url": h.url} for h in hits[:3]],
+            }
+        except Exception:
+            trace["printables_provider"] = {"error": _tb.format_exc()[-600:]}
+    except Exception as exc:
+        trace["printables_provider"] = {"import_error": str(exc)}
 
     # 0) Raw search-page capture: see WHAT each site actually returns to the
     #    server (real model markup vs. a Cloudflare/captcha block page vs. a
@@ -285,19 +303,11 @@ def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict
     gql_trace["query_fields"] = _gql({
         "query": "{ __schema { queryType { fields { name args { name type { name kind ofType { name kind } } } } } } }"
     })
-    # Try the historically-correct Printables search query shapes.
+    # The exact query the live provider uses: enums inlined as literals.
     candidates = [
-        ("searchPrints2", {
-            "query": "query S($q:String!,$limit:Int!,$offset:Int!){searchPrints2(query:$q,limit:$limit,offset:$offset,ordering:\"-rating\",printType:print){items{... on PrintType{id name slug likesCount downloadCount}} totalCount}}",
+        ("searchPrints2_inline", {
+            "query": "query S($q:String!,$limit:Int!,$offset:Int!){searchPrints2(query:$q,limit:$limit,offset:$offset,ordering:rating,printType:print){items{... on PrintType{id name slug likesCount downloadCount}}}}",
             "variables": {"q": q, "limit": 5, "offset": 0},
-        }),
-        ("printsSearch", {
-            "query": "query S($q:String!){printsSearch(query:$q,limit:5,offset:0){items{id name slug likesCount downloadCount} total}}",
-            "variables": {"q": q},
-        }),
-        ("morePrints", {
-            "query": "query S($q:String!){morePrints(query:$q,limit:5,offset:0,ordering:\"-likes\"){items{id name slug likesCount downloadCount} totalCount}}",
-            "variables": {"q": q},
         }),
     ]
     for label, payload in candidates:

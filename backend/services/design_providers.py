@@ -1116,10 +1116,12 @@ class PrintablesProvider(DesignProvider):
     
     # GraphQL query for Printables' public search API. Printables stopped
     # embedding search results in their HTML (app v4.7.10+), so the API is the
-    # only reliable source. `ordering` is a SearchChoicesEnum (unquoted enum).
+    # only reliable source. `ordering` and `printType` are enums and are
+    # inlined as literals (the API rejects them as quoted strings, and inlining
+    # avoids any variable-coercion ambiguity).
     _SEARCH_QUERY = (
-        "query SearchModels($q: String!, $limit: Int!, $offset: Int!, $ordering: SearchChoicesEnum) {"
-        "  searchPrints2(query: $q, limit: $limit, offset: $offset, ordering: $ordering, printType: print) {"
+        "query SearchModels($q: String!, $limit: Int!, $offset: Int!) {"
+        "  searchPrints2(query: $q, limit: $limit, offset: $offset, ordering: rating, printType: print) {"
         "    items { ... on PrintType {"
         "      id name slug likesCount downloadCount ratingAvg datePublished"
         "      image { filePath }"
@@ -1158,7 +1160,6 @@ class PrintablesProvider(DesignProvider):
                     "q": query,
                     "limit": max(limit, 20),
                     "offset": 0,
-                    "ordering": "rating",
                 },
             }
         ).encode("utf-8")
