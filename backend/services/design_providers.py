@@ -299,15 +299,25 @@ def _extract_text_print_settings(text: str) -> dict[str, Any]:
 
 
 def _printables_download_url(preview_path: Any, name: str) -> str | None:
+    """Derive a CDN download URL for a Printables STL file.
+
+    filePreviewPath is a thumbnail path like:
+      /media/prints/{id}/{hash}/stls/preview/thumb.jpg
+    The real STL sits at:
+      https://files.printables.com/media/prints/{id}/{hash}/stls/{name}
+    """
     if not isinstance(preview_path, str) or not name:
         return None
-    # Accept paths that contain /stls/ or /files/ as storage path indicators
-    if "/stls/" not in preview_path and "/files/" not in preview_path:
+    # Match the base path up to and including /stls (strip /preview and beyond)
+    m = re.match(r"(.*?/stls)", preview_path)
+    if not m:
+        # Fallback: try /files/ based paths
+        m = re.match(r"(.*?/files)", preview_path)
+    if not m:
         return None
-    folder = preview_path.rsplit("/", 1)[0]
-    # Preserve original filename casing; also try lowercase hyphenated form
+    base = m.group(1).lstrip("/")
     clean_name = re.sub(r"\s+", "-", name.strip())
-    return f"https://files.printables.com/{folder.lstrip('/')}/{clean_name}"
+    return f"https://files.printables.com/{base}/{clean_name}"
 
 
 def _printables_graphql_download_url(model_id: str, file_id: str, file_type: str) -> str | None:
@@ -795,9 +805,17 @@ def resolve_printables_model_files(model_url: str, limit: int = 20) -> list[Sour
                     if not name or not file_id:
                         continue
                     suffix = name.rsplit(".", 1)[-1].lower() if "." in name else list_key.rstrip("s")
-                    download_url = _printables_download_url(item.get("filePreviewPath"), name)
-                    if download_url is None and suffix == "stl":
-                        download_url = _printables_graphql_download_url(model_id, file_id, suffix)
+                    # Try direct URL fields first, then derive from preview path, then GraphQL
+                    download_url: str | None = None
+                    for url_field in ("downloadUrl", "fileUrl", "url", "sourceUrl", "cdnUrl"):
+                        val = item.get(url_field)
+                        if isinstance(val, str) and val.startswith("http"):
+                            download_url = val
+                            break
+                    if download_url is None:
+                        download_url = _printables_download_url(item.get("filePreviewPath"), name)
+                    if download_url is None and suffix in ("stl", "obj"):
+                        download_url = _printables_graphql_download_url(model_id, file_id, "stl")
                     source_file = SourceModelFile(
                         id=file_id,
                         name=name,
