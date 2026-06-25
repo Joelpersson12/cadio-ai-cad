@@ -176,7 +176,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-25T17:25Z-thingiverse-api-stage1"
+BUILD_MARKER = "2026-06-25T17:45Z-makerworld-thingiverse-stage1"
 
 
 @router.get("/api/debug/version")
@@ -367,6 +367,28 @@ def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict
         import traceback as _tb2
         tv["error"] = _tb2.format_exc()[-500:]
     trace["thingiverse"] = tv
+
+    # MakerWorld API status: token presence + raw probe of each candidate
+    # endpoint (status + body head) so we can see which one actually returns
+    # models from the server, then build search on it.
+    mw: dict[str, Any] = {}
+    try:
+        from backend.services.design_providers import (
+            _makerworld_token,
+            _makerworld_search_endpoints,
+            MakerworldProvider,
+        )
+        mw["token_present"] = bool(_makerworld_token())
+        mw["endpoint_probes"] = []
+        for url in _makerworld_search_endpoints(q, 5):
+            mw["endpoint_probes"].append({"url": url[:90], **_raw_probe(url)})
+        hits = MakerworldProvider().search(q, 5)
+        mw["search_count"] = len(hits)
+        mw["top"] = [{"title": h.title, "likes": h.likes, "downloads": h.downloads, "url": h.url} for h in hits[:3]]
+    except Exception:
+        import traceback as _tb3
+        mw["error"] = _tb3.format_exc()[-500:]
+    trace["makerworld"] = mw
 
     # 1) Cross-provider search (what the real generation path uses).
     try:
