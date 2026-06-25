@@ -69,6 +69,8 @@ class SourceModelFile:
     preview_url: str | None
     download_url: str | None
     order: int = 0
+    model_id: str = ""
+    model_url: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -80,6 +82,8 @@ class SourceModelFile:
             "preview_url": self.preview_url,
             "download_url": self.download_url,
             "order": self.order,
+            "model_id": self.model_id,
+            "model_url": self.model_url,
         }
 
 
@@ -335,9 +339,13 @@ def _printables_graphql_download_url(model_id: str, file_id: str, file_type: str
         data=payload,
         headers={
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.printables.com",
+            "Referer": "https://www.printables.com/",
             "User-Agent": (
-                "Mozilla/5.0 (compatible; CadioBot/1.0; "
-                "+https://cadio-ai-cad-production.up.railway.app)"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
             ),
         },
         method="POST",
@@ -354,6 +362,16 @@ def _printables_graphql_download_url(model_id: str, file_id: str, file_type: str
         .get("link")
     )
     return str(link) if isinstance(link, str) and link.startswith("http") else None
+
+
+def printables_fresh_download_url(model_id: str, file_id: str) -> str | None:
+    """Public: resolve a fresh, signed Printables STL download link.
+
+    Printables generates short-lived signed CDN links at click time via its
+    GraphQL API.  This returns one so callers can fetch the real file instead
+    of guessing the CDN path (which Printables blocks for hot-linking).
+    """
+    return _printables_graphql_download_url(str(model_id or ""), str(file_id or ""), "stl")
 
 
 def _walk_json(value: Any):
@@ -806,8 +824,10 @@ def resolve_printables_model_files(model_url: str, limit: int = 20) -> list[Sour
                             break
                     if download_url is None:
                         download_url = _printables_download_url(item.get("filePreviewPath"), name)
-                    if download_url is None and suffix in ("stl", "obj"):
-                        download_url = _printables_graphql_download_url(model_id, file_id, "stl")
+                    # Note: don't resolve a signed GraphQL link here (one POST
+                    # per file × many models is slow). The importer resolves a
+                    # fresh signed link lazily, only for the file it actually
+                    # imports, using model_id + file id stored below.
                     source_file = SourceModelFile(
                         id=file_id,
                         name=name,
@@ -817,6 +837,8 @@ def resolve_printables_model_files(model_url: str, limit: int = 20) -> list[Sour
                         preview_url=_media_url(item.get("filePreviewPath")),
                         download_url=download_url,
                         order=int(item.get("order") or 0),
+                        model_id=model_id,
+                        model_url=normalized,
                     )
                     files[file_id] = source_file
 

@@ -534,21 +534,53 @@ def _try_import_source_stl(
 ) -> TriMesh | None:
     if not source_file:
         return None
-    url = str(source_file.get("download_url") or "")
     file_type = str(source_file.get("file_type") or "").lower()
-    if file_type not in ("stl", "obj") or not url:
+    if file_type not in ("stl", "obj"):
         return None
+
     try:
         from backend.services.stl_importer import import_stl_from_url
-
-        return import_stl_from_url(
-            url,
-            prefer_flat=prefer_flat,
-            center_xy=center_xy,
-            shift_to_plate=shift_to_plate,
-        )
     except Exception:
         return None
+
+    def _import(candidate_url: str) -> TriMesh | None:
+        if not candidate_url:
+            return None
+        try:
+            return import_stl_from_url(
+                candidate_url,
+                prefer_flat=prefer_flat,
+                center_xy=center_xy,
+                shift_to_plate=shift_to_plate,
+            )
+        except Exception:
+            return None
+
+    # 1) Stored download URL (guessed CDN path or a direct field) — fast path.
+    mesh = _import(str(source_file.get("download_url") or ""))
+    if mesh is not None:
+        return mesh
+
+    # 2) Printables blocks hot-linked CDN guesses; resolve a fresh signed link
+    #    via the GraphQL API (same one the website uses) and retry. This is the
+    #    authoritative way to download a real STL, so anything published on
+    #    Printables becomes importable even when the guessed path fails.
+    if source_file.get("source") == "printables":
+        model_id = str(source_file.get("model_id") or "")
+        file_id = str(source_file.get("id") or "")
+        if model_id and file_id:
+            try:
+                from backend.services.design_providers import printables_fresh_download_url
+
+                signed = printables_fresh_download_url(model_id, file_id)
+            except Exception:
+                signed = None
+            if signed:
+                mesh = _import(signed)
+                if mesh is not None:
+                    return mesh
+
+    return None
 
 
 def _translate_mesh(mesh: TriMesh, dx: float, dy: float, dz: float) -> TriMesh:
@@ -655,8 +687,26 @@ def _source_file_is_bad_component(source_file: dict[str, Any]) -> bool:
     )
 
 
+def _source_file_is_importable(source_file: dict[str, Any]) -> bool:
+    """True when Cadio can fetch a real mesh for this file.
+
+    A file is importable if it has a stored download URL, or if it's a
+    Printables STL/OBJ for which we can resolve a fresh signed download link
+    on demand (model_id + file id known).
+    """
+    if str(source_file.get("file_type") or "").lower() not in ("stl", "obj"):
+        return False
+    if source_file.get("download_url"):
+        return True
+    return bool(
+        source_file.get("source") == "printables"
+        and source_file.get("model_id")
+        and source_file.get("id")
+    )
+
+
 def _source_file_component_score(source_file: dict[str, Any], prompt: str, preferred_slots: int = 0) -> float:
-    if str(source_file.get("file_type") or "").lower() != "stl" or not source_file.get("download_url"):
+    if not _source_file_is_importable(source_file):
         return -9999.0
     if _source_file_is_bad_component(source_file):
         return -9999.0
@@ -1024,7 +1074,7 @@ def _try_replace_with_imported_source_model(
             if candidate.get("id") in seen_ids:
                 continue
             seen_ids.add(candidate.get("id"))
-            if str(candidate.get("file_type") or "").lower() != "stl" or not candidate.get("download_url"):
+            if not _source_file_is_importable(candidate):
                 continue
             ranked_candidates.append(
                 (
