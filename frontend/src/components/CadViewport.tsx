@@ -635,7 +635,7 @@ function snapSketchPoint(start: THREE.Vector3, point: THREE.Vector3, tool: Exper
   const snapped = point.clone();
   snapped.x = Math.round(snapped.x / SKETCH_GRID_STEP_MM) * SKETCH_GRID_STEP_MM;
   snapped.z = Math.round(snapped.z / SKETCH_GRID_STEP_MM) * SKETCH_GRID_STEP_MM;
-  if (tool !== "line") return snapped;
+  if (tool !== "line" && tool !== "cut") return snapped;
 
   const dx = snapped.x - start.x;
   const dz = snapped.z - start.z;
@@ -760,8 +760,8 @@ function SketchPlane({
           const maxX = Math.max(start.x, finish.x);
           const minZ = Math.min(start.z, finish.z);
           const maxZ = Math.max(start.z, finish.z);
-          const width = tool === "line" ? finish.x - start.x : maxX - minX;
-          const depth = tool === "line" ? finish.z - start.z : maxZ - minZ;
+          const width = (tool === "line" || tool === "cut") ? finish.x - start.x : maxX - minX;
+          const depth = (tool === "line" || tool === "cut") ? finish.z - start.z : maxZ - minZ;
           if (Math.max(Math.abs(width), Math.abs(depth)) >= 2) {
             const center: [number, number] = [(minX + maxX) / 2, (minZ + maxZ) / 2];
             const size: [number, number] = tool === "line" ? [width, depth] : [Math.abs(width), Math.abs(depth)];
@@ -797,6 +797,20 @@ function SketchPlane({
           <lineBasicMaterial color="#7de7ff" />
         </line>
       )}
+      {start && end && enabled && tool === "cut" && (() => {
+        const ddx = end.x - start.x;
+        const ddz = end.z - start.z;
+        const len = Math.max(Math.hypot(ddx, ddz), 0.1);
+        const midX = (start.x + end.x) / 2;
+        const midZ = (start.z + end.z) / 2;
+        const angle = -Math.atan2(ddz, ddx);
+        return (
+          <mesh position={[midX, 100, midZ]} rotation={[0, angle, 0]}>
+            <boxGeometry args={[len, 200, 0.8]} />
+            <meshBasicMaterial color="#ff6b6b" transparent opacity={0.3} side={THREE.DoubleSide} />
+          </mesh>
+        );
+      })()}
       {preview && (tool === "circle" || tool === "hole") && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[preview.cx, 0.35, preview.cz]}>
           <circleGeometry args={[preview.radius, 48]} />
@@ -881,7 +895,7 @@ export default function CadViewport({
           </button>
         </div>
         <div className="grid grid-cols-1 gap-1">
-          {(["select", "rectangle", "circle", "line", "hole"] as ExpertTool[]).map((tool) => (
+          {(["select", "rectangle", "circle", "line", "hole", "cut"] as ExpertTool[]).map((tool) => (
             <button
               key={tool}
               disabled={!expertMode}

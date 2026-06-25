@@ -126,5 +126,5 @@ export interface PrinterProfile {
 
 export type TransformMode = "off" | "translate" | "rotate" | "scale";
 
-export type ExpertTool = "select" | "rectangle" | "circle" | "hole" | "line";
+export type ExpertTool = "select" | "rectangle" | "circle" | "hole" | "line" | "cut";
 export type SelectionMode = "body" | "face" | "edge";

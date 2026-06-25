@@ -92,6 +92,7 @@ from backend.services.session_manager import (
     remove_object,
     add_object,
     split_object_by_line,
+    cut_object_by_line,
     replace_object_with_research_assembly,
     replace_object_with_source_model,
     replace_object_with_template_assembly,
@@ -621,6 +622,17 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
                 actions = split_object_by_line(session, obj, data.center, data.size)
                 bump_version(session)
                 add_history(session, "expert-line-split", actions)
+                payload = build_scene_payload(
+                    session, include_mesh=True, model_updated=True
+                )
+                await broadcast(session["session_id"], payload.model_dump())
+                return payload
+
+            if data.primitive.strip().lower() == "cut" and session.get("selected_object_id") and session["object_order"]:
+                obj = get_selected_object(session)
+                actions = cut_object_by_line(session, obj, data.center, data.size)
+                bump_version(session)
+                add_history(session, "expert-cut", actions)
                 payload = build_scene_payload(
                     session, include_mesh=True, model_updated=True
                 )
