@@ -176,7 +176,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-25T16:50Z-assembly-common-prefix"
+BUILD_MARKER = "2026-06-25T17:05Z-assembly-overlap-layout"
 
 
 @router.get("/api/debug/version")
