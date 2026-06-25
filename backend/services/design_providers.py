@@ -613,6 +613,17 @@ def _query_variants(query: str) -> list[str]:
             variants.append(value)
 
     add(cleaned)
+
+    # Printables (and most model sites) search AND-style: every word in the
+    # query must match. A specific multi-word prompt like "pressure washer hose
+    # guide" therefore returns nothing even though "pressure washer hose" or
+    # "hose guide" match real models. Add contiguous sub-phrases (longest
+    # first) so specific prompts still surface the right model.
+    if len(core_words) >= 3:
+        for window in range(len(core_words) - 1, 1, -1):  # n-1 down to 2 words
+            for start in range(0, len(core_words) - window + 1):
+                add(" ".join(core_words[start:start + window]))
+
     if {"battery", "batteries", "dewalt", "makita", "milwaukee", "ryobi", "bosch"} & words:
         brand = next((word for word in ("dewalt", "makita", "milwaukee", "ryobi", "bosch") if word in words), "power tool")
         add(f"{brand} battery holder wall mount")
@@ -694,7 +705,7 @@ def _query_variants(query: str) -> list[str]:
         add(f"{normalized} stl")
         add(f"{normalized} printable")
 
-    return variants[:12]
+    return variants[:16]
 
 
 def _design_score(query: str, design: ExampleDesign) -> float:
