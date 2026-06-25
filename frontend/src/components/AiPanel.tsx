@@ -5,7 +5,7 @@ import type { FormEvent, KeyboardEvent } from "react";
 import { useCadStore } from "../stores/cadStore";
 import type { SourceExample } from "../utils/types";
 
-function SourceInfoModal({ sources, onClose }: { sources: SourceExample[]; onClose: () => void }) {
+export function SourceInfoModal({ sources, onClose }: { sources: SourceExample[]; onClose: () => void }) {
   if (!sources.length) return null;
   const top = sources[0];
   const SOURCE_LABELS: Record<string, string> = {
