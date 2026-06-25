@@ -212,17 +212,27 @@ def _search_sources(prompt: str, limit: int) -> list[ExampleDesign]:
         from backend.services.provider_extensions import get_extended_provider_registry
 
         registry = get_extended_provider_registry()
-        results = registry.search_all(prompt, limit=limit)
-        if results:
-            return results
-        # Fallback: try progressively shorter sub-queries
-        words = [w for w in re.findall(r"[a-z0-9]+", prompt.lower()) if len(w) > 2]
+
+        # Build candidate queries: normalized/synonym-expanded first, then original, then sub-queries
+        normalized = normalize_source_query(prompt)
+        queries: list[str] = []
+        if normalized and normalized.lower() != prompt.strip().lower():
+            queries.append(normalized)
+        queries.append(prompt.strip())
+        words = [w for w in re.findall(r"[a-z0-9]+", (normalized or prompt).lower()) if len(w) > 2]
         for n in (3, 2):
             if len(words) > n:
-                sub = " ".join(words[-n:])
-                results = registry.search_all(sub, limit=limit)
-                if results:
-                    return results
+                queries.append(" ".join(words[-n:]))
+
+        seen: set[str] = set()
+        for query in queries:
+            key = query.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            results = registry.search_all(query, limit=limit)
+            if results:
+                return results
         return []
     except Exception:
         return []
