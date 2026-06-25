@@ -301,23 +301,15 @@ def _extract_text_print_settings(text: str) -> dict[str, Any]:
 def _printables_download_url(preview_path: Any, name: str) -> str | None:
     """Derive a CDN download URL for a Printables STL file.
 
-    filePreviewPath is a thumbnail path like:
-      /media/prints/{id}/{hash}/stls/preview/thumb.jpg
-    The real STL sits at:
-      https://files.printables.com/media/prints/{id}/{hash}/stls/{name}
+    filePreviewPath is typically the STL's own path on the CDN:
+      /media/prints/{id}/{hash}/stls/{filename}
+    We take the parent directory and append the display name (lowercased).
     """
-    if not isinstance(preview_path, str) or not name:
+    if not isinstance(preview_path, str) or "/stls/" not in preview_path or not name:
         return None
-    # Match the base path up to and including /stls (strip /preview and beyond)
-    m = re.match(r"(.*?/stls)", preview_path)
-    if not m:
-        # Fallback: try /files/ based paths
-        m = re.match(r"(.*?/files)", preview_path)
-    if not m:
-        return None
-    base = m.group(1).lstrip("/")
-    clean_name = re.sub(r"\s+", "-", name.strip())
-    return f"https://files.printables.com/{base}/{clean_name}"
+    folder = preview_path.rsplit("/", 1)[0]
+    filename = re.sub(r"\s+", "-", name.strip()).lower()
+    return f"https://files.printables.com/{folder.lstrip('/')}/{filename}"
 
 
 def _printables_graphql_download_url(model_id: str, file_id: str, file_type: str) -> str | None:
@@ -771,7 +763,7 @@ def resolve_printables_model_files(model_url: str, limit: int = 20) -> list[Sour
         return list(cached[1])
 
     try:
-        page = _fetch_text(files_url)
+        page = _fetch_text(files_url, timeout=8.0)
     except Exception:
         return []
 
@@ -852,7 +844,7 @@ def resolve_printables_model_metadata(model_url: str) -> dict[str, Any]:
         return dict(cached[1])
 
     try:
-        page = _fetch_text(normalized)
+        page = _fetch_text(normalized, timeout=8.0)
     except Exception:
         return {}
 
@@ -944,30 +936,100 @@ def resolve_printables_model_metadata(model_url: str) -> dict[str, Any]:
 
 
 class MakerworldProvider(DesignProvider):
-    """MakerWorld design provider.
+    """MakerWorld design provider — uses their public search API."""
 
-    MakerWorld currently presents a Cloudflare challenge to server-side
-    requests in Railway-like environments, so this provider reports
-    unavailable instead of returning guessed data.
-    """
-    
-    def __init__(self):
-        self._available = False
-        # Future: Initialize API client
-    
+    _API_ENDPOINTS = (
+        "https://makerworld.com/api/v1/design/page?keyword={query}&page=1&page_size={limit}&order=likes",
+        "https://makerworld.com/api/v1/design/search?keyword={query}&limit={limit}",
+    )
+
     def search(self, query: str, limit: int = 5) -> list[ExampleDesign]:
-        """Search Makerworld for designs."""
-        return []
-    
+        cache_key = ("makerworld", query.strip().lower(), limit)
+        cached = _SEARCH_CACHE.get(cache_key)
+        if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+            return list(cached[1])
+
+        results: list[ExampleDesign] = []
+        for template in self._API_ENDPOINTS:
+            url = template.format(query=quote_plus(query), limit=limit)
+            req = Request(
+                url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/124.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "application/json",
+                    "Referer": "https://makerworld.com/",
+                },
+            )
+            try:
+                with urlopen(req, timeout=5.0) as res:
+                    data = json.loads(res.read().decode("utf-8", errors="replace"))
+                results = self._parse_results(data, limit)
+                if results:
+                    break
+            except Exception:
+                continue
+
+        _SEARCH_CACHE[cache_key] = (time.time(), results)
+        return list(results)
+
+    def _parse_results(self, data: Any, limit: int) -> list[ExampleDesign]:
+        items: list[Any] = []
+        for key in ("hits", "list", "data", "models", "results"):
+            candidate = data.get(key)
+            if isinstance(candidate, list):
+                items = candidate
+                break
+        results: list[ExampleDesign] = []
+        for item in items[:limit]:
+            item_id = str(item.get("id") or item.get("designId") or "").strip()
+            name = str(item.get("name") or item.get("title") or "").strip()
+            if not item_id or not name:
+                continue
+            handle = str(item.get("handle") or item.get("slug") or "").strip()
+            if handle:
+                url = f"https://makerworld.com/en/models/{item_id}-{handle}"
+            else:
+                url = f"https://makerworld.com/en/models/{item_id}"
+            image_url: str | None = None
+            cover = item.get("cover") or item.get("thumbnail") or item.get("image")
+            if isinstance(cover, dict):
+                mkey = str(cover.get("mediaKey") or cover.get("url") or "").strip()
+                if mkey.startswith("http"):
+                    image_url = mkey
+                elif mkey:
+                    image_url = f"https://makerworld-data.makerworld.com/{mkey}"
+            elif isinstance(cover, str) and cover.startswith("http"):
+                image_url = cover
+            likes = int(item.get("likes") or item.get("likeCount") or item.get("like_count") or 0)
+            downloads = int(item.get("downloads") or item.get("downloadCount") or item.get("download_count") or 0)
+            results.append(
+                ExampleDesign(
+                    id=_stable_id("makerworld", url),
+                    title=name,
+                    source="makerworld",
+                    url=url,
+                    image_url=image_url,
+                    category="3D Model",
+                    tags=_title_tags(name),
+                    popularity=_popularity(likes, downloads, 0.0),
+                    description=None,
+                    created_at=None,
+                    downloads=downloads,
+                    likes=likes,
+                )
+            )
+        return results
+
     def get_popular(self, category: str, limit: int = 5) -> list[ExampleDesign]:
-        """Get popular Makerworld designs."""
-        # TODO: Implement Makerworld API integration
-        return []
-    
+        return self.search(category, limit)
+
     def is_available(self) -> bool:
-        """Check Makerworld availability."""
-        return self._available
-    
+        return True
+
     @property
     def provider_name(self) -> str:
         return "Makerworld"
