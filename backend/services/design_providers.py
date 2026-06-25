@@ -451,6 +451,37 @@ def _thingiverse_token() -> str:
     return os.environ.get("THINGIVERSE_TOKEN", "").strip()
 
 
+def _makerworld_token() -> str:
+    """Optional Bearer token for MakerWorld's API (no public app-token scheme).
+
+    MakerWorld sits behind Cloudflare + Bambu account auth. A token taken from a
+    logged-in session (Authorization header) can be supplied via MAKERWORLD_TOKEN
+    to authenticate API calls; many list endpoints also work unauthenticated.
+    """
+    return os.environ.get("MAKERWORLD_TOKEN", "").strip()
+
+
+def _makerworld_api_get(url: str, timeout: float = 6.0) -> Any:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json",
+        "Origin": "https://makerworld.com",
+        "Referer": "https://makerworld.com/",
+    }
+    token = _makerworld_token()
+    if token:
+        headers["Authorization"] = token if token.lower().startswith("bearer") else f"Bearer {token}"
+    req = Request(url, headers=headers)
+    try:
+        with urlopen(req, timeout=timeout) as res:
+            return json.loads(res.read().decode("utf-8", errors="replace"))
+    except Exception:
+        return None
+
+
 def _thingiverse_api_get(path: str, params: dict[str, Any] | None = None, timeout: float = 6.0) -> Any:
     token = _thingiverse_token()
     if not token:
@@ -1102,13 +1133,25 @@ def resolve_printables_model_metadata(model_url: str) -> dict[str, Any]:
     return dict(metadata)
 
 
-class MakerworldProvider(DesignProvider):
-    """MakerWorld design provider — uses their public search API."""
+def _makerworld_search_endpoints(query: str, limit: int) -> list[str]:
+    q = quote_plus(query)
+    n = max(limit, 20)
+    return [
+        f"https://makerworld.com/api/v1/search-service/select/instance?keyword={q}&limit={n}&offset=0&type=models",
+        f"https://makerworld.com/api/v1/search-service/select/design?searchText={q}&limit={n}&offset=0",
+        f"https://makerworld.com/api/v1/design-service/instance/search?keyword={q}&limit={n}&offset=0",
+        f"https://makerworld.com/api/v1/design-service/design?handle=&keyword={q}&limit={n}&offset=0",
+        f"https://makerworld.com/api/v1/design/page?keyword={q}&page=1&page_size={n}&order=likes",
+    ]
 
-    _API_ENDPOINTS = (
-        "https://makerworld.com/api/v1/design/page?keyword={query}&page=1&page_size={limit}&order=likes",
-        "https://makerworld.com/api/v1/design/search?keyword={query}&limit={limit}",
-    )
+
+class MakerworldProvider(DesignProvider):
+    """MakerWorld design provider.
+
+    MakerWorld is behind Cloudflare + Bambu account auth and exposes no public
+    app-token scheme, so this tries several known API endpoints (optionally
+    authenticated with MAKERWORLD_TOKEN). Returns [] when none respond.
+    """
 
     def search(self, query: str, limit: int = 5) -> list[ExampleDesign]:
         cache_key = ("makerworld", query.strip().lower(), limit)
@@ -1117,38 +1160,29 @@ class MakerworldProvider(DesignProvider):
             return list(cached[1])
 
         results: list[ExampleDesign] = []
-        for template in self._API_ENDPOINTS:
-            url = template.format(query=quote_plus(query), limit=limit)
-            req = Request(
-                url,
-                headers={
-                    "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/124.0.0.0 Safari/537.36"
-                    ),
-                    "Accept": "application/json",
-                    "Referer": "https://makerworld.com/",
-                },
-            )
-            try:
-                with urlopen(req, timeout=5.0) as res:
-                    data = json.loads(res.read().decode("utf-8", errors="replace"))
-                results = self._parse_results(data, limit)
-                if results:
-                    break
-            except Exception:
+        for url in _makerworld_search_endpoints(query, limit):
+            data = _makerworld_api_get(url, timeout=5.0)
+            if data is None:
                 continue
+            results = self._parse_results(data, limit)
+            if results:
+                break
 
         _SEARCH_CACHE[cache_key] = (time.time(), results)
         return list(results)
 
     def _parse_results(self, data: Any, limit: int) -> list[ExampleDesign]:
         items: list[Any] = []
-        for key in ("hits", "list", "data", "models", "results"):
-            candidate = data.get(key)
-            if isinstance(candidate, list):
-                items = candidate
+        # Find the first list of design-like dicts anywhere in the response
+        # (endpoints nest results under data/hits/list/records in varied ways).
+        for node in _walk_json(data):
+            if (
+                isinstance(node, list)
+                and node
+                and isinstance(node[0], dict)
+                and any(k in node[0] for k in ("id", "designId", "title", "name"))
+            ):
+                items = node
                 break
         results: list[ExampleDesign] = []
         for item in items[:limit]:
