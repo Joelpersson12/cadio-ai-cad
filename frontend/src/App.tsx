@@ -521,9 +521,11 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     snapSelectedObjects,
     setPrinter,
     runPrompt,
+    sourceInfo,
   } = useCadStore();
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
+  const [showMobileSourceInfo, setShowMobileSourceInfo] = useState(false);
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -838,6 +840,18 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             showMeasurements={showMeasurements}
           />
           {modelBusy && <ModelLoadingOverlay status={status} />}
+          {sourceInfo.length > 0 && (
+            <button
+              onClick={() => setShowMobileSourceInfo(true)}
+              className="absolute bottom-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-cadio-border/60 bg-cadio-surface/80 text-cadio-muted shadow-lg backdrop-blur-sm hover:border-cadio-accent/50 hover:text-cadio-accent transition-all"
+              title="Source info"
+            >
+              <span className="text-sm font-bold leading-none">i</span>
+            </button>
+          )}
+          {showMobileSourceInfo && sourceInfo.length > 0 && (
+            <SourceInfoModal sources={sourceInfo} onClose={() => setShowMobileSourceInfo(false)} />
+          )}
         </div>
 
         <MobileModelVariantBar />
@@ -887,8 +901,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 function MobileAiBar() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showSourceInfo, setShowSourceInfo] = useState(false);
-  const { runPrompt, isBusy, sourceInfo } = useCadStore();
+  const { runPrompt, isBusy } = useCadStore();
   const busy = loading || isBusy;
 
   const handleSend = async () => {
@@ -907,40 +920,27 @@ function MobileAiBar() {
   };
 
   return (
-    <>
-      {showSourceInfo && (sourceInfo).length > 0 && (
-        <SourceInfoModal sources={sourceInfo} onClose={() => setShowSourceInfo(false)} />
-      )}
-      <div className={`flex items-center gap-2 rounded-2xl border p-1.5 transition-all ${
-        busy
-          ? "border-cadio-accent/70 bg-cadio-accent/10 shadow-[0_0_28px_rgba(59,130,246,0.24)]"
-          : "border-transparent"
-      }`}>
-        {(sourceInfo).length > 0 && (
-          <button
-            onClick={() => setShowSourceInfo(true)}
-            className="h-11 shrink-0 rounded-xl border border-cadio-border bg-cadio-surface px-3 text-xs font-semibold text-cadio-muted hover:bg-cadio-border/50"
-          >
-            Source
-          </button>
-        )}
-        <input
-          type="text"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void handleSend()}
-          placeholder="Ask AI to change the model..."
-          className="min-h-11 flex-1 rounded-xl border border-cadio-border bg-cadio-surface px-3 py-2 text-base text-cadio-text placeholder:text-cadio-muted focus:border-cadio-accent focus:outline-none"
-        />
-        <button
-          onClick={() => void handleSend()}
-          disabled={busy || !prompt.trim()}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cadio-accent text-base font-black text-white shadow-lg disabled:opacity-40"
-        >
-          {busy ? "..." : ">"}
-        </button>
-      </div>
-    </>
+    <div className={`flex items-center gap-2 rounded-2xl border p-1.5 transition-all ${
+      busy
+        ? "border-cadio-accent/70 bg-cadio-accent/10 shadow-[0_0_28px_rgba(59,130,246,0.24)]"
+        : "border-transparent"
+    }`}>
+      <input
+        type="text"
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && void handleSend()}
+        placeholder="Ask AI to change the model..."
+        className="min-h-11 flex-1 rounded-xl border border-cadio-border bg-cadio-surface px-3 py-2 text-base text-cadio-text placeholder:text-cadio-muted focus:border-cadio-accent focus:outline-none"
+      />
+      <button
+        onClick={() => void handleSend()}
+        disabled={busy || !prompt.trim()}
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cadio-accent text-base font-black text-white shadow-lg disabled:opacity-40"
+      >
+        {busy ? "..." : ">"}
+      </button>
+    </div>
   );
 }
 
