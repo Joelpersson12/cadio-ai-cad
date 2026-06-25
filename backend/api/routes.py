@@ -174,6 +174,28 @@ def health() -> dict[str, Any]:
     }
 
 
+@router.get("/api/debug/search")
+def debug_search(q: str = Query(default="pressure washer hose guide")) -> dict[str, Any]:
+    """Debug endpoint: test Printables search + file resolution for a query."""
+    try:
+        from backend.services.design_providers import PrintablesProvider, resolve_printables_model_files
+        from backend.services.prompt_translation import normalize_source_query
+        normalized = normalize_source_query(q)
+        provider = PrintablesProvider()
+        results = provider.search(q, limit=5)
+        out = []
+        for r in results[:3]:
+            files = resolve_printables_model_files(r.url, limit=8)
+            out.append({
+                "title": r.title,
+                "url": r.url,
+                "files": [{"name": f.name, "type": f.file_type, "size": f.file_size, "download_url": f.download_url} for f in files],
+            })
+        return {"query": q, "normalized": normalized, "results_count": len(results), "results": out}
+    except Exception as exc:
+        return {"query": q, "error": str(exc)}
+
+
 @router.post("/api/auth/login", response_model=None)
 def auth_login(data: AuthRequest) -> dict[str, Any] | JSONResponse:
     try:
