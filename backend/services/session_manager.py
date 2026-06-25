@@ -741,7 +741,12 @@ def _select_source_assembly_files(
     has_left_right = any("left" in _source_file_name(item).lower() for item in selected) and any(
         "right" in _source_file_name(item).lower() for item in selected
     )
-    if len(selected) >= 2 and (has_complement or has_left_right or len(selected_roles) >= 3):
+    # Detect numbered parts: files whose stems differ only by a trailing digit (part1/part2, file_1/file_2)
+    has_numbered_parts = False
+    if len(selected) >= 2:
+        stems = [re.sub(r"\d+$", "", re.sub(r"[^a-z0-9]", "", _source_file_name(s).lower().rsplit(".", 1)[0])) for s in selected]
+        has_numbered_parts = len(set(stems)) == 1 and stems[0]
+    if len(selected) >= 2 and (has_complement or has_left_right or has_numbered_parts or len(selected_roles) >= 3):
         return selected
     return []
 
@@ -1171,6 +1176,7 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
                         source_obj["color"] = color
                     add_object(session, source_obj)
                 session["selected_object_id"] = ""
+                session["source_info"] = [example.to_dict()]
                 file_names = ", ".join(_source_file_name(file) for file in assembly_files[:4])
                 if len(assembly_files) > 4:
                     file_names += f", +{len(assembly_files) - 4} more"
@@ -1202,6 +1208,7 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
             _remove_source_group_direct(session, current)
             add_object(session, source_obj)
             session["selected_object_id"] = ""
+            session["source_info"] = [example.to_dict()]
             return [
                 f"{'previous' if step < 0 else 'next'} source model",
                 f"source-match: {example.title}",

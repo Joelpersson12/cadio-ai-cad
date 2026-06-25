@@ -211,7 +211,19 @@ def _search_sources(prompt: str, limit: int) -> list[ExampleDesign]:
     try:
         from backend.services.provider_extensions import get_extended_provider_registry
 
-        return get_extended_provider_registry().search_all(prompt, limit=limit)
+        registry = get_extended_provider_registry()
+        results = registry.search_all(prompt, limit=limit)
+        if results:
+            return results
+        # Fallback: try progressively shorter sub-queries
+        words = [w for w in re.findall(r"[a-z0-9]+", prompt.lower()) if len(w) > 2]
+        for n in (3, 2):
+            if len(words) > n:
+                sub = " ".join(words[-n:])
+                results = registry.search_all(sub, limit=limit)
+                if results:
+                    return results
+        return []
     except Exception:
         return []
 

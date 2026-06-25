@@ -230,7 +230,7 @@ function MobileEditSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const { objects, selectedObjectId, materials, printSettings, patchParam, patchAppearance, setSelectedScalePercent, onToggleFeature, printer, printers, setPrinter } = useCadStore();
+  const { objects, selectedObjectId, materials, printSettings, patchParam, patchAppearance, setSelectedScalePercent, onToggleFeature, printer, printers, setPrinter, onDeleteObject } = useCadStore();
   const obj = objects.find((o) => o.id === selectedObjectId) ?? objects[0];
   const materialEntries: Array<[string, MaterialProfile]> = Object.entries(materials).length
     ? Object.entries(materials)
@@ -357,23 +357,35 @@ function MobileEditSheet({
           ))}
 
           {/* Features */}
-          <div className="border-t border-cadio-border pt-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted mb-3">Feature Tree</p>
-            <div className="grid grid-cols-2 gap-2">
-              {obj.feature_tree.map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => void onToggleFeature(f.id, !f.enabled)}
-                  className={`py-2 px-3 rounded-lg text-[10px] font-bold uppercase transition-all ${
-                    f.enabled
-                      ? "bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20"
-                      : "bg-cadio-surface border border-cadio-border text-cadio-muted"
-                  }`}
-                >
-                  {f.type.replace(/_/g, " ")}
-                </button>
-              ))}
+          {obj.feature_tree.length > 0 && (
+            <div className="border-t border-cadio-border pt-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted mb-3">Feature Tree</p>
+              <div className="grid grid-cols-2 gap-2">
+                {obj.feature_tree.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => void onToggleFeature(f.id, !f.enabled)}
+                    className={`py-2 px-3 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                      f.enabled
+                        ? "bg-cadio-accent text-white shadow-lg shadow-cadio-accent/20"
+                        : "bg-cadio-surface border border-cadio-border text-cadio-muted"
+                    }`}
+                  >
+                    {f.type.replace(/_/g, " ")}
+                  </button>
+                ))}
+              </div>
             </div>
+          )}
+
+          {/* Delete */}
+          <div className="border-t border-cadio-border pt-4 pb-2">
+            <button
+              onClick={() => { void onDeleteObject(); onClose(); }}
+              className="w-full h-10 rounded-xl border border-red-500/30 text-sm font-semibold text-red-400 hover:border-red-500/60 hover:bg-red-500/10 transition-all"
+            >
+              Delete model
+            </button>
           </div>
         </div>
       </div>
@@ -1101,6 +1113,7 @@ export default function App() {
   };
 
   const goHome = () => {
+    useCadStore.getState().startBlankCreation();
     if (window.location.pathname !== "/" || window.location.hash) {
       window.history.pushState(null, "", "/");
     }
