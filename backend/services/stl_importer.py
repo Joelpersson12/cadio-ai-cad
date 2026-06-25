@@ -12,24 +12,37 @@ from backend.services.cad_engine import TriMesh, shift_mesh_to_buildplate
 MAX_STL_BYTES = 32 * 1024 * 1024
 
 
-def _fetch_bytes(url: str, timeout: float = 12.0) -> bytes:
-    req = Request(
-        url,
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (compatible; CadioBot/1.0; "
-                "+https://cadio-ai-cad-production.up.railway.app)"
-            )
-        },
-    )
-    with urlopen(req, timeout=timeout) as res:
-        content_length = res.headers.get("content-length")
-        if content_length and int(content_length) > MAX_STL_BYTES:
-            raise ValueError("STL is too large for interactive import")
-        data = res.read(MAX_STL_BYTES + 1)
-    if len(data) > MAX_STL_BYTES:
-        raise ValueError("STL is too large for interactive import")
-    return data
+def _fetch_bytes(url: str, timeout: float = 25.0, retries: int = 2) -> bytes:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.printables.com/",
+    }
+    last_exc: Exception = RuntimeError("no attempts")
+    for attempt in range(max(1, retries)):
+        try:
+            req = Request(url, headers=headers)
+            with urlopen(req, timeout=timeout) as res:
+                content_length = res.headers.get("content-length")
+                if content_length and int(content_length) > MAX_STL_BYTES:
+                    raise ValueError("STL is too large for interactive import")
+                data = res.read(MAX_STL_BYTES + 1)
+            if len(data) > MAX_STL_BYTES:
+                raise ValueError("STL is too large for interactive import")
+            return data
+        except ValueError:
+            raise
+        except Exception as exc:
+            last_exc = exc
+            if attempt < retries - 1:
+                import time as _time
+                _time.sleep(1.5)
+    raise last_exc
 
 
 def _add_deduped_vertex(mesh: TriMesh, index: dict[tuple[int, int, int], int], vertex: tuple[float, float, float]) -> int:

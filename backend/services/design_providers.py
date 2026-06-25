@@ -299,11 +299,15 @@ def _extract_text_print_settings(text: str) -> dict[str, Any]:
 
 
 def _printables_download_url(preview_path: Any, name: str) -> str | None:
-    if not isinstance(preview_path, str) or "/stls/" not in preview_path or not name:
+    if not isinstance(preview_path, str) or not name:
+        return None
+    # Accept paths that contain /stls/ or /files/ as storage path indicators
+    if "/stls/" not in preview_path and "/files/" not in preview_path:
         return None
     folder = preview_path.rsplit("/", 1)[0]
-    filename = re.sub(r"\s+", "-", name.strip()).lower()
-    return f"https://files.printables.com/{folder.lstrip('/')}/{filename}"
+    # Preserve original filename casing; also try lowercase hyphenated form
+    clean_name = re.sub(r"\s+", "-", name.strip())
+    return f"https://files.printables.com/{folder.lstrip('/')}/{clean_name}"
 
 
 def _printables_graphql_download_url(model_id: str, file_id: str, file_type: str) -> str | None:

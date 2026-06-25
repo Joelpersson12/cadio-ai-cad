@@ -536,7 +536,7 @@ def _try_import_source_stl(
         return None
     url = str(source_file.get("download_url") or "")
     file_type = str(source_file.get("file_type") or "").lower()
-    if file_type != "stl" or not url:
+    if file_type not in ("stl", "obj") or not url:
         return None
     try:
         from backend.services.stl_importer import import_stl_from_url
