@@ -13,6 +13,7 @@ from datetime import datetime
 import hashlib
 import html
 import json
+import os
 import re
 import time
 from typing import Any
@@ -438,6 +439,88 @@ def _printtype_to_example(item: dict[str, Any]) -> ExampleDesign | None:
         downloads=downloads,
         likes=likes,
     )
+
+
+# --- Thingiverse official REST API -----------------------------------------
+# The public Thingiverse website is Cloudflare-protected and rate-limits
+# datacenter IPs (HTTP 429). Their REST API at api.thingiverse.com is the
+# reliable path but requires a free app token (register at
+# thingiverse.com/apps/create). Set THINGIVERSE_TOKEN in the environment.
+
+def _thingiverse_token() -> str:
+    return os.environ.get("THINGIVERSE_TOKEN", "").strip()
+
+
+def _thingiverse_api_get(path: str, params: dict[str, Any] | None = None, timeout: float = 6.0) -> Any:
+    token = _thingiverse_token()
+    if not token:
+        return None
+    merged = dict(params or {})
+    merged["access_token"] = token
+    qs = "&".join(f"{key}={quote_plus(str(value))}" for key, value in merged.items())
+    url = f"https://api.thingiverse.com{path}?{qs}"
+    req = Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urlopen(req, timeout=timeout) as res:
+            return json.loads(res.read().decode("utf-8", errors="replace"))
+    except Exception:
+        return None
+
+
+def resolve_thingiverse_model_files(model_url: str, limit: int = 20) -> list[SourceModelFile]:
+    """List a Thingiverse thing's files (STL download URLs) via the REST API."""
+    token = _thingiverse_token()
+    if not token:
+        return []
+    match = re.search(r"thing:(\d+)", model_url or "")
+    if not match:
+        return []
+    thing_id = match.group(1)
+    cache_key = f"thingiverse:{thing_id}"
+    cached = _FILE_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+        return list(cached[1])
+
+    data = _thingiverse_api_get(f"/things/{thing_id}/files")
+    files: list[SourceModelFile] = []
+    if isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            file_id = str(item.get("id") or "").strip()
+            if not name or not file_id:
+                continue
+            suffix = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+            download_url = str(item.get("download_url") or item.get("public_url") or "")
+            if download_url.startswith("http") and "access_token=" not in download_url:
+                sep = "&" if "?" in download_url else "?"
+                download_url = f"{download_url}{sep}access_token={token}"
+            files.append(
+                SourceModelFile(
+                    id=file_id,
+                    name=name,
+                    source="thingiverse",
+                    file_type=suffix,
+                    file_size=int(item.get("size") or 0),
+                    preview_url=item.get("thumbnail") if isinstance(item.get("thumbnail"), str) else None,
+                    download_url=download_url or None,
+                    model_id=thing_id,
+                    model_url=model_url,
+                )
+            )
+    result = files[:limit]
+    _FILE_CACHE[cache_key] = (time.time(), result)
+    return list(result)
 
 
 _SOURCE_WEIGHTS = {
@@ -1263,33 +1346,68 @@ class PrintablesProvider(DesignProvider):
 
 
 class ThingiverseProvider(DesignProvider):
-    """Thingiverse design provider."""
-    
-    def __init__(self):
-        self._available = True
-    
+    """Thingiverse design provider (official REST API).
+
+    Uses api.thingiverse.com with a free app token (THINGIVERSE_TOKEN). The
+    public website is Cloudflare-protected and rate-limits server IPs, so the
+    API is the only reliable path. Reports unavailable until a token is set.
+    """
+
     def search(self, query: str, limit: int = 5) -> list[ExampleDesign]:
-        """Search Thingiverse for designs."""
+        if not _thingiverse_token():
+            return []
         cache_key = ("thingiverse", query.strip().lower(), limit)
         cached = _SEARCH_CACHE.get(cache_key)
         if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
             return list(cached[1])
-        try:
-            page = _fetch_text(f"https://www.thingiverse.com/search?q={quote_plus(query)}&type=things")
-        except Exception:
-            return []
-        results = _generic_link_results(page, "thingiverse", "https://www.thingiverse.com", limit)
+
+        data = _thingiverse_api_get(
+            f"/search/{quote_plus(query)}/",
+            {"type": "things", "per_page": max(limit, 20), "sort": "popular"},
+        )
+        hits = data.get("hits") if isinstance(data, dict) else None
+        results: list[ExampleDesign] = []
+        if isinstance(hits, list):
+            for hit in hits:
+                if not isinstance(hit, dict):
+                    continue
+                thing_id = str(hit.get("id") or "").strip()
+                name = str(hit.get("name") or "").strip()
+                if not thing_id or not name:
+                    continue
+                url = str(hit.get("public_url") or "").strip()
+                if "thingiverse.com" not in url:
+                    url = f"https://www.thingiverse.com/thing:{thing_id}"
+                likes = int(hit.get("like_count") or 0)
+                downloads = int(hit.get("download_count") or hit.get("collect_count") or 0)
+                image = hit.get("thumbnail")
+                results.append(
+                    ExampleDesign(
+                        id=_stable_id("thingiverse", url),
+                        title=name,
+                        source="thingiverse",
+                        url=url,
+                        image_url=image if isinstance(image, str) else None,
+                        category="3D Model",
+                        tags=_title_tags(name),
+                        popularity=_popularity(likes, downloads, 0.0),
+                        description=None,
+                        created_at=None,
+                        downloads=downloads,
+                        likes=likes,
+                    )
+                )
+        results.sort(key=lambda d: (d.popularity, d.likes, d.downloads), reverse=True)
+        results = results[:limit]
         _SEARCH_CACHE[cache_key] = (time.time(), results)
         return list(results)
-    
+
     def get_popular(self, category: str, limit: int = 5) -> list[ExampleDesign]:
-        """Get popular Thingiverse designs."""
         return self.search(category, limit)
-    
+
     def is_available(self) -> bool:
-        """Check Thingiverse availability."""
-        return self._available
-    
+        return bool(_thingiverse_token())
+
     @property
     def provider_name(self) -> str:
         return "Thingiverse"

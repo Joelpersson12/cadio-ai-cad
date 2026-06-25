@@ -176,7 +176,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-25T17:05Z-assembly-overlap-layout"
+BUILD_MARKER = "2026-06-25T17:25Z-thingiverse-api-stage1"
 
 
 @router.get("/api/debug/version")
@@ -344,6 +344,29 @@ def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict
         _search_probe("hose holder", True),
     ]
     trace["printables_gql"] = gql_trace
+
+    # Thingiverse API status: host reachability (no token), token presence, and
+    # a real provider search + file resolve when a token is configured.
+    tv: dict[str, Any] = {}
+    tv["reachable_probe"] = _raw_probe("https://api.thingiverse.com/search/phone%20stand/?type=things")
+    try:
+        from backend.services.design_providers import (
+            _thingiverse_token,
+            ThingiverseProvider,
+            resolve_thingiverse_model_files,
+        )
+        tv["token_present"] = bool(_thingiverse_token())
+        if _thingiverse_token():
+            hits = ThingiverseProvider().search(q, 5)
+            tv["search_count"] = len(hits)
+            tv["top"] = [{"title": h.title, "likes": h.likes, "downloads": h.downloads, "url": h.url} for h in hits[:3]]
+            if hits:
+                files = resolve_thingiverse_model_files(hits[0].url, 12)
+                tv["files"] = [{"name": f.name, "type": f.file_type, "size": f.file_size, "has_url": bool(f.download_url)} for f in files]
+    except Exception:
+        import traceback as _tb2
+        tv["error"] = _tb2.format_exc()[-500:]
+    trace["thingiverse"] = tv
 
     # 1) Cross-provider search (what the real generation path uses).
     try:
