@@ -149,20 +149,6 @@ export default function AiPanel({ floating = false }: { floating?: boolean }) {
   if (floating) {
     return (
       <div className="flex flex-col">
-        {/* Quick edits — horizontal scroll */}
-        <div className="flex gap-2 overflow-x-auto px-4 pt-3 pb-2 scrollbar-none">
-          {QUICK_COMMANDS.map((cmd) => (
-            <button
-              key={cmd}
-              onClick={() => void run(cmd, false)}
-              disabled={isLoading}
-              className="shrink-0 rounded-md border border-cadio-border/50 bg-cadio-bg/60 px-3 py-1.5 text-xs text-cadio-text/70 transition-colors hover:border-cadio-border/80 hover:text-cadio-text disabled:opacity-30"
-            >
-              {cmd}
-            </button>
-          ))}
-        </div>
-
         {/* Filters toggle */}
         <div className="border-t border-cadio-border/30 px-4 py-2">
           <button

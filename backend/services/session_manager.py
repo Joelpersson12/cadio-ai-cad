@@ -3666,6 +3666,114 @@ def split_object_by_line(session: Session, obj: CadObject, center: list[float], 
     return ["split rectangle into 2 editable bodies"]
 
 
+def _plane_clip_trimesh(
+    mesh: TriMesh,
+    nx: float,
+    ny: float,
+    nz: float,
+    d: float,
+    keep_sign: int = 1,
+) -> TriMesh:
+    """Clip a TriMesh, keeping the half where (nx*x + ny*y + nz*z + d) * keep_sign >= 0."""
+    result = TriMesh()
+
+    def sdist(v: tuple) -> float:
+        return (nx * v[0] + ny * v[1] + nz * v[2] + d) * keep_sign
+
+    def lerp_v(v1: tuple, v2: tuple, t: float) -> tuple:
+        return (
+            v1[0] + t * (v2[0] - v1[0]),
+            v1[1] + t * (v2[1] - v1[1]),
+            v1[2] + t * (v2[2] - v1[2]),
+        )
+
+    for tri in mesh.tris:
+        tri_verts = [mesh.verts[i] for i in tri]
+        dists = [sdist(v) for v in tri_verts]
+
+        in_poly: list[tuple] = []
+        for i in range(3):
+            j = (i + 1) % 3
+            vi, di = tri_verts[i], dists[i]
+            vj, dj = tri_verts[j], dists[j]
+            if di >= 0:
+                in_poly.append(vi)
+            if (di < 0) != (dj < 0):
+                t = di / (di - dj)
+                in_poly.append(lerp_v(vi, vj, t))
+
+        if len(in_poly) < 3:
+            continue
+
+        base = len(result.verts)
+        result.verts.extend(in_poly)
+        for k in range(1, len(in_poly) - 1):
+            result.tris.append((base, base + k, base + k + 1))
+
+    return result
+
+
+def cut_object_by_line(
+    session: Session,
+    obj: CadObject,
+    center_xy: list[float],
+    delta_xy: list[float],
+) -> list[str]:
+    """Split the object with a vertical plane defined by a 2D sketch line."""
+    dx = float(delta_xy[0])
+    dy = float(delta_xy[1])
+    length = math.sqrt(dx * dx + dy * dy)
+    if length < 1.0:
+        return ["cut skipped: line too short"]
+
+    shape = obj.get("shape")
+    if not isinstance(shape, TriMesh):
+        return ["cut skipped: shape not available for this object type"]
+
+    transform: Transform = obj["transform"]
+    # Convert world start point to local object space (subtract position only)
+    px = float(center_xy[0]) - dx / 2.0 - float(transform.position[0])
+    py = float(center_xy[1]) - dy / 2.0 - float(transform.position[1])
+
+    # Cut plane normal: perpendicular to line direction in XY, vertical in Z
+    nx = -dy / length
+    ny = dx / length
+    nz = 0.0
+    d = -(nx * px + ny * py)
+
+    half_a = _plane_clip_trimesh(shape, nx, ny, nz, d, keep_sign=+1)
+    half_b = _plane_clip_trimesh(shape, nx, ny, nz, d, keep_sign=-1)
+
+    if not half_a.tris or not half_b.tris:
+        return ["cut skipped: cut line does not cross the model"]
+
+    base_name = obj.get("name", "part")
+    for suffix, half_shape in [("_A", half_a), ("_B", half_b)]:
+        new_obj: CadObject = {
+            "id": str(uuid.uuid4()),
+            "name": f"{base_name}{suffix}",
+            "shape": half_shape,
+            "parameters": {},
+            "feature_tree": [],
+            "transform": Transform(
+                position=list(transform.position),
+                rotation=list(transform.rotation),
+                scale=list(transform.scale),
+            ),
+            "material": obj.get("material", "PLA"),
+            "color": obj.get("color", "#b8babd"),
+            "primitive": "cut_half",
+            "manual": False,
+        }
+        add_object(session, new_obj)
+
+    oid = obj["id"]
+    session["objects"].pop(oid, None)
+    session["object_order"] = [x for x in session["object_order"] if x != oid]
+    session["selected_object_id"] = session["object_order"][-1] if session["object_order"] else ""
+    return [f"cut '{base_name}' into 2 separate halves"]
+
+
 # ---------------------------------------------------------------------------
 # Session CRUD
 # ---------------------------------------------------------------------------

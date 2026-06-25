@@ -93,6 +93,8 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
         onClose?.();
       } else if (msg.includes("free download") || msg.includes("limit") || msg.toLowerCase().includes("upgrade") || msg.includes("402")) {
         onRequestUpgrade?.();
+      } else if (msg.toLowerCase().includes("session not found") || msg.includes("404")) {
+        setExportError("Session expired — please regenerate your model and try again.");
       } else {
         setExportError(msg);
       }
