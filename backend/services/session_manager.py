@@ -796,7 +796,32 @@ def _select_source_assembly_files(
     if len(selected) >= 2:
         stems = [re.sub(r"\d+$", "", re.sub(r"[^a-z0-9]", "", _source_file_name(s).lower().rsplit(".", 1)[0])) for s in selected]
         has_numbered_parts = len(set(stems)) == 1 and stems[0]
-    if len(selected) >= 2 and (has_complement or has_left_right or has_numbered_parts or len(selected_roles) >= 3):
+
+    # Detect a shared filename prefix (e.g. "Zarazka_pneu_V3" + "Zarazka_pneu_rolna").
+    # Creators name the parts of one model with a common prefix, so two or more
+    # distinct good components sharing a meaningful prefix is a strong assembly
+    # signal. Variants (small/large/v2…) were already collapsed above, so the
+    # files reaching here with a shared prefix are genuinely separate parts.
+    has_common_prefix = False
+    if len(selected) >= 2:
+        token_lists = [
+            [tok for tok in re.split(r"[^a-z0-9]+", _source_file_name(s).lower().rsplit(".", 1)[0]) if tok]
+            for s in selected
+        ]
+        if all(token_lists):
+            common: list[str] = []
+            for group in zip(*token_lists):
+                if all(tok == group[0] for tok in group):
+                    common.append(group[0])
+                else:
+                    break
+            # Ignore generic shared words that don't imply one model.
+            common = [tok for tok in common if tok not in {"the", "model", "print", "stl", "part", "parts"}]
+            has_common_prefix = bool(common) and len("".join(common)) >= 4
+
+    if len(selected) >= 2 and (
+        has_complement or has_left_right or has_numbered_parts or has_common_prefix or len(selected_roles) >= 3
+    ):
         return selected
     return []
 
