@@ -389,6 +389,57 @@ def _popularity(likes: int, downloads: int, rating: float) -> int:
     return int(round(score))
 
 
+def _printtype_to_example(item: dict[str, Any]) -> ExampleDesign | None:
+    """Build an ExampleDesign from a Printables `PrintType` node.
+
+    Works for both GraphQL `searchPrints2` items and PrintType nodes embedded
+    in legacy search HTML — they share the same field shape.
+    """
+    model_id = item.get("id")
+    slug = item.get("slug")
+    name = item.get("name")
+    if not model_id or not slug or not name:
+        return None
+    model_id = str(model_id)
+    slug = str(slug)
+    likes = int(item.get("likesCount") or 0)
+    downloads = int(item.get("downloadCount") or 0)
+    try:
+        rating = float(item.get("ratingAvg") or 0.0)
+    except (TypeError, ValueError):
+        rating = 0.0
+
+    category = "3D Model"
+    cat = item.get("category")
+    if isinstance(cat, dict):
+        path = cat.get("path")
+        if isinstance(path, list) and path:
+            last = path[-1]
+            if isinstance(last, dict):
+                category = str(last.get("nameEn") or last.get("name") or category)
+
+    image_url = None
+    image = item.get("image")
+    if isinstance(image, dict) and image.get("filePath"):
+        image_url = f"https://media.printables.com/{image['filePath']}"
+
+    url = f"https://www.printables.com/model/{model_id}-{slug}"
+    return ExampleDesign(
+        id=_stable_id("printables", url),
+        title=str(name),
+        source="printables",
+        url=url,
+        image_url=image_url,
+        category=category,
+        tags=_title_tags(str(name)),
+        popularity=_popularity(likes, downloads, rating),
+        description=None,
+        created_at=_parse_date(item.get("datePublished")),
+        downloads=downloads,
+        likes=likes,
+    )
+
+
 _SOURCE_WEIGHTS = {
     "printables": 22,
     "cults3d": 15,
@@ -1063,30 +1114,99 @@ class PrintablesProvider(DesignProvider):
     def __init__(self):
         self._available = True
     
+    # GraphQL query for Printables' public search API. Printables stopped
+    # embedding search results in their HTML (app v4.7.10+), so the API is the
+    # only reliable source. `ordering` is a SearchChoicesEnum (unquoted enum).
+    _SEARCH_QUERY = (
+        "query SearchModels($q: String!, $limit: Int!, $offset: Int!, $ordering: SearchChoicesEnum) {"
+        "  searchPrints2(query: $q, limit: $limit, offset: $offset, ordering: $ordering, printType: print) {"
+        "    items { ... on PrintType {"
+        "      id name slug likesCount downloadCount ratingAvg datePublished"
+        "      image { filePath }"
+        "      category { path { nameEn name } }"
+        "    } }"
+        "  }"
+        "}"
+    )
+
     def search(self, query: str, limit: int = 5) -> list[ExampleDesign]:
-        """Search Printables for designs."""
+        """Search Printables for designs via their public GraphQL API."""
         cache_key = ("printables", query.strip().lower(), limit)
         cached = _SEARCH_CACHE.get(cache_key)
         if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
             return list(cached[1])
 
-        url = f"https://www.printables.com/search/models?q={quote_plus(query)}"
-        try:
-            page = _fetch_text(url)
-        except Exception:
-            return []
-        results = self._parse_search_page(page, limit)
+        results = self._search_api(query, limit)
+        if not results:
+            # Fallback to legacy HTML scraping (kept in case the API changes).
+            try:
+                page = _fetch_text(
+                    f"https://www.printables.com/search/models?q={quote_plus(query)}",
+                    timeout=6.0,
+                )
+                results = self._parse_search_page(page, limit)
+            except Exception:
+                results = []
         _SEARCH_CACHE[cache_key] = (time.time(), results)
         return list(results)
-    
+
+    def _search_api(self, query: str, limit: int) -> list[ExampleDesign]:
+        payload = json.dumps(
+            {
+                "query": self._SEARCH_QUERY,
+                "variables": {
+                    "q": query,
+                    "limit": max(limit, 20),
+                    "offset": 0,
+                    "ordering": "rating",
+                },
+            }
+        ).encode("utf-8")
+        req = Request(
+            "https://api.printables.com/graphql/",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Origin": "https://www.printables.com",
+                "Referer": "https://www.printables.com/",
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(req, timeout=6.0) as res:
+                data = json.loads(res.read().decode("utf-8", errors="replace"))
+        except Exception:
+            return []
+        items = (
+            data.get("data", {})
+            .get("searchPrints2", {})
+            .get("items")
+        )
+        if not isinstance(items, list):
+            return []
+        results: list[ExampleDesign] = []
+        for item in items:
+            if isinstance(item, dict) and item.get("id") and item.get("slug") and item.get("name"):
+                design = _printtype_to_example(item)
+                if design is not None:
+                    results.append(design)
+        results.sort(key=lambda d: (d.popularity, d.likes, d.downloads), reverse=True)
+        return results[:limit]
+
     def get_popular(self, category: str, limit: int = 5) -> list[ExampleDesign]:
         """Get popular Printables designs."""
         return self.search(category, limit)
-    
+
     def is_available(self) -> bool:
         """Check Printables availability."""
         return self._available
-    
+
     @property
     def provider_name(self) -> str:
         return "Printables"
@@ -1122,45 +1242,9 @@ class PrintablesProvider(DesignProvider):
 
         results: list[ExampleDesign] = []
         for item in raw_items.values():
-            model_id = str(item["id"])
-            slug = str(item["slug"])
-            likes = int(item.get("likesCount") or 0)
-            downloads = int(item.get("downloadCount") or 0)
-            try:
-                rating = float(item.get("ratingAvg") or 0.0)
-            except (TypeError, ValueError):
-                rating = 0.0
-            category = "3D Model"
-            cat = item.get("category")
-            if isinstance(cat, dict):
-                path = cat.get("path")
-                if isinstance(path, list) and path:
-                    last = path[-1]
-                    if isinstance(last, dict):
-                        category = str(last.get("nameEn") or last.get("name") or category)
-
-            image_url = None
-            image = item.get("image")
-            if isinstance(image, dict) and image.get("filePath"):
-                image_url = f"https://media.printables.com/{image['filePath']}"
-
-            url = f"https://www.printables.com/model/{model_id}-{slug}"
-            results.append(
-                ExampleDesign(
-                    id=_stable_id("printables", url),
-                    title=str(item["name"]),
-                    source="printables",
-                    url=url,
-                    image_url=image_url,
-                    category=category,
-                    tags=_title_tags(str(item["name"])),
-                    popularity=_popularity(likes, downloads, rating),
-                    description=None,
-                    created_at=_parse_date(item.get("datePublished")),
-                    downloads=downloads,
-                    likes=likes,
-                )
-            )
+            design = _printtype_to_example(item)
+            if design is not None:
+                results.append(design)
 
         results.sort(key=lambda d: (d.popularity, d.likes, d.downloads), reverse=True)
         return results[:limit]
