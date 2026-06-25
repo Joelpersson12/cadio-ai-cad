@@ -174,6 +174,18 @@ def health() -> dict[str, Any]:
     }
 
 
+# Bump this string on every deploy so /api/debug/version proves which code
+# is actually live on the Hugging Face Space (build can lag the file sync).
+BUILD_MARKER = "2026-06-25T15:50Z-printables-graphql-search"
+
+
+@router.get("/api/debug/version")
+def debug_version() -> dict[str, Any]:
+    """Return the live build marker so we can confirm HF actually redeployed."""
+    import time as _time
+    return {"build": BUILD_MARKER, "server_time": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())}
+
+
 @router.get("/api/debug/search")
 def debug_search(q: str = Query(default="pressure washer hose guide")) -> dict[str, Any]:
     """Debug endpoint: test Printables search + file resolution for a query."""
