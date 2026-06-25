@@ -521,9 +521,11 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     snapSelectedObjects,
     setPrinter,
     runPrompt,
+    sourceInfo,
   } = useCadStore();
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
+  const [showMobileSourceInfo, setShowMobileSourceInfo] = useState(false);
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -838,6 +840,18 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             showMeasurements={showMeasurements}
           />
           {modelBusy && <ModelLoadingOverlay status={status} />}
+          {sourceInfo.length > 0 && (
+            <button
+              onClick={() => setShowMobileSourceInfo(true)}
+              className="absolute bottom-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-cadio-border/60 bg-cadio-surface/80 text-cadio-muted shadow-lg backdrop-blur-sm hover:border-cadio-accent/50 hover:text-cadio-accent transition-all"
+              title="Source info"
+            >
+              <span className="text-sm font-bold leading-none">i</span>
+            </button>
+          )}
+          {showMobileSourceInfo && sourceInfo.length > 0 && (
+            <SourceInfoModal sources={sourceInfo} onClose={() => setShowMobileSourceInfo(false)} />
+          )}
         </div>
 
         <MobileModelVariantBar />
