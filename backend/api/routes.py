@@ -196,6 +196,105 @@ def debug_search(q: str = Query(default="pressure washer hose guide")) -> dict[s
         return {"query": q, "error": str(exc)}
 
 
+@router.get("/api/debug/pipeline")
+def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict[str, Any]:
+    """Trace the full source->mesh pipeline so we can see exactly where it fails
+    on the live server (search, file resolution, signed link, STL fetch, parse).
+    """
+    import time as _time
+    from urllib.request import Request as _Req, urlopen as _open
+
+    trace: dict[str, Any] = {"query": q}
+
+    # 1) Cross-provider search (what the real generation path uses).
+    try:
+        from backend.services.provider_extensions import get_extended_provider_registry
+        registry = get_extended_provider_registry()
+        per_provider: dict[str, Any] = {}
+        for name, prov in registry.providers.items():
+            try:
+                t0 = _time.time()
+                hits = prov.search(q, limit=5) if prov.is_available() else []
+                per_provider[name] = {
+                    "available": prov.is_available(),
+                    "count": len(hits),
+                    "ms": int((_time.time() - t0) * 1000),
+                    "top": [{"title": h.title, "likes": h.likes, "downloads": h.downloads, "url": h.url} for h in hits[:2]],
+                }
+            except Exception as exc:
+                per_provider[name] = {"error": str(exc)}
+        trace["providers"] = per_provider
+
+        ranked = registry.search_all(q, limit=8)
+        trace["search_all"] = [
+            {"title": r.title, "source": r.source, "likes": r.likes, "downloads": r.downloads, "url": r.url}
+            for r in ranked
+        ]
+    except Exception as exc:
+        trace["search_error"] = str(exc)
+        return trace
+
+    # 2) For the best Printables result, resolve files + try to actually download.
+    try:
+        from backend.services.design_providers import (
+            resolve_printables_model_files,
+            printables_fresh_download_url,
+        )
+        printables_hits = [r for r in ranked if r.source == "printables"]
+        if not printables_hits:
+            trace["download"] = "no printables results to import"
+            return trace
+        target = printables_hits[0]
+        trace["target"] = {"title": target.title, "url": target.url}
+        files = resolve_printables_model_files(target.url, limit=12)
+        trace["files"] = [
+            {"name": f.name, "type": f.file_type, "size": f.file_size,
+             "model_id": f.model_id, "id": f.id, "download_url": f.download_url}
+            for f in files
+        ]
+        stl_files = [f for f in files if f.file_type in ("stl", "obj")]
+        if not stl_files:
+            trace["download"] = "no STL/OBJ files listed on model page"
+            return trace
+
+        def _probe(url: str) -> dict[str, Any]:
+            if not url:
+                return {"url": url, "skipped": True}
+            try:
+                req = _Req(url, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Accept": "*/*", "Referer": "https://www.printables.com/",
+                })
+                with _open(req, timeout=15.0) as res:
+                    data = res.read(4096)
+                    return {"url": url[:120], "status": getattr(res, "status", 200),
+                            "content_type": res.headers.get("content-type"),
+                            "content_length": res.headers.get("content-length"),
+                            "first_bytes": data[:16].hex()}
+            except Exception as exc:
+                return {"url": url[:120], "error": str(exc)}
+
+        f0 = stl_files[0]
+        result: dict[str, Any] = {"file": f0.name}
+        result["guessed_url_probe"] = _probe(f0.download_url or "")
+        signed = printables_fresh_download_url(f0.model_id, f0.id)
+        result["signed_link"] = signed[:120] if signed else None
+        if signed:
+            result["signed_url_probe"] = _probe(signed)
+        # Full import attempt through the real importer.
+        try:
+            from backend.services.stl_importer import import_stl_from_url
+            url_to_try = signed or f0.download_url or ""
+            mesh = import_stl_from_url(url_to_try) if url_to_try else None
+            result["mesh"] = {"verts": len(mesh.verts), "tris": len(mesh.tris)} if mesh else None
+        except Exception as exc:
+            result["mesh_error"] = str(exc)
+        trace["download"] = result
+    except Exception as exc:
+        trace["download_error"] = str(exc)
+    return trace
+
+
 @router.post("/api/auth/login", response_model=None)
 def auth_login(data: AuthRequest) -> dict[str, Any] | JSONResponse:
     try:
