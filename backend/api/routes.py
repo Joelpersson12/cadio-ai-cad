@@ -202,9 +202,43 @@ def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict
     on the live server (search, file resolution, signed link, STL fetch, parse).
     """
     import time as _time
+    from urllib.parse import quote_plus as _qp
     from urllib.request import Request as _Req, urlopen as _open
 
     trace: dict[str, Any] = {"query": q}
+
+    # 0) Raw search-page capture: see WHAT each site actually returns to the
+    #    server (real model markup vs. a Cloudflare/captcha block page vs. a
+    #    changed page structure). This pinpoints why parsers return 0 results.
+    def _raw_probe(url: str) -> dict[str, Any]:
+        try:
+            req = _Req(url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/json,*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+            })
+            t0 = _time.time()
+            with _open(req, timeout=12.0) as res:
+                body = res.read(200000).decode("utf-8", errors="replace")
+            low = body.lower()
+            return {
+                "status": getattr(res, "status", 200),
+                "ms": int((_time.time() - t0) * 1000),
+                "length": len(body),
+                "content_type": res.headers.get("content-type"),
+                "has_printtype": "printtype" in low,
+                "has_sveltekit_fetched": "data-sveltekit-fetched" in low,
+                "blocked_markers": [m for m in ("just a moment", "cloudflare", "captcha", "cf-chl", "access denied", "enable javascript") if m in low],
+                "head": body[:300],
+            }
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    trace["raw"] = {
+        "printables_html": _raw_probe(f"https://www.printables.com/search/models?q={_qp(q)}"),
+        "printables_api": _raw_probe(f"https://api.printables.com/graphql/?query=%7B__typename%7D"),
+        "thingiverse_html": _raw_probe(f"https://www.thingiverse.com/search?q={_qp(q)}&type=things"),
+    }
 
     # 1) Cross-provider search (what the real generation path uses).
     try:
