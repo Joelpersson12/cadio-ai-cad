@@ -240,6 +240,58 @@ def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict
         "thingiverse_html": _raw_probe(f"https://www.thingiverse.com/search?q={_qp(q)}&type=things"),
     }
 
+    # 0b) Introspect the Printables GraphQL API + try candidate search queries,
+    #     so we can rebuild search on their stable API (their HTML no longer
+    #     embeds results). Returns the search field names + a sample response.
+    def _gql(payload: dict[str, Any]) -> dict[str, Any]:
+        import json as _json
+        try:
+            req = _Req(
+                "https://api.printables.com/graphql/",
+                data=_json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "Origin": "https://www.printables.com",
+                    "Referer": "https://www.printables.com/",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                },
+                method="POST",
+            )
+            with _open(req, timeout=12.0) as res:
+                return {"status": getattr(res, "status", 200), "body": res.read(8000).decode("utf-8", errors="replace")}
+        except Exception as exc:
+            body = ""
+            try:
+                body = exc.read(4000).decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            return {"error": str(exc), "body": body}
+
+    gql_trace: dict[str, Any] = {}
+    # List every root Query field whose name hints at search.
+    gql_trace["query_fields"] = _gql({
+        "query": "{ __schema { queryType { fields { name args { name type { name kind ofType { name kind } } } } } } }"
+    })
+    # Try the historically-correct Printables search query shapes.
+    candidates = [
+        ("searchPrints2", {
+            "query": "query S($q:String!,$limit:Int!,$offset:Int!){searchPrints2(query:$q,limit:$limit,offset:$offset,ordering:\"-rating\",printType:print){items{... on PrintType{id name slug likesCount downloadCount}} totalCount}}",
+            "variables": {"q": q, "limit": 5, "offset": 0},
+        }),
+        ("printsSearch", {
+            "query": "query S($q:String!){printsSearch(query:$q,limit:5,offset:0){items{id name slug likesCount downloadCount} total}}",
+            "variables": {"q": q},
+        }),
+        ("morePrints", {
+            "query": "query S($q:String!){morePrints(query:$q,limit:5,offset:0,ordering:\"-likes\"){items{id name slug likesCount downloadCount} totalCount}}",
+            "variables": {"q": q},
+        }),
+    ]
+    for label, payload in candidates:
+        gql_trace[label] = _gql(payload)
+    trace["printables_gql"] = gql_trace
+
     # 1) Cross-provider search (what the real generation path uses).
     try:
         from backend.services.provider_extensions import get_extended_provider_registry
