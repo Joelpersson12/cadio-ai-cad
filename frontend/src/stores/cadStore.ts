@@ -22,6 +22,7 @@ import {
   deleteObject as apiDeleteObject,
   updateObjectTransform as apiUpdateTransform,
   switchSourceModel as apiSwitchSourceModel,
+  selectSourceFile as apiSelectSourceFile,
   createPrimitive as apiCreatePrimitive,
   applyExpertOperation as apiApplyExpertOperation,
   listPrinters as apiListPrinters,
@@ -73,6 +74,7 @@ interface CadState {
   operationAmount: number;
   editHistory: Array<Record<string, unknown>>;
   sourceInfo: import("../utils/types").SourceExample[];
+  sourceFiles: import("../utils/types").SourceFileOption[];
 
   // Actions
   setTransformMode: (mode: TransformMode) => void;
@@ -103,6 +105,7 @@ interface CadState {
   setSelectedScalePercent: (percent: number) => Promise<void>;
   snapSelectedObjects: (snap: "on_plate" | "center_on_plate") => Promise<void>;
   switchSourceModel: (direction: "next" | "previous") => Promise<void>;
+  selectSourceFile: (fileId: string) => Promise<void>;
   createPrimitive: (payload: {
     primitive: ExpertTool;
     center: [number, number];
@@ -150,6 +153,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   operationAmount: 2,
   editHistory: [],
   sourceInfo: [],
+  sourceFiles: [],
 
   // ---------------------------------------------------------------------------
   // Setters
@@ -236,6 +240,7 @@ export const useCadStore = create<CadState>((set, get) => ({
       printSettings: payload.print_settings,
       editHistory: payload.edit_history,
       sourceInfo: payload.source_info ?? [],
+      sourceFiles: payload.source_files ?? [],
     });
   },
 
@@ -435,6 +440,22 @@ export const useCadStore = create<CadState>((set, get) => ({
         session_id: sessionId,
         direction,
       });
+      get().applyScenePayload(data);
+      await waitForMinimumBusy(startedAt);
+      set({ status: `Updated v${data.version}`, isBusy: false });
+    } catch (err) {
+      await waitForMinimumBusy(startedAt);
+      set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
+    }
+  },
+
+  selectSourceFile: async (fileId) => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    const startedAt = Date.now();
+    set({ status: "Loading file...", isBusy: true });
+    try {
+      const data = await apiSelectSourceFile({ session_id: sessionId, file_id: fileId });
       get().applyScenePayload(data);
       await waitForMinimumBusy(startedAt);
       set({ status: `Updated v${data.version}`, isBusy: false });

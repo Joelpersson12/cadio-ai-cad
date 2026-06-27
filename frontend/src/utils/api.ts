@@ -265,6 +265,16 @@ export async function switchSourceModel(payload: {
   });
 }
 
+export async function selectSourceFile(payload: {
+  session_id: string;
+  file_id: string;
+}): Promise<ScenePayload> {
+  return request<ScenePayload>("/api/source-model/select-file", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateAppearance(payload: {
   session_id: string;
   object_id?: string;

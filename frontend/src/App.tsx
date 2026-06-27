@@ -6,7 +6,7 @@ import { loginCadioAccount, loginWithGoogle } from "./utils/auth";
 import { useCadStore } from "./stores/cadStore";
 import { useWebSocket } from "./hooks/useWebSocket";
 import CadViewport from "./components/CadViewport";
-import AiPanel, { SourceInfoModal } from "./components/AiPanel";
+import AiPanel, { SourceInfoModal, SourceFilesModal } from "./components/AiPanel";
 import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
 import LandingPage from "./components/LandingPage";
@@ -534,11 +534,14 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     setPrinter,
     runPrompt,
     sourceInfo,
+    sourceFiles,
+    selectSourceFile,
   } = useCadStore();
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [showMobileSourceInfo, setShowMobileSourceInfo] = useState(false);
   const [showDesktopSourceInfo, setShowDesktopSourceInfo] = useState(false);
+  const [showSourceFiles, setShowSourceFiles] = useState(false);
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -649,6 +652,28 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         )}
         {showDesktopSourceInfo && sourceInfo.length > 0 && (
           <SourceInfoModal sources={sourceInfo} onClose={() => setShowDesktopSourceInfo(false)} />
+        )}
+
+        {/* Source file picker — choose which downloadable file to place */}
+        {sourceFiles.length > 1 && (
+          <button
+            onClick={() => setShowSourceFiles(true)}
+            title="Choose model file"
+            className="absolute bottom-5 left-20 z-20 flex h-10 items-center gap-2 rounded-xl border border-cadio-border/60 bg-cadio-surface/85 px-3 text-cadio-muted shadow-lg backdrop-blur-sm transition-all hover:border-cadio-accent/50 hover:text-cadio-accent"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span className="text-xs font-semibold">{sourceFiles.filter((f) => f.id !== "__all__").length} files</span>
+          </button>
+        )}
+        {showSourceFiles && sourceFiles.length > 0 && (
+          <SourceFilesModal
+            files={sourceFiles}
+            busy={isBusy}
+            onSelect={(fileId) => { void selectSourceFile(fileId); setShowSourceFiles(false); }}
+            onClose={() => setShowSourceFiles(false)}
+          />
         )}
 
         {/* Top bar */}
@@ -881,6 +906,24 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           )}
           {showMobileSourceInfo && sourceInfo.length > 0 && (
             <SourceInfoModal sources={sourceInfo} onClose={() => setShowMobileSourceInfo(false)} />
+          )}
+          {sourceFiles.length > 1 && (
+            <button
+              onClick={() => setShowSourceFiles(true)}
+              className="absolute bottom-3 left-14 z-10 flex h-8 items-center gap-1.5 rounded-full border border-cadio-border/60 bg-cadio-surface/80 px-3 text-cadio-muted shadow-lg backdrop-blur-sm hover:border-cadio-accent/50 hover:text-cadio-accent transition-all"
+              title="Choose model file"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              <span className="text-[11px] font-semibold">{sourceFiles.filter((f) => f.id !== "__all__").length}</span>
+            </button>
+          )}
+          {showSourceFiles && sourceFiles.length > 0 && (
+            <SourceFilesModal
+              files={sourceFiles}
+              busy={isBusy}
+              onSelect={(fileId) => { void selectSourceFile(fileId); setShowSourceFiles(false); }}
+              onClose={() => setShowSourceFiles(false)}
+            />
           )}
         </div>
 
