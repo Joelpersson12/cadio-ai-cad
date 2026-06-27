@@ -146,16 +146,20 @@ function formatFileSize(bytes?: number): string {
 
 export function SourceFilesModal({
   files,
+  source,
   onSelect,
   onClose,
   busy = false,
 }: {
   files: import("../utils/types").SourceFileOption[];
+  source?: SourceExample;
   onSelect: (fileId: string) => void;
   onClose: () => void;
   busy?: boolean;
 }) {
   if (!files.length) return null;
+  const lic = source ? sourceLicense(source) : null;
+  const srcLabel = source ? (SOURCE_LABELS[source.source] ?? source.source) : "";
   return (
     <div
       className="fixed inset-0 z-[200] grid place-items-center px-4 py-6"
@@ -169,8 +173,8 @@ export function SourceFilesModal({
       >
         <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-white/7" style={{ background: "#0d1318" }}>
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-white/30">Choose a file</p>
-            <p className="mt-0.5 text-[11px] text-white/40">This model has several files — pick which to place on the build plate.</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-white/30">Choose a model file</p>
+            <p className="mt-0.5 text-[11px] text-white/40">This design has several files — pick which one to place on the build plate.</p>
           </div>
           <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -178,19 +182,40 @@ export function SourceFilesModal({
             </svg>
           </button>
         </div>
+        {source && lic && (
+          <div className="border-b border-white/7 px-5 py-3" style={{ background: "rgba(255,255,255,0.02)" }}>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold text-white leading-snug">{source.title}</p>
+              <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(43,184,220,0.15)", color: "#2bb8dc" }}>{srcLabel}</span>
+            </div>
+            {source.author && <p className="mt-0.5 text-[11px] text-white/40">by {source.author}</p>}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {lic.lic?.url ? (
+                <a href={lic.lic.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-cadio-accent hover:underline">{lic.name}</a>
+              ) : (
+                <span className="text-[11px] font-semibold text-white/70">{lic.name}</span>
+              )}
+              <PermissionBadge ok={lic.lic?.allow_commercial ?? false} label="Commercial" />
+              <PermissionBadge ok={lic.editable} label="Editable" />
+            </div>
+            {!lic.editable && (
+              <p className="mt-1.5 text-[11px] text-[#ff9f0a]">⚠ This model's license does not allow editing.</p>
+            )}
+          </div>
+        )}
         <div className="px-4 py-4 space-y-2">
           {files.map((f) => {
             const isAssembly = f.id === "__all__";
             return (
               <button
                 key={f.id}
-                disabled={busy || f.active}
+                disabled={busy}
                 onClick={() => onSelect(f.id)}
-                className={`flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                className={`group flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-colors disabled:opacity-50 ${
                   f.active
                     ? "border border-cadio-accent/40 bg-cadio-accent/10"
                     : "border border-white/7 bg-white/[0.03] hover:border-cadio-accent/30 hover:bg-white/[0.06]"
-                } disabled:cursor-default`}
+                }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className={`shrink-0 ${isAssembly ? "text-cadio-accent" : "text-white/40"}`}>
@@ -209,10 +234,14 @@ export function SourceFilesModal({
                     </p>
                   </div>
                 </div>
-                {f.active ? (
-                  <span className="shrink-0 rounded-full bg-cadio-accent/15 px-2 py-0.5 text-[10px] font-bold text-cadio-accent">On plate</span>
+                {isAssembly ? (
+                  <span className="shrink-0 text-[11px] font-semibold text-cadio-accent">Place all →</span>
+                ) : f.active ? (
+                  <span className="shrink-0 rounded-full bg-cadio-accent/15 px-2 py-0.5 text-[10px] font-bold text-cadio-accent">
+                    On plate<span className="text-white/40 group-hover:text-[#ff6961]"> · remove</span>
+                  </span>
                 ) : (
-                  <span className="shrink-0 text-[11px] font-semibold text-cadio-accent">Place →</span>
+                  <span className="shrink-0 text-[11px] font-semibold text-cadio-accent">+ Add</span>
                 )}
               </button>
             );

@@ -376,10 +376,12 @@ function CameraController({
     if (lastFitKey.current === fitKey) return;
     lastFitKey.current = fitKey;
 
-    // Calculate appropriate distance to frame the entire model
-    const size = Math.max(bounds.x, bounds.y, bounds.z, 50);
-    const distance = Math.max(size * 2.5, 380);
-    
+    // Frame the camera to the actual model size. A low floor keeps small parts
+    // from rendering tiny on a large plate (previously the 380 floor zoomed the
+    // camera way out for anything under ~150 mm).
+    const size = Math.max(bounds.x, bounds.y, bounds.z, 20);
+    const distance = Math.max(size * 2.3, 90);
+
     // Better camera positioning for isometric-like view
     camera.position.set(distance * 0.7, distance * 0.7, distance * 0.7);
     camera.near = 1;

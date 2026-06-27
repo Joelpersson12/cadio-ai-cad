@@ -75,6 +75,7 @@ interface CadState {
   editHistory: Array<Record<string, unknown>>;
   sourceInfo: import("../utils/types").SourceExample[];
   sourceFiles: import("../utils/types").SourceFileOption[];
+  notice: string | null;
 
   // Actions
   setTransformMode: (mode: TransformMode) => void;
@@ -106,6 +107,7 @@ interface CadState {
   snapSelectedObjects: (snap: "on_plate" | "center_on_plate") => Promise<void>;
   switchSourceModel: (direction: "next" | "previous") => Promise<void>;
   selectSourceFile: (fileId: string) => Promise<void>;
+  setNotice: (notice: string | null) => void;
   createPrimitive: (payload: {
     primitive: ExpertTool;
     center: [number, number];
@@ -154,6 +156,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   editHistory: [],
   sourceInfo: [],
   sourceFiles: [],
+  notice: null,
 
   // ---------------------------------------------------------------------------
   // Setters
@@ -489,8 +492,15 @@ export const useCadStore = create<CadState>((set, get) => ({
     }
   },
 
+  setNotice: (notice) => set({ notice }),
+
   createPrimitive: async ({ primitive, center, size, radius }) => {
-    const { sessionId, sketchHeight, objects } = get();
+    const { sessionId, sketchHeight, objects, sourceInfo } = get();
+    const lic = sourceInfo[0]?.license;
+    if (objects.length > 0 && lic && lic.verified && lic.editable === false) {
+      set({ notice: `Due to the license of this model (${lic.name}), it is not editable. Start a new model to use the tools.` });
+      return;
+    }
     set({ status: `Sketching ${primitive}...` });
     try {
       const data = await apiCreatePrimitive({
@@ -511,9 +521,14 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
 
   applyExpertOperation: async (operation, amountOverride, objectIdOverride, targetOverride) => {
-    const { sessionId, selectedObjectId, selectionMode, operationAmount } = get();
+    const { sessionId, selectedObjectId, selectionMode, operationAmount, sourceInfo } = get();
     const objectId = objectIdOverride || selectedObjectId;
     if (!sessionId || !objectId) return;
+    const lic = sourceInfo[0]?.license;
+    if (lic && lic.verified && lic.editable === false) {
+      set({ notice: `Due to the license of this model (${lic.name}), it is not editable. Start a new model to use the tools.` });
+      return;
+    }
     set({ status: `Applying ${operation}...` });
     try {
       const data = await apiApplyExpertOperation({

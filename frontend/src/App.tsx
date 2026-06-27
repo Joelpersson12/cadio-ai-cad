@@ -1,6 +1,6 @@
 /** Cadio App shell - Shapr3D-inspired layout with mobile support. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { loginCadioAccount, loginWithGoogle } from "./utils/auth";
 import { useCadStore } from "./stores/cadStore";
@@ -536,12 +536,15 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     sourceInfo,
     sourceFiles,
     selectSourceFile,
+    notice,
+    setNotice,
   } = useCadStore();
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [showMobileSourceInfo, setShowMobileSourceInfo] = useState(false);
   const [showDesktopSourceInfo, setShowDesktopSourceInfo] = useState(false);
   const [showSourceFiles, setShowSourceFiles] = useState(false);
+  const sourceFilesSig = useRef("");
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -559,6 +562,18 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
   useEffect(() => {
     void loadPrinters();
   }, [loadPrinters]);
+
+  // Auto-open the file chooser when a NEW multi-file model is imported, so the
+  // user picks which one to place instead of getting all parts at once. Keyed on
+  // the set of file ids so selecting within the same model doesn't re-open it.
+  useEffect(() => {
+    const ids = sourceFiles.filter((f) => f.id !== "__all__").map((f) => f.id).sort().join(",");
+    const multi = sourceFiles.filter((f) => f.id !== "__all__").length > 1;
+    if (ids && ids !== sourceFilesSig.current && multi) {
+      setShowSourceFiles(true);
+    }
+    sourceFilesSig.current = ids;
+  }, [sourceFiles]);
 
   useEffect(() => {
     const openExport = () => setExportOpen(true);
@@ -608,6 +623,31 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
   return (
     <div className="w-full h-[100dvh] relative bg-cadio-bg text-cadio-text font-sans overflow-hidden">
+      {/* Global notice popup (e.g. non-editable model) */}
+      {notice && (
+        <div
+          className="fixed inset-0 z-[300] grid place-items-center px-4"
+          style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)" }}
+          onClick={() => setNotice(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-6 text-center shadow-2xl"
+            style={{ background: "#0d1318", border: "1px solid rgba(255,159,10,0.3)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ background: "rgba(255,159,10,0.12)" }}>
+              <svg className="h-6 w-6 text-[#ff9f0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+            </div>
+            <p className="text-sm font-medium leading-relaxed text-white/80">{notice}</p>
+            <button
+              onClick={() => setNotice(null)}
+              className="mt-5 w-full rounded-lg bg-cadio-accent py-2.5 text-sm font-semibold text-cadio-bg hover:bg-cadio-accent-hover transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
       {/* ── Desktop layout — fullscreen viewport with floating overlays ── */}
       <div className="hidden md:block relative h-full w-full bg-cadio-bg">
 
@@ -673,8 +713,9 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         {showSourceFiles && sourceFiles.length > 0 && (
           <SourceFilesModal
             files={sourceFiles}
+            source={sourceInfo[0]}
             busy={isBusy}
-            onSelect={(fileId) => { void selectSourceFile(fileId); setShowSourceFiles(false); }}
+            onSelect={(fileId) => { if (fileId === "__all__") setShowSourceFiles(false); void selectSourceFile(fileId); }}
             onClose={() => setShowSourceFiles(false)}
           />
         )}
