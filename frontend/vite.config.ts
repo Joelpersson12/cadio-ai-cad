@@ -20,5 +20,17 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: false,
+    // Split heavy vendor libraries into their own cacheable chunks so the app
+    // loads faster and isn't one >500 kB bundle.
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ["three"],
+          "react-three": ["@react-three/fiber", "@react-three/drei"],
+          react: ["react", "react-dom"],
+        },
+      },
+    },
   },
 });
