@@ -637,35 +637,38 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         />
         {modelBusy && <ModelLoadingOverlay status={status} />}
 
-        {/* Persistent source / license info button — always present when a
-            model came from an external source (legal attribution requirement) */}
-        {sourceInfo.length > 0 && (
-          <button
-            onClick={() => setShowDesktopSourceInfo(true)}
-            title="Source & license"
-            className="absolute bottom-5 left-5 z-20 flex h-10 w-10 items-center justify-center rounded-xl border border-cadio-border/60 bg-cadio-surface/85 text-cadio-muted shadow-lg backdrop-blur-sm transition-all hover:border-cadio-accent/50 hover:text-cadio-accent"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </button>
+        {/* Source / license + file picker — top-left, clearly labelled and
+            always clickable (legal attribution requirement). */}
+        {(sourceInfo.length > 0 || sourceFiles.length > 1) && (
+          <div className="absolute left-4 top-20 z-30 flex flex-col items-start gap-2">
+            {sourceInfo.length > 0 && (
+              <button
+                onClick={() => setShowDesktopSourceInfo(true)}
+                title="Where this model is from and what you may do with it"
+                className="flex items-center gap-2 rounded-xl border border-cadio-accent/40 bg-cadio-surface/90 px-3 py-2 text-cadio-accent shadow-lg backdrop-blur-sm transition-all hover:bg-cadio-accent/10"
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-xs font-semibold">Source &amp; license</span>
+              </button>
+            )}
+            {sourceFiles.length > 1 && (
+              <button
+                onClick={() => setShowSourceFiles(true)}
+                title="Choose which model file to place on the build plate"
+                className="flex items-center gap-2 rounded-xl border border-cadio-border/60 bg-cadio-surface/90 px-3 py-2 text-cadio-muted shadow-lg backdrop-blur-sm transition-all hover:border-cadio-accent/50 hover:text-cadio-accent"
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="text-xs font-semibold">{sourceFiles.filter((f) => f.id !== "__all__").length} files to choose</span>
+              </button>
+            )}
+          </div>
         )}
         {showDesktopSourceInfo && sourceInfo.length > 0 && (
           <SourceInfoModal sources={sourceInfo} onClose={() => setShowDesktopSourceInfo(false)} />
-        )}
-
-        {/* Source file picker — choose which downloadable file to place */}
-        {sourceFiles.length > 1 && (
-          <button
-            onClick={() => setShowSourceFiles(true)}
-            title="Choose model file"
-            className="absolute bottom-5 left-20 z-20 flex h-10 items-center gap-2 rounded-xl border border-cadio-border/60 bg-cadio-surface/85 px-3 text-cadio-muted shadow-lg backdrop-blur-sm transition-all hover:border-cadio-accent/50 hover:text-cadio-accent"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span className="text-xs font-semibold">{sourceFiles.filter((f) => f.id !== "__all__").length} files</span>
-          </button>
         )}
         {showSourceFiles && sourceFiles.length > 0 && (
           <SourceFilesModal
@@ -717,7 +720,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         {/* Model variations (Next / Previous source model) */}
         <DesktopModelVariantBar />
 
-        {/* Left icon strip */}
+        {/* Left tool strip — labelled so it's clear what each button does */}
         <div className="absolute left-4 top-1/2 z-20 -translate-y-1/2 flex flex-col gap-2">
           {[
             { icon: "M12 4v16m8-8H4", label: "New", action: startBlankCreation, active: false },
@@ -726,8 +729,9 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             { icon: "M3 6l3 1m0 0l-3 9a5 5 0 006 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5 5 0 006 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3", label: "Measure", action: () => setShowMeasurements(v => !v), active: showMeasurements },
           ].map(({ icon, label, action, active }) => (
             <button key={label} onClick={action} title={label}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl border backdrop-blur-sm transition-all ${active ? "border-cadio-accent/50 bg-cadio-accent/10 text-cadio-accent" : "border-cadio-border/50 bg-cadio-surface/80 text-cadio-muted hover:border-cadio-accent/40 hover:text-cadio-text"}`}>
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d={icon} /></svg>
+              className={`flex h-10 w-32 items-center gap-3 rounded-xl border px-3 backdrop-blur-sm transition-all ${active ? "border-cadio-accent/50 bg-cadio-accent/10 text-cadio-accent" : "border-cadio-border/50 bg-cadio-surface/80 text-cadio-muted hover:border-cadio-accent/40 hover:text-cadio-text"}`}>
+              <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d={icon} /></svg>
+              <span className="text-xs font-semibold">{label}</span>
             </button>
           ))}
         </div>
@@ -740,9 +744,10 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           </button>
         </div>
 
-        {/* Bottom AI bar */}
-        <div className="absolute inset-x-0 bottom-5 z-20 flex justify-center px-6">
-          <div className="w-full max-w-2xl rounded-2xl border border-cadio-border/60 bg-cadio-surface/90 shadow-2xl backdrop-blur-xl">
+        {/* Bottom AI bar — outer wrapper is click-through so it never blocks the
+            viewport buttons sitting in the same band; the panel itself is not. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-5 z-20 flex justify-center px-6">
+          <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-cadio-border/60 bg-cadio-surface/90 shadow-2xl backdrop-blur-xl">
             <AiPanel floating />
           </div>
         </div>
