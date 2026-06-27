@@ -104,6 +104,7 @@ interface CadState {
     },
   ) => Promise<void>;
   setSelectedScalePercent: (percent: number) => Promise<void>;
+  scaleAllToFit: (percent: number) => Promise<void>;
   snapSelectedObjects: (snap: "on_plate" | "center_on_plate") => Promise<void>;
   switchSourceModel: (direction: "next" | "previous") => Promise<void>;
   selectSourceFile: (fileId: string) => Promise<void>;
@@ -402,6 +403,23 @@ export const useCadStore = create<CadState>((set, get) => ({
       set({ status: `Scale ${safePercent.toFixed(1)}%` });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });
+    }
+  },
+
+  scaleAllToFit: async (percent) => {
+    const { sessionId, objects } = get();
+    if (!sessionId || !objects.length) return;
+    const scale = Math.max(0.01, Math.min(10, percent / 100));
+    set({ status: `Scaling to ${percent.toFixed(0)}%...`, isBusy: true });
+    try {
+      let data: ScenePayload | null = null;
+      for (const object of objects) {
+        data = await apiUpdateTransform({ session_id: sessionId, object_id: object.id, scale: [scale, scale, scale] });
+      }
+      if (data) get().applyScenePayload(data);
+      set({ status: `Scaled to fit (${percent.toFixed(0)}%)`, isBusy: false });
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
     }
   },
 
