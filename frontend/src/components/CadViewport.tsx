@@ -26,6 +26,30 @@ const VIEW_COLORS = {
 };
 const SKETCH_GRID_STEP_MM = 5;
 
+// Plain-language labels for the editing tools so the toolbox reads like a
+// consumer app, not CAD jargon.
+const TOOL_LABELS: Record<ExpertTool, { label: string; hint: string; icon: string }> = {
+  select: { label: "Select", hint: "Click parts to select and move them", icon: "M3 3l7.07 17 2.51-7.42L20 10.07z" },
+  rectangle: { label: "Add box", hint: "Draw a rectangular block on the plate", icon: "M4 5h16v14H4z" },
+  circle: { label: "Add cylinder", hint: "Draw a round cylinder on the plate", icon: "M12 4a8 8 0 100 16 8 8 0 000-16z" },
+  hole: { label: "Make hole", hint: "Cut a round hole into the selected part", icon: "M12 4a8 8 0 100 16 8 8 0 000-16zm0 5a3 3 0 110 6 3 3 0 010-6z" },
+  line: { label: "Split", hint: "Split a part into two along a line", icon: "M5 12h14" },
+  cut: { label: "Cut slot", hint: "Cut a slot or notch out of a part", icon: "M5 7h14M5 12h14M5 17h14" },
+};
+
+const OP_LABELS: Record<string, { label: string; hint: string }> = {
+  extrude: { label: "Taller", hint: "Increase the height" },
+  fillet: { label: "Round", hint: "Round the edges" },
+  chamfer: { label: "Bevel", hint: "Bevel (flatten) the edges" },
+  shell: { label: "Hollow", hint: "Hollow the inside out" },
+};
+
+const SELECTION_LABELS: Record<SelectionMode, string> = {
+  body: "Whole part",
+  face: "Face",
+  edge: "Edge",
+};
+
 function visibleBodyColor(_obj: CadObject, selected: boolean, hovered: boolean) {
   if (selected) return VIEW_COLORS.selectedBody;
   if (hovered) return VIEW_COLORS.hoveredBody;
@@ -881,10 +905,11 @@ export default function CadViewport({
       <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-6 top-[72px] z-10 w-64 flex-col gap-2 rounded-2xl border border-cadio-border/50 bg-cadio-surface/90 p-3 shadow-2xl backdrop-blur-xl transition-all`}>
         <div className="flex items-center justify-between px-2 py-1 mb-2">
           <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted">
-            Expert Tools
+            Edit tools
           </div>
           <button
             type="button"
+            title="Close edit tools"
             onClick={() => {
               onSetExpertTool?.("select");
               onSetExpertMode?.(false);
@@ -895,10 +920,11 @@ export default function CadViewport({
           </button>
         </div>
         <div className="grid grid-cols-1 gap-1">
-          {(["select", "rectangle", "circle", "line", "hole", "cut"] as ExpertTool[]).map((tool) => (
+          {(["select", "rectangle", "circle", "hole", "line", "cut"] as ExpertTool[]).map((tool) => (
             <button
               key={tool}
               disabled={!expertMode}
+              title={TOOL_LABELS[tool].hint}
               onClick={() => onSetExpertTool?.(tool)}
               className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
                 expertMode && expertTool === tool
@@ -906,31 +932,34 @@ export default function CadViewport({
                   : "text-cadio-muted hover:bg-cadio-border/30 hover:text-white disabled:opacity-30"
               }`}
             >
-              <span className="capitalize">{tool}</span>
+              <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d={TOOL_LABELS[tool].icon} /></svg>
+              <span>{TOOL_LABELS[tool].label}</span>
             </button>
           ))}
         </div>
         <div className="h-px bg-cadio-border/30 my-1 mx-2" />
+        <p className="px-2 pt-1 text-[9px] font-bold uppercase tracking-widest text-cadio-muted/70">Select by</p>
         <div className="grid grid-cols-3 gap-1 px-1">
           {(["body", "face", "edge"] as SelectionMode[]).map((mode) => (
             <button
               key={mode}
               disabled={!expertMode}
               onClick={() => onSetSelectionMode?.(mode)}
-              className={`py-2 rounded-md text-[10px] font-bold uppercase tracking-tighter transition-all ${
+              className={`py-2 rounded-md text-[10px] font-bold transition-all ${
                 expertMode && selectionMode === mode
                   ? "bg-cadio-accent/10 border border-cadio-accent text-cadio-accent"
                   : "border border-transparent text-cadio-muted hover:text-white"
               }`}
             >
-              {mode}
+              {SELECTION_LABELS[mode]}
             </button>
           ))}
         </div>
         <div className="my-1 h-px bg-cadio-border/30 mx-2" />
         <div className="space-y-3 px-1 pb-1">
-          <label className="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-tight text-cadio-muted">
-            <span>New Height</span>
+          <p className="px-1 text-[9px] font-bold uppercase tracking-widest text-cadio-muted/70">Shape edits</p>
+          <label className="flex items-center justify-between gap-2 text-[10px] font-semibold text-cadio-muted">
+            <span>New shape height (mm)</span>
             <input
               type="number"
               min={0.5}
@@ -940,8 +969,8 @@ export default function CadViewport({
               className="w-16 rounded border border-cadio-border bg-cadio-bg/50 px-2 py-1 text-white outline-none focus:border-cadio-accent"
             />
           </label>
-          <label className="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-tight text-cadio-muted">
-            <span>Op Size</span>
+          <label className="flex items-center justify-between gap-2 text-[10px] font-semibold text-cadio-muted">
+            <span>Amount (mm)</span>
             <input
               type="number"
               min={0}
@@ -956,6 +985,7 @@ export default function CadViewport({
               <button
                 key={op}
                 disabled={!expertMode}
+                title={OP_LABELS[op]?.hint}
                 onClick={() => {
                   if (selectionMode === "edge" && (op === "fillet" || op === "chamfer")) {
                     setEdgeOperation(op);
@@ -963,11 +993,11 @@ export default function CadViewport({
                   }
                   onApplyExpertOperation?.(op);
                 }}
-                className={`rounded-lg py-2 text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-30 ${
+                className={`rounded-lg py-2 text-[10px] font-bold tracking-wide transition-all disabled:opacity-30 ${
                   edgeOperation === op ? "bg-cadio-surface border border-cadio-border text-white shadow-sm" : "text-cadio-muted hover:text-white"
                 }`}
               >
-                {op}
+                {OP_LABELS[op]?.label ?? op}
               </button>
             ))}
           </div>

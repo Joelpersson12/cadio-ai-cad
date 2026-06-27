@@ -720,13 +720,13 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         {/* Left icon strip */}
         <div className="absolute left-4 top-1/2 z-20 -translate-y-1/2 flex flex-col gap-2">
           {[
-            { icon: "M12 4v16m8-8H4", label: "New", action: startBlankCreation },
-            { icon: "M4 6h16M4 12h16M4 18h7", label: "Projects", action: () => setLeftDrawerOpen(v => !v) },
-            { icon: expertMode ? "M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v10m0 0H5m4 0h10m0 0v6a2 2 0 01-2 2H9m10-8v6" : "M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z", label: expertMode ? "Expert" : "Easy", action: () => setExpertMode(!expertMode) },
-            { icon: "M3 6l3 1m0 0l-3 9a5 5 0 006 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5 5 0 006 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3", label: "Measure", action: () => setShowMeasurements(v => !v) },
-          ].map(({ icon, label, action }) => (
+            { icon: "M12 4v16m8-8H4", label: "New", action: startBlankCreation, active: false },
+            { icon: "M4 6h16M4 12h16M4 18h7", label: "Projects", action: () => setLeftDrawerOpen(v => !v), active: leftDrawerOpen },
+            { icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z", label: "Edit", action: () => setExpertMode(!expertMode), active: expertMode },
+            { icon: "M3 6l3 1m0 0l-3 9a5 5 0 006 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5 5 0 006 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3", label: "Measure", action: () => setShowMeasurements(v => !v), active: showMeasurements },
+          ].map(({ icon, label, action, active }) => (
             <button key={label} onClick={action} title={label}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-cadio-border/50 bg-cadio-surface/80 text-cadio-muted backdrop-blur-sm transition-all hover:border-cadio-accent/40 hover:text-cadio-text">
+              className={`flex h-10 w-10 items-center justify-center rounded-xl border backdrop-blur-sm transition-all ${active ? "border-cadio-accent/50 bg-cadio-accent/10 text-cadio-accent" : "border-cadio-border/50 bg-cadio-surface/80 text-cadio-muted hover:border-cadio-accent/40 hover:text-cadio-text"}`}>
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d={icon} /></svg>
             </button>
           ))}
@@ -756,12 +756,18 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             </button>
           </div>
 
-          {/* Mode toggle */}
+          {/* Edit tools toggle */}
           <div className="border-b border-cadio-border/30 px-4 py-3">
-            <div className="flex rounded-lg border border-cadio-border/40 bg-cadio-bg/60 p-0.5">
-              <button onClick={() => setExpertMode(false)} className={`flex-1 rounded-md py-2 text-xs font-semibold transition-all ${!expertMode ? "bg-cadio-surface text-cadio-text shadow-sm" : "text-cadio-muted hover:text-cadio-text"}`}>Easy</button>
-              <button onClick={() => setExpertMode(true)} className={`flex-1 rounded-md py-2 text-xs font-semibold transition-all ${expertMode ? "bg-cadio-accent text-cadio-bg" : "text-cadio-muted hover:text-cadio-text"}`}>Expert</button>
-            </div>
+            <button
+              onClick={() => setExpertMode(!expertMode)}
+              className={`flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all ${expertMode ? "border-cadio-accent/40 bg-cadio-accent/10 text-cadio-accent" : "border-cadio-border/40 bg-cadio-bg/60 text-cadio-text hover:border-cadio-accent/30"}`}
+            >
+              <span className="flex items-center gap-2">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                Edit tools
+              </span>
+              <span className={`text-[10px] font-bold ${expertMode ? "text-cadio-accent" : "text-cadio-muted"}`}>{expertMode ? "ON" : "OFF"}</span>
+            </button>
           </div>
 
           {/* Printer */}
@@ -862,8 +868,9 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
         {/* Quick toolbar */}
         <div className="flex gap-2 overflow-x-auto border-b border-cadio-border/30 bg-cadio-bg/90 px-4 py-2 scrollbar-none">
           <button onClick={() => setExpertMode(!expertMode)}
-            className={`h-8 shrink-0 rounded-lg px-3 text-xs font-bold transition-all ${expertMode ? "bg-cadio-accent text-cadio-bg" : "border border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-white"}`}>
-            {expertMode ? "Expert" : "Easy"}
+            className={`flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-bold transition-all ${expertMode ? "bg-cadio-accent text-cadio-bg" : "border border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-white"}`}>
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            Edit
           </button>
           <div className="mx-1 w-px bg-cadio-border/40" />
           {TRANSFORM_MODES.map((mode) => (
