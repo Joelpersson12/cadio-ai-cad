@@ -547,6 +547,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
   const [showMobileSourceInfo, setShowMobileSourceInfo] = useState(false);
   const [showDesktopSourceInfo, setShowDesktopSourceInfo] = useState(false);
   const [showSourceFiles, setShowSourceFiles] = useState(false);
+  const [pulseFiles, setPulseFiles] = useState(false);
   const sourceFilesSig = useRef("");
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
@@ -566,14 +567,16 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     void loadPrinters();
   }, [loadPrinters]);
 
-  // Auto-open the file chooser when a NEW multi-file model is imported, so the
-  // user picks which one to place instead of getting all parts at once. Keyed on
-  // the set of file ids so selecting within the same model doesn't re-open it.
+  // When a NEW multi-file model is imported, pulse the "files to choose" button
+  // to draw attention instead of popping a big modal in the user's face.
   useEffect(() => {
     const ids = sourceFiles.filter((f) => f.id !== "__all__").map((f) => f.id).sort().join(",");
     const multi = sourceFiles.filter((f) => f.id !== "__all__").length > 1;
     if (ids && ids !== sourceFilesSig.current && multi) {
-      setShowSourceFiles(true);
+      setPulseFiles(true);
+      const t = setTimeout(() => setPulseFiles(false), 6000);
+      sourceFilesSig.current = ids;
+      return () => clearTimeout(t);
     }
     sourceFilesSig.current = ids;
   }, [sourceFiles]);
@@ -722,14 +725,19 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             )}
             {sourceFiles.length > 1 && (
               <button
-                onClick={() => setShowSourceFiles(true)}
+                onClick={() => { setShowSourceFiles(true); setPulseFiles(false); }}
                 title="Choose which model file to place on the build plate"
-                className="flex items-center gap-2 rounded-xl border border-cadio-border/60 bg-cadio-surface/90 px-3 py-2 text-cadio-muted shadow-lg backdrop-blur-sm transition-all hover:border-cadio-accent/50 hover:text-cadio-accent"
+                className={`flex items-center gap-2.5 rounded-xl border bg-cadio-surface/90 px-4 py-2.5 shadow-lg backdrop-blur-sm transition-all ${
+                  pulseFiles
+                    ? "animate-pulse border-cadio-accent text-cadio-accent ring-2 ring-cadio-accent/50"
+                    : "border-cadio-accent/40 text-cadio-text hover:border-cadio-accent hover:text-cadio-accent"
+                }`}
+                style={pulseFiles ? { boxShadow: "0 0 0 4px rgba(43,184,220,0.18), 0 0 22px rgba(43,184,220,0.35)" } : undefined}
               >
-                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <span className="text-xs font-semibold">{sourceFiles.filter((f) => f.id !== "__all__").length} files to choose</span>
+                <span className="text-sm font-bold">{sourceFiles.filter((f) => f.id !== "__all__").length} files to choose</span>
               </button>
             )}
           </div>
@@ -800,7 +808,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           {[
             { icon: "M12 4v16m8-8H4", label: "New", action: startBlankCreation, active: false },
             { icon: "M4 6h16M4 12h16M4 18h7", label: "Projects", action: () => setLeftDrawerOpen(v => !v), active: leftDrawerOpen },
-            { icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z", label: "Edit", action: () => setExpertMode(!expertMode), active: expertMode },
+            { icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z", label: "Edit", action: () => { const next = !expertMode; setExpertMode(next); setRightDrawerOpen(next); }, active: expertMode },
             { icon: "M3 6l3 1m0 0l-3 9a5 5 0 006 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5 5 0 006 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3", label: "Measure", action: () => setShowMeasurements(v => !v), active: showMeasurements },
           ].map(({ icon, label, action, active }) => (
             <button key={label} onClick={action} title={label}
@@ -811,13 +819,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           ))}
         </div>
 
-        {/* Right inspector toggle */}
-        <div className="absolute right-4 top-1/2 z-20 -translate-y-1/2">
-          <button onClick={() => setRightDrawerOpen(v => !v)} title="Inspector"
-            className={`flex h-10 w-10 items-center justify-center rounded-xl border backdrop-blur-sm transition-all ${rightDrawerOpen ? "border-cadio-accent/50 bg-cadio-accent/10 text-cadio-accent" : "border-cadio-border/50 bg-cadio-surface/80 text-cadio-muted hover:border-cadio-accent/40 hover:text-cadio-text"}`}>
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-          </button>
-        </div>
+        {/* Inspector is opened by the Edit button (left strip) — no separate toggle. */}
 
         {/* Bottom AI bar — outer wrapper is click-through so it never blocks the
             viewport buttons sitting in the same band; the panel itself is not. */}
@@ -1005,19 +1007,22 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           )}
           {sourceFiles.length > 1 && (
             <button
-              onClick={() => setShowSourceFiles(true)}
-              className="absolute bottom-3 left-14 z-10 flex h-8 items-center gap-1.5 rounded-full border border-cadio-border/60 bg-cadio-surface/80 px-3 text-cadio-muted shadow-lg backdrop-blur-sm hover:border-cadio-accent/50 hover:text-cadio-accent transition-all"
+              onClick={() => { setShowSourceFiles(true); setPulseFiles(false); }}
+              className={`absolute bottom-3 left-14 z-10 flex h-9 items-center gap-1.5 rounded-full border px-3.5 shadow-lg backdrop-blur-sm transition-all ${
+                pulseFiles ? "animate-pulse border-cadio-accent text-cadio-accent ring-2 ring-cadio-accent/50 bg-cadio-surface" : "border-cadio-accent/40 bg-cadio-surface/80 text-cadio-text hover:border-cadio-accent"
+              }`}
               title="Choose model file"
             >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-              <span className="text-[11px] font-semibold">{sourceFiles.filter((f) => f.id !== "__all__").length}</span>
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              <span className="text-xs font-bold">{sourceFiles.filter((f) => f.id !== "__all__").length} files</span>
             </button>
           )}
           {showSourceFiles && sourceFiles.length > 0 && (
             <SourceFilesModal
               files={sourceFiles}
+              source={sourceInfo[0]}
               busy={isBusy}
-              onSelect={(fileId) => { void selectSourceFile(fileId); setShowSourceFiles(false); }}
+              onSelect={(fileId) => { if (fileId === "__all__") setShowSourceFiles(false); void selectSourceFile(fileId); }}
               onClose={() => setShowSourceFiles(false)}
             />
           )}

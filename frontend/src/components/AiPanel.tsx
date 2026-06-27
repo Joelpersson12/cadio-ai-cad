@@ -167,11 +167,11 @@ export function SourceFilesModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-2xl shadow-2xl"
-        style={{ background: "#0d1318", border: "1px solid rgba(43,184,220,0.18)" }}
+        className="flex w-full max-w-lg max-h-[88vh] flex-col overflow-hidden rounded-2xl shadow-2xl"
+        style={{ background: "#0d1318", border: "1px solid rgba(43,184,220,0.25)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-white/7" style={{ background: "#0d1318" }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/7" style={{ background: "#0d1318" }}>
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-white/30">Choose a model file</p>
             <p className="mt-0.5 text-[11px] text-white/40">This design has several files — pick which one to place on the build plate.</p>
@@ -208,7 +208,7 @@ export function SourceFilesModal({
             )}
           </div>
         )}
-        <div className="px-4 py-4 space-y-2">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
           {files.map((f) => {
             const isAssembly = f.id === "__all__";
             return (
@@ -223,11 +223,18 @@ export function SourceFilesModal({
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className={`shrink-0 ${isAssembly ? "text-cadio-accent" : "text-white/40"}`}>
-                    {isAssembly ? (
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                  <span
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${
+                      f.active ? "border-cadio-accent/40" : "border-white/10"
+                    }`}
+                    style={{ background: "rgba(255,255,255,0.04)" }}
+                  >
+                    {source?.image_url && !isAssembly ? (
+                      <img src={source.image_url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    ) : isAssembly ? (
+                      <svg className="h-5 w-5 text-cadio-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                     ) : (
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      <svg className="h-5 w-5 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                     )}
                   </span>
                   <div className="min-w-0">
@@ -252,7 +259,7 @@ export function SourceFilesModal({
             );
           })}
         </div>
-        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-white/7 px-5 py-3" style={{ background: "#0d1318" }}>
+        <div className="flex items-center justify-between gap-3 border-t border-white/7 px-5 py-3" style={{ background: "#0d1318" }}>
           <span className="text-[11px] text-white/35">
             {(() => {
               const n = files.filter((f) => f.id !== "__all__" && f.active).length;
