@@ -178,7 +178,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-27T-license-attribution-stage2"
+BUILD_MARKER = "2026-06-27T-license-and-multisource-import"
 
 
 @router.get("/api/debug/version")
@@ -491,6 +491,33 @@ def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict
         trace["download"] = result
     except Exception as exc:
         trace["download_error"] = str(exc)
+
+    # 3) Verify the generalized importer against the top Thingiverse result
+    #    (zips are unpacked, OBJ parsed) so non-Printables import can be checked.
+    try:
+        from backend.services.design_providers import resolve_source_model_files
+        from backend.services.stl_importer import import_mesh_from_url
+
+        tv_hits = [r for r in ranked if r.source == "thingiverse"]
+        if tv_hits:
+            tv = tv_hits[0]
+            tv_files = resolve_source_model_files(tv.url, "thingiverse", limit=12)
+            tv_result: dict[str, Any] = {
+                "title": tv.title,
+                "url": tv.url,
+                "files": [{"name": f.name, "type": f.file_type, "has_url": bool(f.download_url)} for f in tv_files[:8]],
+            }
+            importable = [f for f in tv_files if f.file_type in ("stl", "obj", "zip", "3mf") and f.download_url]
+            if importable:
+                pick = importable[0]
+                mesh = import_mesh_from_url(pick.download_url or "", file_name=pick.name)
+                tv_result["imported_file"] = pick.name
+                tv_result["mesh"] = {"verts": len(mesh.verts), "tris": len(mesh.tris)} if mesh else None
+            else:
+                tv_result["mesh"] = "no importable files"
+            trace["thingiverse_import"] = tv_result
+    except Exception as exc:
+        trace["thingiverse_import_error"] = str(exc)
     return trace
 
 

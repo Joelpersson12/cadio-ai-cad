@@ -1,8 +1,17 @@
 # Aktivera Thingiverse & MakerWorld i Cadio
 
-Printables fungerar redan fullt ut (sök + flerdelad import + nedladdning).
-Thingiverse och MakerWorld är förberedda i koden ("Steg 1") men behöver tokens
-och en sista verifiering innan de kopplas in i import-pipelinen ("Steg 2").
+**Status (Steg 2 klart):** Import-pipelinen är nu generaliserad. Cadio söker
+*och importerar* från Printables, Thingiverse och MakerWorld via en gemensam
+fil-upplösare som hanterar STL, OBJ och `.zip`-arkiv (Thingiverse levererar
+ofta zippade filer) samt `.3mf`. Varje importerad modell visar källa, skapare
+och licens via "i"-knappen, och Cadio vägrar AI-redigera modeller vars licens
+förbjuder derivat.
+
+- **Printables** — full sök + flerdelad import + signerade nedladdningar.
+- **Thingiverse** — kräver `THINGIVERSE_TOKEN`. Zippade filer packas upp
+  automatiskt; största mesh används.
+- **MakerWorld** — sök utan token; fil-nedladdning är "best effort" (filer ofta
+  bakom inloggning, faller då tillbaka till andra källor).
 
 Verifiera alltid via diagnostiken efter att en token lagts in:
 `https://persson12-cadio-ai-cad.hf.space/api/debug/pipeline?q=phone+stand`

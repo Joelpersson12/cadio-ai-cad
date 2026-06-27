@@ -576,6 +576,89 @@ def resolve_thingiverse_model_files(model_url: str, limit: int = 20) -> list[Sou
     return list(result)
 
 
+_MESH_FILE_EXTS = ("stl", "obj", "3mf", "zip")
+
+
+def resolve_makerworld_model_files(model_url: str, limit: int = 20) -> list[SourceModelFile]:
+    """Best-effort file resolver for a MakerWorld model.
+
+    MakerWorld serves model packages (usually .3mf) through Bambu's CDN and
+    typically gates downloads behind a logged-in session, so this may legitimately
+    return no importable files. It probes the public design-service endpoints and
+    extracts any directly downloadable mesh URLs it can find; when nothing is
+    available the import pipeline falls back to other sources.
+    """
+    match = re.search(r"/models/(\d+)", model_url or "")
+    if not match:
+        return []
+    design_id = match.group(1)
+    cache_key = f"makerworld:{design_id}"
+    cached = _FILE_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+        return list(cached[1])
+
+    endpoints = [
+        f"https://makerworld.com/api/v1/design-service/design/{design_id}",
+        f"https://makerworld.com/api/v1/design-service/instance/{design_id}",
+        f"https://makerworld.com/api/v1/design-service/design/{design_id}/instance",
+    ]
+    files: list[SourceModelFile] = []
+    seen: set[str] = set()
+    for url in endpoints:
+        data = _makerworld_api_get(url, timeout=6.0)
+        if data is None:
+            continue
+        for node in _walk_json(data):
+            if not isinstance(node, dict):
+                continue
+            name = str(node.get("name") or node.get("fileName") or node.get("title") or "").strip()
+            download = ""
+            for field in ("url", "downloadUrl", "modelUrl", "fileUrl", "cdnUrl"):
+                val = node.get(field)
+                if isinstance(val, str) and val.startswith("http"):
+                    download = val
+                    break
+            target = download or name
+            suffix = target.lower().split("?", 1)[0].rsplit(".", 1)[-1] if "." in target else ""
+            if suffix not in _MESH_FILE_EXTS:
+                continue
+            if not download or download in seen:
+                continue
+            seen.add(download)
+            if not name:
+                name = download.split("?", 1)[0].rsplit("/", 1)[-1] or f"part_{len(files) + 1}.{suffix}"
+            files.append(
+                SourceModelFile(
+                    id=str(node.get("id") or node.get("fileId") or len(files) + 1),
+                    name=name,
+                    source="makerworld",
+                    file_type=suffix,
+                    file_size=int(node.get("size") or node.get("fileSize") or 0),
+                    preview_url=None,
+                    download_url=download,
+                    model_id=design_id,
+                    model_url=model_url,
+                )
+            )
+        if files:
+            break
+    result = files[:limit]
+    _FILE_CACHE[cache_key] = (time.time(), result)
+    return list(result)
+
+
+def resolve_source_model_files(model_url: str, source: str, limit: int = 20) -> list[SourceModelFile]:
+    """Resolve a model's importable files, dispatching by source platform."""
+    src = (source or "").strip().lower()
+    if src == "printables":
+        return resolve_printables_model_files(model_url, limit)
+    if src == "thingiverse":
+        return resolve_thingiverse_model_files(model_url, limit)
+    if src == "makerworld":
+        return resolve_makerworld_model_files(model_url, limit)
+    return []
+
+
 _SOURCE_WEIGHTS = {
     "printables": 22,
     "cults3d": 15,

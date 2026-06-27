@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import io
 import re
 import struct
+import zipfile
 from urllib.request import Request, urlopen
 
 from backend.services.cad_engine import TriMesh, shift_mesh_to_buildplate
 
 
 MAX_STL_BYTES = 32 * 1024 * 1024
+# A zip can hold several meshes compressed small; allow a larger download but
+# still bound extracted-member size to MAX_STL_BYTES.
+MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 
 
-def _fetch_bytes(url: str, timeout: float = 25.0, retries: int = 2) -> bytes:
+def _fetch_bytes(url: str, timeout: float = 25.0, retries: int = 2, max_bytes: int = MAX_STL_BYTES) -> bytes:
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -29,11 +34,11 @@ def _fetch_bytes(url: str, timeout: float = 25.0, retries: int = 2) -> bytes:
             req = Request(url, headers=headers)
             with urlopen(req, timeout=timeout) as res:
                 content_length = res.headers.get("content-length")
-                if content_length and int(content_length) > MAX_STL_BYTES:
-                    raise ValueError("STL is too large for interactive import")
-                data = res.read(MAX_STL_BYTES + 1)
-            if len(data) > MAX_STL_BYTES:
-                raise ValueError("STL is too large for interactive import")
+                if content_length and int(content_length) > max_bytes:
+                    raise ValueError("file is too large for interactive import")
+                data = res.read(max_bytes + 1)
+            if len(data) > max_bytes:
+                raise ValueError("file is too large for interactive import")
             return data
         except ValueError:
             raise
@@ -102,6 +107,107 @@ def _parse_ascii_stl(data: bytes) -> TriMesh | None:
     return mesh
 
 
+def _parse_obj(data: bytes) -> TriMesh | None:
+    """Parse a Wavefront OBJ mesh (vertices + faces, triangulated as fans)."""
+    try:
+        text = data.decode("utf-8", errors="ignore")
+    except Exception:
+        return None
+    verts: list[tuple[float, float, float]] = []
+    faces: list[list[int]] = []
+    for line in text.splitlines():
+        if not line or line[0] not in "vf":
+            continue
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == "v" and len(parts) >= 4:
+            try:
+                verts.append((float(parts[1]), float(parts[2]), float(parts[3])))
+            except ValueError:
+                continue
+        elif parts[0] == "f" and len(parts) >= 4:
+            idxs: list[int] = []
+            for token in parts[1:]:
+                raw = token.split("/", 1)[0]
+                if not raw:
+                    continue
+                try:
+                    vi = int(raw)
+                except ValueError:
+                    continue
+                # OBJ indices are 1-based; negatives count from the end.
+                idxs.append(vi - 1 if vi > 0 else len(verts) + vi)
+            if len(idxs) >= 3:
+                faces.append(idxs)
+    if len(verts) < 3 or not faces:
+        return None
+
+    mesh = TriMesh()
+    index_map: dict[int, int] = {}
+
+    def _local(obj_index: int) -> int | None:
+        if obj_index < 0 or obj_index >= len(verts):
+            return None
+        existing = index_map.get(obj_index)
+        if existing is not None:
+            return existing
+        new_index = mesh.add_vertex(verts[obj_index])
+        index_map[obj_index] = new_index
+        return new_index
+
+    for face in faces:
+        local = [_local(i) for i in face]
+        local = [i for i in local if i is not None]
+        if len(local) < 3:
+            continue
+        for k in range(1, len(local) - 1):
+            mesh.add_tri(local[0], local[k], local[k + 1])
+    if not mesh.verts or not mesh.tris:
+        return None
+    return mesh
+
+
+def _parse_mesh_bytes(data: bytes, name: str = "") -> TriMesh | None:
+    """Parse raw bytes into a TriMesh, sniffing STL (binary/ascii) and OBJ."""
+    lower = name.lower()
+    if lower.endswith(".obj"):
+        return _parse_obj(data)
+    # STL first (covers the common case and binary sniffing), then OBJ fallback.
+    return _parse_binary_stl(data) or _parse_ascii_stl(data) or _parse_obj(data)
+
+
+def _extract_mesh_from_zip(data: bytes) -> TriMesh | None:
+    """Pick the largest STL/OBJ member of a zip archive and parse it.
+
+    Thingiverse (and others) frequently deliver a model's files as a single
+    ``.zip``. We import the biggest mesh member as the representative body.
+    """
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(data))
+    except Exception:
+        return None
+    candidates = [
+        info
+        for info in archive.infolist()
+        if not info.is_dir()
+        and info.filename.lower().rsplit(".", 1)[-1] in ("stl", "obj")
+        and info.file_size <= MAX_STL_BYTES
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda info: info.file_size, reverse=True)
+    for info in candidates:
+        try:
+            member = archive.read(info)
+        except Exception:
+            continue
+        mesh = _parse_mesh_bytes(member, info.filename)
+        if mesh is not None and mesh.verts and mesh.tris:
+            return mesh
+    return None
+
+
 def _center_xy(mesh: TriMesh) -> TriMesh:
     if not mesh.verts:
         return mesh
@@ -157,6 +263,68 @@ def _flip_depth_axis(mesh: TriMesh) -> TriMesh:
     return flipped
 
 
+def _finalize_mesh(
+    mesh: TriMesh | None,
+    *,
+    prefer_flat: bool,
+    center_xy: bool,
+    shift_to_plate: bool,
+) -> TriMesh | None:
+    if mesh is None or not mesh.verts or not mesh.tris:
+        return None
+    if prefer_flat:
+        # The reorientation here is itself a reflection, which already
+        # cancels the viewport's Y/Z swap — leave it as the single flip.
+        mesh = _orient_smallest_axis_to_z(mesh)
+    else:
+        # Cancel the viewport's reflective Y/Z swap so imported text and
+        # asymmetric detail render the right way round (not mirrored).
+        mesh = _flip_depth_axis(mesh)
+    if center_xy:
+        mesh = _center_xy(mesh)
+    if shift_to_plate:
+        mesh = shift_mesh_to_buildplate(mesh)
+    return mesh
+
+
+def _looks_like_zip(url: str, data: bytes) -> bool:
+    return url.lower().split("?", 1)[0].endswith(".zip") or data[:4] == b"PK\x03\x04"
+
+
+def import_mesh_from_url(
+    url: str,
+    *,
+    file_name: str = "",
+    prefer_flat: bool = False,
+    center_xy: bool = True,
+    shift_to_plate: bool = True,
+) -> TriMesh | None:
+    """Fetch and parse a mesh URL (STL, OBJ, or a ZIP of them) into a TriMesh.
+
+    Generalizes the original STL-only importer so models from sources that
+    deliver OBJ files or zipped archives (e.g. Thingiverse) import as real
+    geometry rather than failing.
+    """
+    if not url:
+        return None
+    name = file_name or url.split("?", 1)[0]
+    try:
+        is_zip_name = name.lower().rsplit(".", 1)[-1] == "zip" or url.lower().split("?", 1)[0].endswith(".zip")
+        data = _fetch_bytes(url, max_bytes=MAX_ARCHIVE_BYTES if is_zip_name else MAX_STL_BYTES)
+        if _looks_like_zip(url, data) or (name.lower().endswith(".zip")):
+            mesh = _extract_mesh_from_zip(data)
+        else:
+            mesh = _parse_mesh_bytes(data, name)
+        return _finalize_mesh(
+            mesh,
+            prefer_flat=prefer_flat,
+            center_xy=center_xy,
+            shift_to_plate=shift_to_plate,
+        )
+    except Exception:
+        return None
+
+
 def import_stl_from_url(
     url: str,
     *,
@@ -164,26 +332,10 @@ def import_stl_from_url(
     center_xy: bool = True,
     shift_to_plate: bool = True,
 ) -> TriMesh | None:
-    """Fetch and parse an STL URL into Cadio's TriMesh format."""
-    if not url.lower().endswith(".stl"):
-        return None
-    try:
-        data = _fetch_bytes(url)
-        mesh = _parse_binary_stl(data) or _parse_ascii_stl(data)
-        if mesh is None or not mesh.verts or not mesh.tris:
-            return None
-        if prefer_flat:
-            # The reorientation here is itself a reflection, which already
-            # cancels the viewport's Y/Z swap — leave it as the single flip.
-            mesh = _orient_smallest_axis_to_z(mesh)
-        else:
-            # Cancel the viewport's reflective Y/Z swap so imported text and
-            # asymmetric detail render the right way round (not mirrored).
-            mesh = _flip_depth_axis(mesh)
-        if center_xy:
-            mesh = _center_xy(mesh)
-        if shift_to_plate:
-            mesh = shift_mesh_to_buildplate(mesh)
-        return mesh
-    except Exception:
-        return None
+    """Backwards-compatible STL importer (delegates to import_mesh_from_url)."""
+    return import_mesh_from_url(
+        url,
+        prefer_flat=prefer_flat,
+        center_xy=center_xy,
+        shift_to_plate=shift_to_plate,
+    )
