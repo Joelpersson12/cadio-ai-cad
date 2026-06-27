@@ -199,7 +199,12 @@ export function SourceFilesModal({
               <PermissionBadge ok={lic.editable} label="Editable" />
             </div>
             {!lic.editable && (
-              <p className="mt-1.5 text-[11px] text-[#ff9f0a]">⚠ This model's license does not allow editing.</p>
+              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-white/45">
+                <svg className="h-3.5 w-3.5 shrink-0 text-white/35" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                This design's license is view &amp; print only — Cadio won't edit it.
+              </p>
             )}
           </div>
         )}
@@ -246,6 +251,20 @@ export function SourceFilesModal({
               </button>
             );
           })}
+        </div>
+        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-white/7 px-5 py-3" style={{ background: "#0d1318" }}>
+          <span className="text-[11px] text-white/35">
+            {(() => {
+              const n = files.filter((f) => f.id !== "__all__" && f.active).length;
+              return n > 0 ? `${n} part${n > 1 ? "s" : ""} on plate` : "Add the parts you want";
+            })()}
+          </span>
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-cadio-accent px-5 py-2 text-sm font-semibold text-cadio-bg transition-colors hover:bg-cadio-accent-hover"
+          >
+            Continue
+          </button>
         </div>
       </div>
     </div>
