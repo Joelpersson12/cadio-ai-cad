@@ -976,6 +976,43 @@ def _create_imported_source_object(
     return source_obj
 
 
+def _object_license_record(obj: CadObject) -> dict[str, Any] | None:
+    """Return the normalized license record attached to an imported object."""
+    matched = (obj.get("source_model") or {}).get("matched_example")
+    if isinstance(matched, dict):
+        lic = matched.get("license")
+        if isinstance(lic, dict):
+            return lic
+    return None
+
+
+def edit_locked_source_object(session: Session) -> CadObject | None:
+    """Return an imported source object whose license forbids derivatives.
+
+    Used to refuse AI *edits* of models that may not be remixed (e.g. CC BY-ND,
+    All Rights Reserved). Only confirmed (verified) non-editable licenses lock
+    editing; unconfirmed licenses are allowed through but flagged in the UI.
+    """
+    for oid in session.get("object_order", []):
+        obj = session["objects"].get(oid)
+        if not obj or not obj.get("imported_source_mesh"):
+            continue
+        lic = _object_license_record(obj)
+        if isinstance(lic, dict) and lic.get("verified") and lic.get("editable") is False:
+            return obj
+    return None
+
+
+def edit_lock_message(obj: CadObject | None) -> str:
+    """User-facing reason an imported model cannot be edited."""
+    lic = _object_license_record(obj) if obj else None
+    name = (lic or {}).get("name") or "this model's license"
+    return (
+        f"Due to the license of this model ({name}), it is not editable. "
+        "You can still view and download the original, or start a new model to use the AI editor."
+    )
+
+
 def _source_group_id() -> str:
     return f"source-{uuid.uuid4().hex[:10]}"
 

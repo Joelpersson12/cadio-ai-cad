@@ -538,6 +538,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [showMobileSourceInfo, setShowMobileSourceInfo] = useState(false);
+  const [showDesktopSourceInfo, setShowDesktopSourceInfo] = useState(false);
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -632,6 +633,23 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           showMeasurements={showMeasurements}
         />
         {modelBusy && <ModelLoadingOverlay status={status} />}
+
+        {/* Persistent source / license info button — always present when a
+            model came from an external source (legal attribution requirement) */}
+        {sourceInfo.length > 0 && (
+          <button
+            onClick={() => setShowDesktopSourceInfo(true)}
+            title="Source & license"
+            className="absolute bottom-5 left-5 z-20 flex h-10 w-10 items-center justify-center rounded-xl border border-cadio-border/60 bg-cadio-surface/85 text-cadio-muted shadow-lg backdrop-blur-sm transition-all hover:border-cadio-accent/50 hover:text-cadio-accent"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+        )}
+        {showDesktopSourceInfo && sourceInfo.length > 0 && (
+          <SourceInfoModal sources={sourceInfo} onClose={() => setShowDesktopSourceInfo(false)} />
+        )}
 
         {/* Top bar */}
         <div className="absolute inset-x-0 top-0 z-20 flex h-14 items-center justify-between px-5 pointer-events-none">

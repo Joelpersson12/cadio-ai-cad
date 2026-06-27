@@ -108,6 +108,18 @@ export interface ScenePayload {
   source_info?: SourceExample[];
 }
 
+export interface ModelLicense {
+  code: string;
+  name: string;
+  url: string;
+  requires_attribution: boolean;
+  allow_commercial: boolean;
+  allow_remix: boolean;
+  share_alike: boolean;
+  editable: boolean;
+  verified: boolean;
+}
+
 export interface SourceExample {
   title: string;
   source: string;
@@ -117,6 +129,10 @@ export interface SourceExample {
   downloads?: number;
   description?: string | null;
   tags?: string[];
+  author?: string;
+  license?: ModelLicense;
+  license_editable?: boolean;
+  license_name?: string;
 }
 
 export interface PrinterProfile {

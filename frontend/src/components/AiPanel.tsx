@@ -5,15 +5,39 @@ import type { FormEvent, KeyboardEvent } from "react";
 import { useCadStore } from "../stores/cadStore";
 import type { SourceExample } from "../utils/types";
 
+const SOURCE_LABELS: Record<string, string> = {
+  printables: "Printables",
+  makerworld: "MakerWorld",
+  thingiverse: "Thingiverse",
+  thangs: "Thangs",
+};
+
+/** Returns the resolved license editability + display for a source. */
+export function sourceLicense(src: SourceExample | undefined) {
+  const lic = src?.license;
+  const name = lic?.name || src?.license_name || "License not confirmed";
+  const editable = lic ? lic.editable : src?.license_editable ?? false;
+  const verified = lic?.verified ?? false;
+  return { lic, name, editable, verified };
+}
+
+function PermissionBadge({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+      style={
+        ok
+          ? { background: "rgba(52,199,89,0.12)", color: "#34c759" }
+          : { background: "rgba(255,69,58,0.12)", color: "#ff6961" }
+      }
+    >
+      {ok ? "✔" : "✖"} {label}
+    </span>
+  );
+}
+
 export function SourceInfoModal({ sources, onClose }: { sources: SourceExample[]; onClose: () => void }) {
   if (!sources.length) return null;
-  const top = sources[0];
-  const SOURCE_LABELS: Record<string, string> = {
-    printables: "Printables",
-    makerworld: "MakerWorld",
-    thingiverse: "Thingiverse",
-    thangs: "Thangs",
-  };
   return (
     <div
       className="fixed inset-0 z-[200] grid place-items-center px-4 py-6"
@@ -21,12 +45,12 @@ export function SourceInfoModal({ sources, onClose }: { sources: SourceExample[]
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl shadow-2xl"
+        className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-2xl shadow-2xl"
         style={{ background: "#0d1318", border: "1px solid rgba(43,184,220,0.18)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/7">
-          <p className="text-xs font-bold uppercase tracking-widest text-white/30">Inspiration source</p>
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-white/7" style={{ background: "#0d1318" }}>
+          <p className="text-xs font-bold uppercase tracking-widest text-white/30">Source &amp; license</p>
           <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
@@ -34,39 +58,79 @@ export function SourceInfoModal({ sources, onClose }: { sources: SourceExample[]
           </button>
         </div>
         <div className="px-5 py-5 space-y-4">
-          {sources.slice(0, 3).map((src, i) => (
-            <div key={i} className="rounded-xl p-4 space-y-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-semibold text-white leading-snug">{src.title}</p>
-                <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(43,184,220,0.15)", color: "#2bb8dc" }}>
-                  {SOURCE_LABELS[src.source] ?? src.source}
-                </span>
+          {sources.slice(0, 3).map((src, i) => {
+            const { lic, name, editable, verified } = sourceLicense(src);
+            const label = SOURCE_LABELS[src.source] ?? src.source;
+            return (
+              <div key={i} className="rounded-xl p-4 space-y-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-white leading-snug">{src.title}</p>
+                  <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(43,184,220,0.15)", color: "#2bb8dc" }}>
+                    {label}
+                  </span>
+                </div>
+
+                {src.author && (
+                  <p className="text-[11px] text-white/40">by {src.author}</p>
+                )}
+
+                {/* License block — always shown so the user knows their rights */}
+                <div className="rounded-lg p-3 space-y-2" style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-white/30">License</span>
+                    {lic?.url ? (
+                      <a href={lic.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-cadio-accent hover:underline">
+                        {name}
+                      </a>
+                    ) : (
+                      <span className="text-[11px] font-semibold text-white/70">{name}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <PermissionBadge ok={!(lic?.requires_attribution ?? true)} label="No attribution needed" />
+                    <PermissionBadge ok={lic?.allow_commercial ?? false} label="Commercial use" />
+                    <PermissionBadge ok={editable} label="Editing / remix" />
+                  </div>
+                  {!editable && (
+                    <p className="text-[11px] leading-relaxed text-[#ff9f0a]">
+                      ⚠ Due to the license of this model, it is not editable. You can view and download the original, but Cadio will not modify it.
+                    </p>
+                  )}
+                  {(lic?.requires_attribution ?? true) && (
+                    <p className="text-[10px] leading-relaxed text-white/40">
+                      You must credit the original creator{src.author ? ` (${src.author})` : ""} and link back to the source when sharing.
+                    </p>
+                  )}
+                  {!verified && (
+                    <p className="text-[10px] leading-relaxed text-white/40">
+                      Cadio could not confirm this license automatically — please verify it on the source page before commercial use.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4 text-[11px] text-white/30">
+                  {(src.likes ?? 0) > 0 && <span>♥ {src.likes?.toLocaleString()}</span>}
+                  {(src.downloads ?? 0) > 0 && <span>↓ {src.downloads?.toLocaleString()}</span>}
+                </div>
+                {src.url && (
+                  <a
+                    href={src.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-cadio-accent hover:underline"
+                  >
+                    View original on {label}
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                )}
               </div>
-              {src.description && (
-                <p className="text-xs text-white/50 leading-relaxed line-clamp-4">{src.description}</p>
-              )}
-              <div className="flex items-center gap-4 text-[11px] text-white/30">
-                {(src.likes ?? 0) > 0 && <span>♥ {src.likes?.toLocaleString()}</span>}
-                {(src.downloads ?? 0) > 0 && <span>↓ {src.downloads?.toLocaleString()}</span>}
-                {src.tags?.slice(0, 3).map((t) => (
-                  <span key={t} className="rounded bg-white/5 px-1.5 py-px">{t}</span>
-                ))}
-              </div>
-              {src.url && (
-                <a
-                  href={src.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] text-cadio-accent hover:underline"
-                >
-                  View on {SOURCE_LABELS[src.source] ?? src.source}
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              )}
-            </div>
-          ))}
+            );
+          })}
+          <p className="text-[10px] leading-relaxed text-white/30">
+            Models are sourced from public 3D-printing sites. Always respect the original creator's license. Cadio shows this information so you can comply — see our Terms for details.
+          </p>
         </div>
       </div>
     </div>
