@@ -83,6 +83,9 @@ class ScenePayload(BaseModel):
     updated_at: str
     model_updated: bool = False
     source_info: list[Any] = Field(default_factory=list)
+    # Importable files for the active source model, so the user can pick which
+    # one to place on the build plate instead of auto-importing everything.
+    source_files: list[Any] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +159,11 @@ class TransformUpdateRequest(BaseModel):
 class SourceModelSwitchRequest(BaseModel):
     session_id: str
     direction: str = "next"
+
+
+class SourceFileSelectRequest(BaseModel):
+    session_id: str
+    file_id: str
 
 
 class PrimitiveCreateRequest(BaseModel):

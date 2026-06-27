@@ -137,6 +137,92 @@ export function SourceInfoModal({ sources, onClose }: { sources: SourceExample[]
   );
 }
 
+function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function SourceFilesModal({
+  files,
+  onSelect,
+  onClose,
+  busy = false,
+}: {
+  files: import("../utils/types").SourceFileOption[];
+  onSelect: (fileId: string) => void;
+  onClose: () => void;
+  busy?: boolean;
+}) {
+  if (!files.length) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[200] grid place-items-center px-4 py-6"
+      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-2xl shadow-2xl"
+        style={{ background: "#0d1318", border: "1px solid rgba(43,184,220,0.18)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-white/7" style={{ background: "#0d1318" }}>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-white/30">Choose a file</p>
+            <p className="mt-0.5 text-[11px] text-white/40">This model has several files — pick which to place on the build plate.</p>
+          </div>
+          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="px-4 py-4 space-y-2">
+          {files.map((f) => {
+            const isAssembly = f.id === "__all__";
+            return (
+              <button
+                key={f.id}
+                disabled={busy || f.active}
+                onClick={() => onSelect(f.id)}
+                className={`flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                  f.active
+                    ? "border border-cadio-accent/40 bg-cadio-accent/10"
+                    : "border border-white/7 bg-white/[0.03] hover:border-cadio-accent/30 hover:bg-white/[0.06]"
+                } disabled:cursor-default`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`shrink-0 ${isAssembly ? "text-cadio-accent" : "text-white/40"}`}>
+                    {isAssembly ? (
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                    ) : (
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-white">{f.name}</p>
+                    <p className="text-[11px] text-white/35">
+                      {isAssembly
+                        ? `${f.part_count ?? ""} parts`
+                        : [f.file_type?.toUpperCase(), formatFileSize(f.file_size)].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                </div>
+                {f.active ? (
+                  <span className="shrink-0 rounded-full bg-cadio-accent/15 px-2 py-0.5 text-[10px] font-bold text-cadio-accent">On plate</span>
+                ) : (
+                  <span className="shrink-0 text-[11px] font-semibold text-cadio-accent">Place →</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const QUICK_COMMANDS = [
   "Add mounting holes",
   "Round all edges",

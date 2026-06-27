@@ -33,6 +33,7 @@ from backend.models.schema import (
     ResetPasswordRequest,
     SavedLibraryRequest,
     ScenePayload,
+    SourceFileSelectRequest,
     SourceModelSwitchRequest,
     TransformUpdateRequest,
 )
@@ -99,6 +100,7 @@ from backend.services.session_manager import (
     replace_object_with_source_model,
     replace_object_with_template_assembly,
     save_undo_snapshot,
+    select_source_file,
     switch_source_model_variant,
     update_imported_source_dimensions,
     undo_session,
@@ -1041,6 +1043,28 @@ async def switch_source_model(data: SourceModelSwitchRequest) -> ScenePayload | 
             actions = switch_source_model_variant(session, data.direction)
             bump_version(session)
             add_history(session, f"{data.direction}-source-model", actions)
+            payload = build_scene_payload(session, include_mesh=True, model_updated=True)
+
+        await broadcast(session["session_id"], payload.model_dump())
+        return payload
+
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
+@router.post("/api/source-model/select-file", response_model=None)
+async def select_source_model_file(data: SourceFileSelectRequest) -> ScenePayload | JSONResponse:
+    try:
+        lock = acquire_lock()
+        with lock:
+            session = get_session(data.session_id)
+            if session is None:
+                return _error(404, "Session not found")
+            save_undo_snapshot(session)
+            actions = select_source_file(session, data.file_id)
+            bump_version(session)
+            add_history(session, "select-source-file", actions)
             payload = build_scene_payload(session, include_mesh=True, model_updated=True)
 
         await broadcast(session["session_id"], payload.model_dump())

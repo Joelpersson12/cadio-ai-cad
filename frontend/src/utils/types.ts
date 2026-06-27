@@ -106,6 +106,17 @@ export interface ScenePayload {
   updated_at: string;
   model_updated: boolean;
   source_info?: SourceExample[];
+  source_files?: SourceFileOption[];
+}
+
+export interface SourceFileOption {
+  id: string;
+  name: string;
+  file_type: string;
+  file_size?: number;
+  source?: string;
+  part_count?: number;
+  active?: boolean;
 }
 
 export interface ModelLicense {

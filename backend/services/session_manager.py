@@ -326,6 +326,10 @@ def prepare_generation_target(session: Session, name: str = "part_1") -> CadObje
     for oid in generated_ids:
         _remove_object_direct(session, oid)
 
+    # A fresh generation starts a new model — drop any source-file picker state
+    # so a stale file list from a previous import doesn't linger.
+    session["source_files"] = []
+
     obj = create_object(name)
     obj["generated_seed"] = True
     add_object(session, obj)
@@ -1226,6 +1230,41 @@ def _try_replace_with_imported_source_model(
                 )
             )
 
+    # Default: import the single best-ranked file and offer the model's other
+    # files as a pickable list, rather than auto-dumping every part onto the
+    # plate. Users choose additional parts (or "All parts") from the picker.
+    ranked_candidates.sort(key=lambda item: item[0], reverse=True)
+    for _score, source_example_obj, source_files, candidate in ranked_candidates:
+        imported_shape = _try_import_source_stl(candidate, prefer_flat=prefer_flat)
+        if imported_shape is None:
+            continue
+
+        source_example = source_example_obj.to_dict()
+        source_obj = _create_imported_source_object(
+            prompt,
+            imported_shape,
+            source_example,
+            source_files,
+            candidate,
+        )
+        _remove_object_direct(session, obj["id"])
+        add_object(session, source_obj)
+        session["selected_object_id"] = ""
+        session["source_files"] = _build_source_file_options(
+            source_files, prompt, preferred_slots, active_id=candidate.get("id")
+        )
+        selected_file_name = candidate.get("name")
+        options_n = len([o for o in session["source_files"] if o.get("id") != "__all__"])
+        return [
+            _source_signal_summary(prompt),
+            f"source-match: {source_example_obj.title}",
+            f"source-files: selected {selected_file_name}" if selected_file_name else "source-files: selected public STL",
+            f"imported real {_source_label(source_example_obj.source)} mesh as starting geometry",
+            f"source-file-options: {options_n} files available to choose from" if options_n > 1 else "",
+        ], source_obj
+
+    # Fallback: nothing imported as a single file but a multi-part assembly is
+    # available — import it so the plate isn't empty.
     ranked_assemblies.sort(key=lambda item: item[0], reverse=True)
     for _score, source_example_obj, source_files, assembly_files in ranked_assemblies:
         imported_parts = _try_import_source_stl_assembly(
@@ -1245,6 +1284,9 @@ def _try_replace_with_imported_source_model(
         for source_obj in source_objects:
             add_object(session, source_obj)
         session["selected_object_id"] = ""
+        session["source_files"] = _build_source_file_options(
+            source_files, prompt, preferred_slots, active_id="__all__"
+        )
         file_names = ", ".join(_source_file_name(file) for file in assembly_files[:4])
         if len(assembly_files) > 4:
             file_names += f", +{len(assembly_files) - 4} more"
@@ -1255,31 +1297,6 @@ def _try_replace_with_imported_source_model(
             f"source-parts: {file_names}",
             f"imported real multi-part {_source_label(source_example_obj.source)} assembly as editable parts",
         ], source_objects[0]
-
-    ranked_candidates.sort(key=lambda item: item[0], reverse=True)
-    for _score, source_example_obj, source_files, candidate in ranked_candidates:
-        imported_shape = _try_import_source_stl(candidate, prefer_flat=prefer_flat)
-        if imported_shape is None:
-            continue
-
-        source_example = source_example_obj.to_dict()
-        source_obj = _create_imported_source_object(
-            prompt,
-            imported_shape,
-            source_example,
-            source_files,
-            candidate,
-        )
-        _remove_object_direct(session, obj["id"])
-        add_object(session, source_obj)
-        session["selected_object_id"] = ""
-        selected_file_name = candidate.get("name")
-        return [
-            _source_signal_summary(prompt),
-            f"source-match: {source_example_obj.title}",
-            f"source-files: selected {selected_file_name}" if selected_file_name else "source-files: selected public STL",
-            f"imported real {_source_label(source_example_obj.source)} mesh as starting geometry",
-        ], source_obj
 
     return [], None
 
@@ -1306,6 +1323,110 @@ def _source_model_prompt(obj: CadObject | None) -> str:
     if isinstance(matched, dict):
         return str(matched.get("title") or obj.get("name") or "").strip()
     return str(obj.get("name") or "").replace("_", " ").strip()
+
+
+def _build_source_file_options(
+    source_files: list[dict[str, Any]],
+    prompt: str,
+    preferred_slots: int,
+    active_id: Any = None,
+    max_options: int = 24,
+) -> list[dict[str, Any]]:
+    """Build the pickable file list for the active source model.
+
+    Lists each importable file plus, when the model looks multi-part, a synthetic
+    "All parts" assembly option. ``active_id`` marks the file currently on the
+    plate ("__all__" for the assembly option).
+    """
+    importable = [item for item in source_files if _source_file_is_importable(item)]
+    options: list[dict[str, Any]] = []
+    assembly_files = _select_source_assembly_files(source_files, prompt, preferred_slots, max_parts=6)
+    if len(assembly_files) >= 2:
+        options.append(
+            {
+                "id": "__all__",
+                "name": f"All {len(assembly_files)} parts (assembly)",
+                "file_type": "assembly",
+                "file_size": 0,
+                "source": importable[0].get("source") if importable else "",
+                "part_count": len(assembly_files),
+                "active": str(active_id) == "__all__",
+            }
+        )
+    seen: set[str] = set()
+    for item in importable:
+        fid = str(item.get("id") or "")
+        if not fid or fid in seen:
+            continue
+        seen.add(fid)
+        options.append(
+            {
+                "id": item.get("id"),
+                "name": _source_file_name(item),
+                "file_type": str(item.get("file_type") or ""),
+                "file_size": int(item.get("file_size") or 0),
+                "source": item.get("source"),
+                "active": str(item.get("id")) == str(active_id),
+            }
+        )
+        if len(options) >= max_options:
+            break
+    return options
+
+
+def select_source_file(session: Session, file_id: str) -> list[str]:
+    """Replace the active source model with a user-chosen file (or assembly).
+
+    ``file_id`` is a file id from the picker, or "__all__" to import every part
+    of a multi-part model as a side-by-side assembly.
+    """
+    current = _active_source_object(session)
+    if current is None:
+        return ["no source model to choose files for"]
+
+    source_model = current.get("source_model") if isinstance(current.get("source_model"), dict) else {}
+    source_example = source_model.get("matched_example") if isinstance(source_model.get("matched_example"), dict) else {}
+    source_files = source_model.get("files") if isinstance(source_model.get("files"), list) else []
+    if not source_files:
+        source_files = session.get("source_files", [])
+    prompt = _source_model_prompt(current)
+    color = current.get("color")
+
+    if str(file_id) == "__all__":
+        assembly_files = _select_source_assembly_files(source_files, prompt, 0, max_parts=6)
+        imported_parts = _try_import_source_stl_assembly(assembly_files, prefer_flat=False)
+        if len(imported_parts) < 2:
+            return ["could not import all parts as an assembly"]
+        source_objects = _create_imported_source_objects(prompt, imported_parts, source_example, source_files)
+        _remove_source_group_direct(session, current)
+        for source_obj in source_objects:
+            if color:
+                source_obj["color"] = color
+            add_object(session, source_obj)
+        session["selected_object_id"] = ""
+        if source_example:
+            session["source_info"] = [source_example]
+        session["source_files"] = _build_source_file_options(source_files, prompt, 0, active_id="__all__")
+        return [
+            f"source-files: imported all {len(source_objects)} parts as assembly",
+        ]
+
+    candidate = next((item for item in source_files if str(item.get("id")) == str(file_id)), None)
+    if candidate is None:
+        return ["selected file is no longer available"]
+    shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
+    if shape is None:
+        return [f"could not import {_source_file_name(candidate)}"]
+    source_obj = _create_imported_source_object(prompt, shape, source_example, source_files, candidate)
+    if color:
+        source_obj["color"] = color
+    _remove_source_group_direct(session, current)
+    add_object(session, source_obj)
+    session["selected_object_id"] = ""
+    if source_example:
+        session["source_info"] = [source_example]
+    session["source_files"] = _build_source_file_options(source_files, prompt, 0, active_id=candidate.get("id"))
+    return [f"source-files: switched to {_source_file_name(candidate)}"]
 
 
 def switch_source_model_variant(session: Session, direction: str = "next") -> list[str]:
@@ -1366,6 +1487,7 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
                     add_object(session, source_obj)
                 session["selected_object_id"] = ""
                 session["source_info"] = [example.to_dict()]
+                session["source_files"] = _build_source_file_options(files_dicts, prompt, 0, active_id="__all__")
                 file_names = ", ".join(_source_file_name(file) for file in assembly_files[:4])
                 if len(assembly_files) > 4:
                     file_names += f", +{len(assembly_files) - 4} more"
@@ -1398,6 +1520,7 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
             add_object(session, source_obj)
             session["selected_object_id"] = ""
             session["source_info"] = [example.to_dict()]
+            session["source_files"] = _build_source_file_options(files_dicts, prompt, 0, active_id=candidate.get("id"))
             return [
                 f"{'previous' if step < 0 else 'next'} source model",
                 f"source-match: {example.title}",
@@ -2883,7 +3006,17 @@ def rebuild_manual_object(obj: CadObject) -> None:
 
     if primitive in {"circle", "cylinder"}:
         radius = max(width, depth) / 2.0
-        obj["shape"] = make_cylinder_body(radius, height) or make_cylinder(radius, height)
+        holes = _hole_specs(params)
+        # Apply any mounting holes the user cut into the cylinder. Without this
+        # the cylinder was rebuilt as a plain solid and holes silently vanished.
+        shape = make_cylinder_body(radius, height, params if holes else None)
+        if shape is None:
+            # CadQuery unavailable — fall back to the engine mesh and cut the
+            # holes directly in the triangle mesh so they still appear.
+            shape = make_cylinder(radius, height)
+            if holes:
+                shape = _apply_mesh_hole_cuts(shape, params)
+        obj["shape"] = shape
     elif primitive == "hole":
         radius = max(float(params.get("hole_diameter", max(width, depth))) / 2.0, 0.5)
         obj["shape"] = make_cylinder_body(radius, height) or make_cylinder(radius, height)

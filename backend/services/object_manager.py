@@ -247,4 +247,5 @@ def build_scene_payload(
         updated_at=session.get("updated_at", ""),
         model_updated=model_updated,
         source_info=session.get("source_info", []),
+        source_files=session.get("source_files", []),
     )
