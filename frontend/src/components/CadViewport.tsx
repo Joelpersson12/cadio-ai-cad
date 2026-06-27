@@ -364,9 +364,11 @@ function MeasurementOverlay({ specs }: { specs: MeasurementSpec[] }) {
  
 function CameraController({
   bounds,
+  printerVolume,
   fitKey,
 }: {
   bounds: { x: number; y: number; z: number };
+  printerVolume: [number, number, number];
   fitKey: string;
 }) {
   const { camera, controls } = useThree();
@@ -376,25 +378,27 @@ function CameraController({
     if (lastFitKey.current === fitKey) return;
     lastFitKey.current = fitKey;
 
-    // Frame the camera to the actual model size. A low floor keeps small parts
-    // from rendering tiny on a large plate (previously the 380 floor zoomed the
-    // camera way out for anything under ~150 mm).
-    const size = Math.max(bounds.x, bounds.y, bounds.z, 20);
-    const distance = Math.max(size * 2.3, 90);
+    // When there's a real model, frame to it (a low floor keeps small parts from
+    // rendering tiny). When the scene is empty, frame the whole build plate
+    // instead of zooming into nothing (which looked like "full zoom" on entry).
+    const hasModel = bounds.x > 1 || bounds.y > 1 || bounds.z > 1;
+    const plate = Math.max(printerVolume[0], printerVolume[1], printerVolume[2], 120);
+    const size = hasModel ? Math.max(bounds.x, bounds.y, bounds.z, 20) : plate;
+    const distance = hasModel ? Math.max(size * 2.3, 90) : plate * 1.7;
 
     // Better camera positioning for isometric-like view
     camera.position.set(distance * 0.7, distance * 0.7, distance * 0.7);
     camera.near = 1;
     camera.far = 10000;
     (camera as THREE.PerspectiveCamera).updateProjectionMatrix?.();
-    
+
     // Orbit around the model's actual centre so you can view from below
-    const centreY = Math.max(bounds.z * 0.5, size * 0.25);
+    const centreY = hasModel ? Math.max(bounds.z * 0.5, size * 0.25) : Math.min(plate * 0.12, 28);
     // @ts-ignore
     controls?.target?.set(0, centreY, 0);
     // @ts-ignore
     controls?.update?.();
-  }, [bounds, camera, controls, fitKey]);
+  }, [bounds, printerVolume, camera, controls, fitKey]);
 
   return null;
 }
@@ -1070,7 +1074,7 @@ export default function CadViewport({
       {showMeasurements && <MeasurementOverlay specs={measurementSpecs} />}
  
       {/* Camera auto-fit */}
-      <CameraController bounds={bounds} fitKey={objects.length ? objects.map((o) => o.id).join("|") : "empty"} />
+      <CameraController bounds={bounds} printerVolume={printerVolume} fitKey={objects.length ? objects.map((o) => o.id).join("|") : "empty"} />
  
       {/* Orbit controls — RMB orbits (free camera), middle button pans, wheel zooms.
           LMB is reserved for selection / sketching, so it is intentionally left
