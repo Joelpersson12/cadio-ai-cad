@@ -16,7 +16,7 @@ const pages: Record<
   terms: {
     title: "Terms of Service",
     eyebrow: "Cadio legal",
-    updated: "Effective June 23, 2026",
+    updated: "Effective June 27, 2026",
     icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
     sections: [
       {
@@ -75,10 +75,21 @@ const pages: Record<
         ],
       },
       {
-        heading: "Third-Party Sources",
+        heading: "Third-Party Models, Licenses and Attribution",
         body: [
-          "Cadio may use public model pages, examples, and source signals as inspiration. You must respect third-party licenses, attribution requirements, and usage restrictions when using inspiration or source models.",
-          "Generated or remixed models should be checked carefully before commercial use.",
+          "Cadio can search public 3D-printing platforms (such as Printables, Thingiverse and MakerWorld) and import publicly available model files as a starting point. Cadio does not own these models — they remain the property of their original creators and are made available under the license each creator chose.",
+          "Whenever Cadio imports or references an external model, it displays the source, the creator, and the detected license through the information (i) button. You are responsible for reading and complying with that license, including any attribution, non-commercial, share-alike, or no-derivatives terms.",
+          "Cadio automatically detects when a model's license forbids modification (for example Creative Commons BY-ND, BY-NC-ND, or All Rights Reserved) and will not let its AI editor create a derivative of that model. When a license cannot be confirmed automatically, Cadio marks it as unverified — you must check the original source page before editing, redistributing, or using the model commercially.",
+          "License detection is provided for convenience only and may be incomplete or inaccurate. It is not legal advice. The license shown on the original model page always governs. If you are unsure of your rights, do not modify, redistribute, or sell the model.",
+          "You agree not to use Cadio to remove attribution, circumvent license restrictions, or otherwise infringe the intellectual property rights of any creator. You are solely responsible for how you use, modify, print, share, or sell any model, and you agree to indemnify Cadio against any claim arising from your use of third-party models.",
+        ],
+      },
+      {
+        heading: "Copyright, Reporting and Takedowns",
+        body: [
+          "Cadio respects intellectual property rights and expects its users to do the same. If you are a rights holder and believe that a model accessible through Cadio infringes your copyright, or that the displayed license or attribution is incorrect, contact support@cadio.net with a description of the work, the URL or model in question, and your contact details.",
+          "On receipt of a valid report, Cadio will review and, where appropriate, promptly remove or block access to the relevant model and correct license information. Cadio may also remove access to any model at its discretion.",
+          "Cadio acts as an intermediary that surfaces publicly available content and does not host the original model files of third-party platforms. Claims relating to a model's content or licensing may also need to be directed to the platform that hosts it.",
         ],
       },
       {
@@ -106,7 +117,7 @@ const pages: Record<
   privacy: {
     title: "Privacy Policy",
     eyebrow: "Cadio privacy",
-    updated: "Effective June 23, 2026",
+    updated: "Effective June 27, 2026",
     icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
     sections: [
       {
@@ -149,7 +160,8 @@ const pages: Record<
       {
         heading: "Third-Party Model Sources",
         body: [
-          "When Cadio searches for public models or inspiration, it may request information from public model sites. Those services may have their own privacy practices.",
+          "When Cadio searches for public models, it requests information from public model platforms (such as Printables, Thingiverse and MakerWorld). Those services may have their own privacy practices and may receive your search terms and basic technical request data.",
+          "Cadio stores the source, creator, and license information of imported models so it can display attribution and license terms to you. This is metadata about public models, not your personal data.",
         ],
       },
       {

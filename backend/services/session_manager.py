@@ -477,18 +477,18 @@ def _select_source_file(files: list[Any], prompt: str, preferred_slots: int = 0)
 
 def _source_file_evidence(prompt: str, preferred_slots: int = 0) -> tuple[dict[str, Any] | None, list[dict[str, Any]], dict[str, Any] | None]:
     try:
-        from backend.services.design_providers import get_provider_registry, resolve_printables_model_files
+        from backend.services.design_providers import get_provider_registry, resolve_source_model_files
 
-        examples = get_provider_registry().search_all(prompt, limit=5)
+        examples = get_provider_registry().search_all(prompt, limit=8)
     except Exception:
         return None, [], None
 
-    printables = next((example for example in examples if example.source == "printables"), None)
-    top = printables or (examples[0] if examples else None)
+    importable = next((example for example in examples if example.source in _IMPORTABLE_SOURCES), None)
+    top = importable or (examples[0] if examples else None)
     if top is None:
         return None, [], None
 
-    files = resolve_printables_model_files(top.url, limit=20) if top.source == "printables" else []
+    files = resolve_source_model_files(top.url, top.source, limit=20) if top.source in _IMPORTABLE_SOURCES else []
     files = _rank_source_files(files, prompt, preferred_slots)
     selected = files[0] if files else None
     return (
@@ -535,20 +535,23 @@ def _try_import_source_stl(
     if not source_file:
         return None
     file_type = str(source_file.get("file_type") or "").lower()
-    if file_type not in ("stl", "obj"):
+    if file_type not in _IMPORTABLE_FILE_TYPES:
         return None
 
     try:
-        from backend.services.stl_importer import import_stl_from_url
+        from backend.services.stl_importer import import_mesh_from_url
     except Exception:
         return None
+
+    file_name = str(source_file.get("name") or "")
 
     def _import(candidate_url: str) -> TriMesh | None:
         if not candidate_url:
             return None
         try:
-            return import_stl_from_url(
+            return import_mesh_from_url(
                 candidate_url,
+                file_name=file_name,
                 prefer_flat=prefer_flat,
                 center_xy=center_xy,
                 shift_to_plate=shift_to_plate,
@@ -742,14 +745,33 @@ def _source_file_is_bad_component(source_file: dict[str, Any]) -> bool:
     )
 
 
+# Mesh file types Cadio can import directly. ".zip" is included because some
+# sources (e.g. Thingiverse) deliver a model's meshes inside a zip archive.
+_IMPORTABLE_FILE_TYPES = ("stl", "obj", "zip", "3mf")
+
+# Sources whose model files Cadio can resolve and download (see
+# design_providers.resolve_source_model_files).
+_IMPORTABLE_SOURCES = ("printables", "thingiverse", "makerworld")
+
+_SOURCE_LABELS = {
+    "printables": "Printables",
+    "thingiverse": "Thingiverse",
+    "makerworld": "MakerWorld",
+}
+
+
+def _source_label(source: str | None) -> str:
+    return _SOURCE_LABELS.get(str(source or "").lower(), "source")
+
+
 def _source_file_is_importable(source_file: dict[str, Any]) -> bool:
     """True when Cadio can fetch a real mesh for this file.
 
-    A file is importable if it has a stored download URL, or if it's a
-    Printables STL/OBJ for which we can resolve a fresh signed download link
-    on demand (model_id + file id known).
+    A file is importable if it has a stored download URL (Thingiverse,
+    MakerWorld, ...), or if it's a Printables STL/OBJ for which we can resolve a
+    fresh signed download link on demand (model_id + file id known).
     """
-    if str(source_file.get("file_type") or "").lower() not in ("stl", "obj"):
+    if str(source_file.get("file_type") or "").lower() not in _IMPORTABLE_FILE_TYPES:
         return False
     if source_file.get("download_url"):
         return True
@@ -976,6 +998,43 @@ def _create_imported_source_object(
     return source_obj
 
 
+def _object_license_record(obj: CadObject) -> dict[str, Any] | None:
+    """Return the normalized license record attached to an imported object."""
+    matched = (obj.get("source_model") or {}).get("matched_example")
+    if isinstance(matched, dict):
+        lic = matched.get("license")
+        if isinstance(lic, dict):
+            return lic
+    return None
+
+
+def edit_locked_source_object(session: Session) -> CadObject | None:
+    """Return an imported source object whose license forbids derivatives.
+
+    Used to refuse AI *edits* of models that may not be remixed (e.g. CC BY-ND,
+    All Rights Reserved). Only confirmed (verified) non-editable licenses lock
+    editing; unconfirmed licenses are allowed through but flagged in the UI.
+    """
+    for oid in session.get("object_order", []):
+        obj = session["objects"].get(oid)
+        if not obj or not obj.get("imported_source_mesh"):
+            continue
+        lic = _object_license_record(obj)
+        if isinstance(lic, dict) and lic.get("verified") and lic.get("editable") is False:
+            return obj
+    return None
+
+
+def edit_lock_message(obj: CadObject | None) -> str:
+    """User-facing reason an imported model cannot be edited."""
+    lic = _object_license_record(obj) if obj else None
+    name = (lic or {}).get("name") or "this model's license"
+    return (
+        f"Due to the license of this model ({name}), it is not editable. "
+        "You can still view and download the original, or start a new model to use the AI editor."
+    )
+
+
 def _source_group_id() -> str:
     return f"source-{uuid.uuid4().hex[:10]}"
 
@@ -1110,12 +1169,12 @@ def _try_replace_with_imported_source_model(
     prefer_flat: bool = False,
 ) -> tuple[list[str], CadObject | None]:
     try:
-        from backend.services.design_providers import get_provider_registry, resolve_printables_model_files
+        from backend.services.design_providers import get_provider_registry, resolve_source_model_files
 
         examples = [
             example
-            for example in get_provider_registry().search_all(prompt, limit=12)
-            if example.source == "printables"
+            for example in get_provider_registry().search_all(prompt, limit=14)
+            if example.source in _IMPORTABLE_SOURCES
         ]
     except Exception:
         examples = []
@@ -1124,7 +1183,7 @@ def _try_replace_with_imported_source_model(
     ranked_candidates: list[tuple[float, Any, list[dict[str, Any]], dict[str, Any]]] = []
     for example_index, source_example_obj in enumerate(examples[:8]):
         source_files_obj = _rank_source_files(
-            resolve_printables_model_files(source_example_obj.url, limit=24),
+            resolve_source_model_files(source_example_obj.url, source_example_obj.source, limit=24),
             prompt,
             preferred_slots,
         )
@@ -1194,7 +1253,7 @@ def _try_replace_with_imported_source_model(
             f"source-match: {source_example_obj.title}",
             f"source-files: imported {len(source_objects)} separate STL parts",
             f"source-parts: {file_names}",
-            "imported real multi-part Printables assembly as editable parts",
+            f"imported real multi-part {_source_label(source_example_obj.source)} assembly as editable parts",
         ], source_objects[0]
 
     ranked_candidates.sort(key=lambda item: item[0], reverse=True)
@@ -1219,7 +1278,7 @@ def _try_replace_with_imported_source_model(
             _source_signal_summary(prompt),
             f"source-match: {source_example_obj.title}",
             f"source-files: selected {selected_file_name}" if selected_file_name else "source-files: selected public STL",
-            "imported real Printables STL mesh as starting geometry",
+            f"imported real {_source_label(source_example_obj.source)} mesh as starting geometry",
         ], source_obj
 
     return [], None
@@ -1250,24 +1309,24 @@ def _source_model_prompt(obj: CadObject | None) -> str:
 
 
 def switch_source_model_variant(session: Session, direction: str = "next") -> list[str]:
-    """Swap the active source model to another ranked Printables result."""
+    """Swap the active source model to another ranked importable result."""
     current = _active_source_object(session)
     prompt = _source_model_prompt(current)
     if current is None or not prompt:
         return ["no source model to switch"]
 
     try:
-        from backend.services.design_providers import get_provider_registry, resolve_printables_model_files
+        from backend.services.design_providers import get_provider_registry, resolve_source_model_files
     except Exception:
         return ["source providers unavailable"]
 
     examples = [
         example
-        for example in get_provider_registry().search_all(prompt, limit=12)
-        if example.source == "printables"
+        for example in get_provider_registry().search_all(prompt, limit=14)
+        if example.source in _IMPORTABLE_SOURCES
     ]
     if not examples:
-        return ["no Printables variants found"]
+        return ["no importable source variants found"]
 
     current_url = ""
     source_model = current.get("source_model") if isinstance(current.get("source_model"), dict) else {}
@@ -1282,7 +1341,7 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
 
     for index in order:
         example = examples[index]
-        files = _rank_source_files(resolve_printables_model_files(example.url, limit=24), prompt, 0)
+        files = _rank_source_files(resolve_source_model_files(example.url, example.source, limit=24), prompt, 0)
         files_dicts = [source_file.to_dict() for source_file in files]
         assembly_files = _select_source_assembly_files(files_dicts, prompt, 0, max_parts=6)
         if len(assembly_files) >= 2:

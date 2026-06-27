@@ -78,6 +78,8 @@ from backend.services.session_manager import (
     center_object_on_plate,
     create_object,
     create_primitive_object,
+    edit_locked_source_object,
+    edit_lock_message,
     get_object,
     get_or_create_session,
     get_or_create_empty_session,
@@ -176,7 +178,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-25T17:45Z-makerworld-thingiverse-stage1"
+BUILD_MARKER = "2026-06-27T-license-and-multisource-import"
 
 
 @router.get("/api/debug/version")
@@ -414,6 +416,19 @@ def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict
             {"title": r.title, "source": r.source, "likes": r.likes, "downloads": r.downloads, "url": r.url}
             for r in ranked
         ]
+        # License capture per result (verifies attribution/editability detection).
+        trace["licenses"] = [
+            {
+                "title": r.title,
+                "source": r.source,
+                "author": getattr(r, "author", ""),
+                "license": (r.license or {}).get("name") if getattr(r, "license", None) else None,
+                "code": (r.license or {}).get("code") if getattr(r, "license", None) else None,
+                "editable": (r.license or {}).get("editable") if getattr(r, "license", None) else None,
+                "verified": (r.license or {}).get("verified") if getattr(r, "license", None) else None,
+            }
+            for r in ranked
+        ]
     except Exception as exc:
         trace["search_error"] = str(exc)
         return trace
@@ -476,6 +491,33 @@ def debug_pipeline(q: str = Query(default="pressure washer hose guide")) -> dict
         trace["download"] = result
     except Exception as exc:
         trace["download_error"] = str(exc)
+
+    # 3) Verify the generalized importer against the top Thingiverse result
+    #    (zips are unpacked, OBJ parsed) so non-Printables import can be checked.
+    try:
+        from backend.services.design_providers import resolve_source_model_files
+        from backend.services.stl_importer import import_mesh_from_url
+
+        tv_hits = [r for r in ranked if r.source == "thingiverse"]
+        if tv_hits:
+            tv = tv_hits[0]
+            tv_files = resolve_source_model_files(tv.url, "thingiverse", limit=12)
+            tv_result: dict[str, Any] = {
+                "title": tv.title,
+                "url": tv.url,
+                "files": [{"name": f.name, "type": f.file_type, "has_url": bool(f.download_url)} for f in tv_files[:8]],
+            }
+            importable = [f for f in tv_files if f.file_type in ("stl", "obj", "zip", "3mf") and f.download_url]
+            if importable:
+                pick = importable[0]
+                mesh = import_mesh_from_url(pick.download_url or "", file_name=pick.name)
+                tv_result["imported_file"] = pick.name
+                tv_result["mesh"] = {"verts": len(mesh.verts), "tris": len(mesh.tris)} if mesh else None
+            else:
+                tv_result["mesh"] = "no importable files"
+            trace["thingiverse_import"] = tv_result
+    except Exception as exc:
+        trace["thingiverse_import_error"] = str(exc)
     return trace
 
 
@@ -664,8 +706,21 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
         prompt = (data.prompt or "").strip().lower()
         command_prompt = f"{prompt} {normalize_source_query(data.prompt)}".strip().lower()
 
+        # License guard: refuse AI edits of imported models whose license
+        # forbids derivatives (e.g. CC BY-ND, All Rights Reserved). A fresh
+        # generation/replacement is still allowed so users can move on.
+        locked_obj = edit_locked_source_object(session)
+        is_edit_request = (
+            is_structural_ai_edit_prompt(data.prompt)
+            or is_bottom_plate_prompt(data.prompt)
+            or is_text_label_prompt(data.prompt)
+            or is_edit_only_prompt(data.prompt)
+        )
+
         # Special commands
-        if "duplicate" in command_prompt:
+        if locked_obj is not None and is_edit_request:
+            actions = [edit_lock_message(locked_obj)]
+        elif "duplicate" in command_prompt:
             duplicate_object(session)
             actions = ["duplicate selected object"]
         elif "delete object" in command_prompt or "remove object" in command_prompt:

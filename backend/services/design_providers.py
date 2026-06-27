@@ -20,13 +20,14 @@ from typing import Any
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
+from backend.services.licensing import classify_license, license_to_fields
 from backend.services.prompt_translation import normalize_source_query
 
 
 @dataclass
 class ExampleDesign:
     """A design available from an external source."""
-    
+
     id: str
     title: str
     source: str  # "makerworld", "printables", "thingiverse", "thangs"
@@ -39,10 +40,15 @@ class ExampleDesign:
     created_at: datetime | None
     downloads: int = 0
     likes: int = 0
-    
+    author: str = ""
+    # Normalized license record (see licensing.classify_license). Defaults to an
+    # unconfirmed/not-editable record when the source did not expose a license.
+    license: dict[str, Any] | None = None
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
+        license_record = self.license if isinstance(self.license, dict) else classify_license(None)
+        data = {
             "id": self.id,
             "title": self.title,
             "source": self.source,
@@ -55,7 +61,11 @@ class ExampleDesign:
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "downloads": self.downloads,
             "likes": self.likes,
+            "author": self.author,
+            "license": license_record,
         }
+        data.update(license_to_fields(license_record))
+        return data
 
 
 @dataclass
@@ -424,6 +434,16 @@ def _printtype_to_example(item: dict[str, Any]) -> ExampleDesign | None:
     if isinstance(image, dict) and image.get("filePath"):
         image_url = f"https://media.printables.com/{image['filePath']}"
 
+    license_record = None
+    lic = item.get("license")
+    if isinstance(lic, dict):
+        license_record = classify_license(lic, source="printables")
+
+    author = ""
+    user = item.get("user")
+    if isinstance(user, dict):
+        author = str(user.get("publicUsername") or user.get("handle") or user.get("slug") or "").strip()
+
     url = f"https://www.printables.com/model/{model_id}-{slug}"
     return ExampleDesign(
         id=_stable_id("printables", url),
@@ -438,6 +458,8 @@ def _printtype_to_example(item: dict[str, Any]) -> ExampleDesign | None:
         created_at=_parse_date(item.get("datePublished")),
         downloads=downloads,
         likes=likes,
+        author=author,
+        license=license_record,
     )
 
 
@@ -552,6 +574,89 @@ def resolve_thingiverse_model_files(model_url: str, limit: int = 20) -> list[Sou
     result = files[:limit]
     _FILE_CACHE[cache_key] = (time.time(), result)
     return list(result)
+
+
+_MESH_FILE_EXTS = ("stl", "obj", "3mf", "zip")
+
+
+def resolve_makerworld_model_files(model_url: str, limit: int = 20) -> list[SourceModelFile]:
+    """Best-effort file resolver for a MakerWorld model.
+
+    MakerWorld serves model packages (usually .3mf) through Bambu's CDN and
+    typically gates downloads behind a logged-in session, so this may legitimately
+    return no importable files. It probes the public design-service endpoints and
+    extracts any directly downloadable mesh URLs it can find; when nothing is
+    available the import pipeline falls back to other sources.
+    """
+    match = re.search(r"/models/(\d+)", model_url or "")
+    if not match:
+        return []
+    design_id = match.group(1)
+    cache_key = f"makerworld:{design_id}"
+    cached = _FILE_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+        return list(cached[1])
+
+    endpoints = [
+        f"https://makerworld.com/api/v1/design-service/design/{design_id}",
+        f"https://makerworld.com/api/v1/design-service/instance/{design_id}",
+        f"https://makerworld.com/api/v1/design-service/design/{design_id}/instance",
+    ]
+    files: list[SourceModelFile] = []
+    seen: set[str] = set()
+    for url in endpoints:
+        data = _makerworld_api_get(url, timeout=6.0)
+        if data is None:
+            continue
+        for node in _walk_json(data):
+            if not isinstance(node, dict):
+                continue
+            name = str(node.get("name") or node.get("fileName") or node.get("title") or "").strip()
+            download = ""
+            for field in ("url", "downloadUrl", "modelUrl", "fileUrl", "cdnUrl"):
+                val = node.get(field)
+                if isinstance(val, str) and val.startswith("http"):
+                    download = val
+                    break
+            target = download or name
+            suffix = target.lower().split("?", 1)[0].rsplit(".", 1)[-1] if "." in target else ""
+            if suffix not in _MESH_FILE_EXTS:
+                continue
+            if not download or download in seen:
+                continue
+            seen.add(download)
+            if not name:
+                name = download.split("?", 1)[0].rsplit("/", 1)[-1] or f"part_{len(files) + 1}.{suffix}"
+            files.append(
+                SourceModelFile(
+                    id=str(node.get("id") or node.get("fileId") or len(files) + 1),
+                    name=name,
+                    source="makerworld",
+                    file_type=suffix,
+                    file_size=int(node.get("size") or node.get("fileSize") or 0),
+                    preview_url=None,
+                    download_url=download,
+                    model_id=design_id,
+                    model_url=model_url,
+                )
+            )
+        if files:
+            break
+    result = files[:limit]
+    _FILE_CACHE[cache_key] = (time.time(), result)
+    return list(result)
+
+
+def resolve_source_model_files(model_url: str, source: str, limit: int = 20) -> list[SourceModelFile]:
+    """Resolve a model's importable files, dispatching by source platform."""
+    src = (source or "").strip().lower()
+    if src == "printables":
+        return resolve_printables_model_files(model_url, limit)
+    if src == "thingiverse":
+        return resolve_thingiverse_model_files(model_url, limit)
+    if src == "makerworld":
+        return resolve_makerworld_model_files(model_url, limit)
+    return []
 
 
 _SOURCE_WEIGHTS = {
@@ -1207,6 +1312,16 @@ class MakerworldProvider(DesignProvider):
                 image_url = cover
             likes = int(item.get("likes") or item.get("likeCount") or item.get("like_count") or 0)
             downloads = int(item.get("downloads") or item.get("downloadCount") or item.get("download_count") or 0)
+            license_record = None
+            lic = item.get("license") or item.get("licenseType") or item.get("license_type")
+            if lic:
+                license_record = classify_license(lic, source="makerworld")
+            author = ""
+            designer = item.get("designer") or item.get("author") or item.get("user")
+            if isinstance(designer, dict):
+                author = str(designer.get("name") or designer.get("handle") or designer.get("uid") or "").strip()
+            elif isinstance(designer, str):
+                author = designer.strip()
             results.append(
                 ExampleDesign(
                     id=_stable_id("makerworld", url),
@@ -1221,6 +1336,8 @@ class MakerworldProvider(DesignProvider):
                     created_at=None,
                     downloads=downloads,
                     likes=likes,
+                    author=author,
+                    license=license_record,
                 )
             )
         return results
@@ -1254,6 +1371,22 @@ class PrintablesProvider(DesignProvider):
         "      id name slug likesCount downloadCount ratingAvg datePublished"
         "      image { filePath }"
         "      category { path { nameEn name } }"
+        "      license { id name disallowRemixing }"
+        "      user { publicUsername }"
+        "    } }"
+        "  }"
+        "}"
+    )
+
+    # Same query without the license/user fields, used as a fallback if the
+    # primary query is ever rejected (so search never breaks over license data).
+    _SEARCH_QUERY_BASIC = (
+        "query SearchModels($q: String!, $limit: Int!, $offset: Int!) {"
+        "  searchPrints2(query: $q, limit: $limit, offset: $offset, ordering: rating, printType: print) {"
+        "    items { ... on PrintType {"
+        "      id name slug likesCount downloadCount ratingAvg datePublished"
+        "      image { filePath }"
+        "      category { path { nameEn name } }"
         "    } }"
         "  }"
         "}"
@@ -1281,14 +1414,30 @@ class PrintablesProvider(DesignProvider):
         return list(results)
 
     def _search_api(self, query: str, limit: int) -> list[ExampleDesign]:
+        data = self._post_search(query, limit, self._SEARCH_QUERY)
+        items = self._extract_items(data)
+        if items is None:
+            # Primary query (with license/user fields) failed — retry with the
+            # lean query so search keeps working even if those fields change.
+            data = self._post_search(query, limit, self._SEARCH_QUERY_BASIC)
+            items = self._extract_items(data)
+        if items is None:
+            return []
+        results: list[ExampleDesign] = []
+        for item in items:
+            if isinstance(item, dict) and item.get("id") and item.get("slug") and item.get("name"):
+                design = _printtype_to_example(item)
+                if design is not None:
+                    results.append(design)
+        results.sort(key=lambda d: (d.popularity, d.likes, d.downloads), reverse=True)
+        return results[:limit]
+
+    @staticmethod
+    def _post_search(query: str, limit: int, gql: str) -> Any:
         payload = json.dumps(
             {
-                "query": self._SEARCH_QUERY,
-                "variables": {
-                    "q": query,
-                    "limit": max(limit, 20),
-                    "offset": 0,
-                },
+                "query": gql,
+                "variables": {"q": query, "limit": max(limit, 20), "offset": 0},
             }
         ).encode("utf-8")
         req = Request(
@@ -1309,24 +1458,17 @@ class PrintablesProvider(DesignProvider):
         )
         try:
             with urlopen(req, timeout=6.0) as res:
-                data = json.loads(res.read().decode("utf-8", errors="replace"))
+                return json.loads(res.read().decode("utf-8", errors="replace"))
         except Exception:
-            return []
-        items = (
-            data.get("data", {})
-            .get("searchPrints2", {})
-            .get("items")
-        )
-        if not isinstance(items, list):
-            return []
-        results: list[ExampleDesign] = []
-        for item in items:
-            if isinstance(item, dict) and item.get("id") and item.get("slug") and item.get("name"):
-                design = _printtype_to_example(item)
-                if design is not None:
-                    results.append(design)
-        results.sort(key=lambda d: (d.popularity, d.likes, d.downloads), reverse=True)
-        return results[:limit]
+            return None
+
+    @staticmethod
+    def _extract_items(data: Any) -> list[Any] | None:
+        """Return the search items list, or None if the query errored."""
+        if not isinstance(data, dict) or data.get("errors"):
+            return None
+        items = data.get("data", {}).get("searchPrints2", {}).get("items")
+        return items if isinstance(items, list) else None
 
     def get_popular(self, category: str, limit: int = 5) -> list[ExampleDesign]:
         """Get popular Printables designs."""
@@ -1415,6 +1557,13 @@ class ThingiverseProvider(DesignProvider):
                 likes = int(hit.get("like_count") or 0)
                 downloads = int(hit.get("download_count") or hit.get("collect_count") or 0)
                 image = hit.get("thumbnail")
+                license_record = None
+                if hit.get("license"):
+                    license_record = classify_license(hit.get("license"), source="thingiverse")
+                creator = hit.get("creator")
+                author = ""
+                if isinstance(creator, dict):
+                    author = str(creator.get("name") or creator.get("first_name") or "").strip()
                 results.append(
                     ExampleDesign(
                         id=_stable_id("thingiverse", url),
@@ -1429,6 +1578,8 @@ class ThingiverseProvider(DesignProvider):
                         created_at=None,
                         downloads=downloads,
                         likes=likes,
+                        author=author,
+                        license=license_record,
                     )
                 )
         results.sort(key=lambda d: (d.popularity, d.likes, d.downloads), reverse=True)
