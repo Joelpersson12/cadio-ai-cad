@@ -963,6 +963,13 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
         with lock:
             session = get_or_create_session(data.session_id)
             save_undo_snapshot(session)
+            # Refuse sketch tools (hole/cut/split/box/...) on models whose license
+            # forbids derivatives — don't silently draw geometry on them.
+            locked_obj = edit_locked_source_object(session)
+            if locked_obj is not None and not data.replace_scene:
+                payload = build_scene_payload(session, include_mesh=True, model_updated=False)
+                payload.source_info = session.get("source_info", [])
+                return JSONResponse(status_code=409, content={"error": edit_lock_message(locked_obj), "locked": True})
             if data.replace_scene:
                 session["objects"] = {}
                 session["object_order"] = []
@@ -1118,6 +1125,10 @@ async def apply_operation(data: ExpertOperationRequest) -> ScenePayload | JSONRe
             obj = get_object(session, data.object_id)
             if obj is None:
                 return _error(404, "Object not found")
+
+            locked_obj = edit_locked_source_object(session)
+            if locked_obj is not None:
+                return JSONResponse(status_code=409, content={"error": edit_lock_message(locked_obj), "locked": True})
 
             save_undo_snapshot(session)
             actions = apply_expert_operation(
