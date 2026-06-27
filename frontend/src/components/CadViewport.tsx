@@ -659,7 +659,7 @@ function snapSketchPoint(start: THREE.Vector3, point: THREE.Vector3, tool: Exper
   const snapped = point.clone();
   snapped.x = Math.round(snapped.x / SKETCH_GRID_STEP_MM) * SKETCH_GRID_STEP_MM;
   snapped.z = Math.round(snapped.z / SKETCH_GRID_STEP_MM) * SKETCH_GRID_STEP_MM;
-  if (tool !== "line" && tool !== "cut") return snapped;
+  if (tool !== "line") return snapped;
 
   const dx = snapped.x - start.x;
   const dz = snapped.z - start.z;
@@ -784,8 +784,8 @@ function SketchPlane({
           const maxX = Math.max(start.x, finish.x);
           const minZ = Math.min(start.z, finish.z);
           const maxZ = Math.max(start.z, finish.z);
-          const width = (tool === "line" || tool === "cut") ? finish.x - start.x : maxX - minX;
-          const depth = (tool === "line" || tool === "cut") ? finish.z - start.z : maxZ - minZ;
+          const width = tool === "line" ? finish.x - start.x : maxX - minX;
+          const depth = tool === "line" ? finish.z - start.z : maxZ - minZ;
           if (Math.max(Math.abs(width), Math.abs(depth)) >= 2) {
             const center: [number, number] = [(minX + maxX) / 2, (minZ + maxZ) / 2];
             const size: [number, number] = tool === "line" ? [width, depth] : [Math.abs(width), Math.abs(depth)];
@@ -810,6 +810,12 @@ function SketchPlane({
           <meshBasicMaterial color="#7dd3fc" transparent opacity={0.35} />
         </mesh>
       )}
+      {preview && tool === "cut" && (
+        <mesh position={[preview.cx, 60, preview.cz]}>
+          <boxGeometry args={[preview.width, 120, preview.depth]} />
+          <meshBasicMaterial color="#ff6b6b" transparent opacity={0.3} side={THREE.DoubleSide} />
+        </mesh>
+      )}
       {start && end && enabled && tool === "line" && (
         <line>
           <bufferGeometry>
@@ -821,20 +827,6 @@ function SketchPlane({
           <lineBasicMaterial color="#7de7ff" />
         </line>
       )}
-      {start && end && enabled && tool === "cut" && (() => {
-        const ddx = end.x - start.x;
-        const ddz = end.z - start.z;
-        const len = Math.max(Math.hypot(ddx, ddz), 0.1);
-        const midX = (start.x + end.x) / 2;
-        const midZ = (start.z + end.z) / 2;
-        const angle = -Math.atan2(ddz, ddx);
-        return (
-          <mesh position={[midX, 100, midZ]} rotation={[0, angle, 0]}>
-            <boxGeometry args={[len, 200, 0.8]} />
-            <meshBasicMaterial color="#ff6b6b" transparent opacity={0.3} side={THREE.DoubleSide} />
-          </mesh>
-        );
-      })()}
       {preview && (tool === "circle" || tool === "hole") && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[preview.cx, 0.35, preview.cz]}>
           <circleGeometry args={[preview.radius, 48]} />
@@ -874,7 +866,7 @@ export default function CadViewport({
   mobileMode = false,
   showMeasurements = false,
 }: CadViewportProps) {
-  const [edgeOperation, setEdgeOperation] = useState("chamfer");
+  const [edgeOperation, setEdgeOperation] = useState("fillet");
   const [edgeInput, setEdgeInput] = useState<{
     x: number;
     y: number;
@@ -1141,28 +1133,50 @@ export default function CadViewport({
             e.preventDefault();
             e.stopPropagation();
             const amount = Number(edgeInput.value.replace("mm", "").trim());
-            if (Number.isFinite(amount) && amount >= 0) {
+            if (Number.isFinite(amount) && amount > 0) {
               onSetOperationAmount?.(amount);
               onApplyExpertOperation?.(edgeInput.operation, amount, edgeInput.objectId, edgeInput.target);
             }
             setEdgeInput(null);
           }}
-          className="absolute z-20 flex items-center gap-1 rounded-md border border-cadio-border bg-cadio-surface p-1 shadow-xl"
+          className="absolute z-20 w-44 rounded-lg border border-cadio-border bg-cadio-surface p-2 shadow-2xl"
           style={{ left: edgeInput.x + 10, top: edgeInput.y + 10 }}
         >
-          <span className="px-1 text-[11px] capitalize text-cadio-muted">
-            {edgeInput.operation} {edgeTargetLabel(edgeInput.target)}
-          </span>
-          <input
-            autoFocus
-            value={edgeInput.value}
-            onChange={(e) => setEdgeInput({ ...edgeInput, value: e.target.value })}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Escape") setEdgeInput(null);
-            }}
-            className="w-16 rounded border border-cadio-border bg-cadio-bg px-2 py-1 text-xs text-white outline-none focus:border-cadio-accent"
-          />
+          <p className="px-1 pb-1.5 text-[10px] font-semibold text-cadio-muted">{edgeTargetLabel(edgeInput.target)}</p>
+          <div className="mb-1.5 grid grid-cols-2 gap-1">
+            {([["fillet", "Round"], ["chamfer", "Bevel"]] as const).map(([op, label]) => (
+              <button
+                key={op}
+                type="button"
+                onClick={() => setEdgeInput({ ...edgeInput, operation: op })}
+                className={`rounded-md py-1.5 text-[11px] font-bold transition-all ${
+                  edgeInput.operation === op
+                    ? "bg-cadio-accent text-white"
+                    : "border border-cadio-border/60 text-cadio-muted hover:text-white"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              type="number"
+              min={0.5}
+              step={0.5}
+              value={edgeInput.value}
+              onChange={(e) => setEdgeInput({ ...edgeInput, value: e.target.value })}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Escape") setEdgeInput(null);
+              }}
+              className="w-full rounded border border-cadio-border bg-cadio-bg px-2 py-1 text-xs text-white outline-none focus:border-cadio-accent"
+              placeholder="mm"
+            />
+            <button type="submit" className="rounded bg-cadio-accent px-2 py-1 text-[11px] font-bold text-cadio-bg">↵</button>
+          </div>
+          <p className="px-1 pt-1 text-[9px] text-cadio-muted/70">Type mm, press Enter</p>
         </form>
       )}
     </div>

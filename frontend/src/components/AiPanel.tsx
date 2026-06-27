@@ -266,16 +266,14 @@ export default function AiPanel({ floating = false }: { floating?: boolean }) {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [prompt]);
 
-  const filteredPrompt = (text: string) => {
-    const base = text.trim();
-    return activeFilters.length ? `${base}, ${activeFilters.join(", ")}` : base;
-  };
-
-  const run = async (text: string, useFilters = true) => {
-    const query = useFilters ? filteredPrompt(text) : text.trim();
+  const run = async (text: string, _useFilters = true) => {
+    // Filters are already inserted into the prompt text by the chips, so the
+    // prompt is used as-is (no hidden re-appending).
+    const query = text.trim();
     if (!query || isLoading) return;
     setIsLoading(true);
     setPrompt("");
+    setActiveFilters([]);
     try { await runPrompt(query); }
     finally { setIsLoading(false); }
   };
@@ -292,8 +290,21 @@ export default function AiPanel({ floating = false }: { floating?: boolean }) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSubmit(); }
   };
 
-  const toggleFilter = (f: string) =>
-    setActiveFilters((prev) => prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]);
+  // Clicking a filter chip inserts (or removes) the phrase in the prompt box so
+  // the change is visible. It's also tracked in activeFilters for highlighting.
+  const toggleFilter = (f: string) => {
+    setActiveFilters((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
+    setPrompt((prev) => {
+      const escaped = f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (prev.toLowerCase().includes(f.toLowerCase())) {
+        return prev
+          .replace(new RegExp(`\\s*,?\\s*${escaped}`, "i"), "")
+          .replace(/^\s*,\s*/, "")
+          .trim();
+      }
+      return prev.trim() ? `${prev.trim()}, ${f}` : f;
+    });
+  };
 
   // Floating mode: compact inline layout (no outer wrapper with bg — handled by parent)
   if (floating) {

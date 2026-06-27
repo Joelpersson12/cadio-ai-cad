@@ -3859,10 +3859,16 @@ def apply_expert_operation(
     # it instead of silently rebuilding the mesh unchanged (which looked like the
     # tool was broken).  Mounting holes still work via add_hole_to_object.
     is_imported = obj.get("primitive") == "imported_source_mesh" or bool(obj.get("imported_source_mesh"))
-    if is_imported and op in {"fillet", "chamfer", "shell", "extrude"}:
+    # Raw-mesh bodies (split/cut halves and other non-parametric meshes) have no
+    # parametric build, so a rebuild would regenerate a default-sized box — which
+    # is exactly the "model became huge" bug. Treat them like imported meshes.
+    is_raw_mesh = is_imported or obj.get("primitive") in {"cut_half", "cut_pocket", "edited_mesh"} or (
+        not obj.get("manual") and not obj.get("feature_tree") and not obj.get("template_hint")
+    )
+    if is_raw_mesh and op in {"fillet", "chamfer", "shell", "extrude"}:
         return [
-            f"{op} isn't available on imported models — use scale, mounting holes, "
-            "or describe the change to the AI instead"
+            f"{op} isn't available on this body (it's a cut/imported mesh, not a parametric shape) — "
+            "use scale or mounting holes, or describe the change to the AI instead"
         ]
 
     # Template-generated (non-manual) objects support fillet and chamfer via
@@ -4046,61 +4052,52 @@ def cut_object_by_line(
     session: Session,
     obj: CadObject,
     center_xy: list[float],
-    delta_xy: list[float],
+    size_xy: list[float],
 ) -> list[str]:
-    """Split the object with a vertical plane defined by a 2D sketch line."""
-    dx = float(delta_xy[0])
-    dy = float(delta_xy[1])
-    length = math.sqrt(dx * dx + dy * dy)
-    if length < 1.0:
-        return ["cut skipped: line too short"]
+    """Cut a rectangular slot of material out of the selected object.
+
+    The "Cut slot" tool removes the dragged area entirely (a through-pocket),
+    rather than splitting the body into two parts. For parametric bodies the cut
+    is stored as a custom cutout so it survives later resizes; raw meshes are cut
+    in place.
+    """
+    width = abs(float(size_xy[0])) if len(size_xy) > 0 else 0.0
+    depth = abs(float(size_xy[1])) if len(size_xy) > 1 else 0.0
+    if max(width, depth) < 1.0:
+        return ["cut skipped: drag a larger area to remove"]
 
     shape = obj.get("shape")
-    if not isinstance(shape, TriMesh):
+    if not isinstance(shape, TriMesh) or not shape.verts:
         return ["cut skipped: shape not available for this object type"]
 
     transform: Transform = obj["transform"]
-    # Convert world start point to local object space (subtract position only)
-    px = float(center_xy[0]) - dx / 2.0 - float(transform.position[0])
-    py = float(center_xy[1]) - dy / 2.0 - float(transform.position[1])
+    sx = max(0.001, float(transform.scale[0]))
+    sy = max(0.001, float(transform.scale[1]))
+    local_x = (float(center_xy[0]) - float(transform.position[0])) / sx
+    local_y = (float(center_xy[1]) - float(transform.position[1])) / sy
+    local_w = width / sx
+    local_d = depth / sy
 
-    # Cut plane normal: perpendicular to line direction in XY, vertical in Z
-    nx = -dy / length
-    ny = dx / length
-    nz = 0.0
-    d = -(nx * px + ny * py)
+    params = obj["parameters"]
+    index = max(0, int(params.get("custom_cutout_count", 0.0)))
+    params[f"custom_cutout_{index}_x"] = local_x
+    params[f"custom_cutout_{index}_y"] = local_y
+    params[f"custom_cutout_{index}_width"] = local_w
+    params[f"custom_cutout_{index}_depth"] = local_d
+    params["custom_cutout_count"] = float(index + 1)
 
-    half_a = _plane_clip_trimesh(shape, nx, ny, nz, d, keep_sign=+1)
-    half_b = _plane_clip_trimesh(shape, nx, ny, nz, d, keep_sign=-1)
+    if obj.get("manual"):
+        rebuild_manual_object(obj)
+    elif obj.get("primitive") == "imported_source_mesh" or obj.get("imported_source_mesh"):
+        rebuild_manual_object(obj)
+    else:
+        # Raw/template mesh body — cut the current mesh directly.
+        obj["shape"] = shift_mesh_to_buildplate(_apply_mesh_rect_cutouts(shape, params))
 
-    if not half_a.tris or not half_b.tris:
-        return ["cut skipped: cut line does not cross the model"]
-
-    base_name = obj.get("name", "part")
-    for suffix, half_shape in [("_A", half_a), ("_B", half_b)]:
-        new_obj: CadObject = {
-            "id": str(uuid.uuid4()),
-            "name": f"{base_name}{suffix}",
-            "shape": half_shape,
-            "parameters": {},
-            "feature_tree": [],
-            "transform": Transform(
-                position=list(transform.position),
-                rotation=list(transform.rotation),
-                scale=list(transform.scale),
-            ),
-            "material": obj.get("material", "PLA"),
-            "color": obj.get("color", "#b8babd"),
-            "primitive": "cut_half",
-            "manual": False,
-        }
-        add_object(session, new_obj)
-
-    oid = obj["id"]
-    session["objects"].pop(oid, None)
-    session["object_order"] = [x for x in session["object_order"] if x != oid]
-    session["selected_object_id"] = session["object_order"][-1] if session["object_order"] else ""
-    return [f"cut '{base_name}' into 2 separate halves"]
+    obj.setdefault("operation_history", []).append(
+        {"operation": "cut_slot", "x": local_x, "y": local_y, "width": local_w, "depth": local_d}
+    )
+    return [f"cut a {local_w:.0f}×{local_d:.0f}mm slot out of '{obj.get('name', 'part')}'"]
 
 
 # ---------------------------------------------------------------------------
