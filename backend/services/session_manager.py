@@ -2883,7 +2883,17 @@ def rebuild_manual_object(obj: CadObject) -> None:
 
     if primitive in {"circle", "cylinder"}:
         radius = max(width, depth) / 2.0
-        obj["shape"] = make_cylinder_body(radius, height) or make_cylinder(radius, height)
+        holes = _hole_specs(params)
+        # Apply any mounting holes the user cut into the cylinder. Without this
+        # the cylinder was rebuilt as a plain solid and holes silently vanished.
+        shape = make_cylinder_body(radius, height, params if holes else None)
+        if shape is None:
+            # CadQuery unavailable — fall back to the engine mesh and cut the
+            # holes directly in the triangle mesh so they still appear.
+            shape = make_cylinder(radius, height)
+            if holes:
+                shape = _apply_mesh_hole_cuts(shape, params)
+        obj["shape"] = shape
     elif primitive == "hole":
         radius = max(float(params.get("hole_diameter", max(width, depth))) / 2.0, 0.5)
         obj["shape"] = make_cylinder_body(radius, height) or make_cylinder(radius, height)

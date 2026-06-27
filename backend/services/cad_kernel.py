@@ -215,11 +215,18 @@ def make_box_body(
         return None
 
 
-def make_cylinder_body(radius: float, height: float) -> TriMesh | None:
+def make_cylinder_body(
+    radius: float,
+    height: float,
+    params: dict[str, float] | None = None,
+) -> TriMesh | None:
     if not CADQUERY_AVAILABLE:
         return None
     try:
-        return to_trimesh(cq.Workplane("XY").circle(radius).extrude(height))
+        body = cq.Workplane("XY").circle(radius).extrude(height)
+        if params:
+            body = _cut_vertical_holes(body, params, height)
+        return to_trimesh(body)
     except Exception:
         return None
 
