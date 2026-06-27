@@ -7,6 +7,7 @@ import { useCadStore } from "./stores/cadStore";
 import { useWebSocket } from "./hooks/useWebSocket";
 import CadViewport from "./components/CadViewport";
 import AiPanel, { SourceInfoModal, SourceFilesModal } from "./components/AiPanel";
+import ErrorBoundary from "./components/ErrorBoundary";
 import ObjectInspector from "./components/ObjectInspector";
 import ExampleBrowser from "./components/ExampleBrowser";
 import LandingPage from "./components/LandingPage";
@@ -507,6 +508,8 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
     bounds,
     printers,
     printer,
+    printSettings,
+    scaleAllToFit,
     status,
     isBusy,
     expertMode,
@@ -621,6 +624,28 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
   const selectedCount = selectedObjectIds.length || (selectedObjectId ? 1 : 0);
   const modelBusy = isBusy || isModelBusyStatus(status);
 
+  // Per-printer "model too big" warning (backend computes the fit scale).
+  const fitInfo = printSettings?.scale;
+  const tooBig = !!(objects.length && fitInfo && !fitInfo.fits_without_scaling);
+  const fitPct = fitInfo ? Math.max(1, Math.floor(fitInfo.fit_scale_percent)) : 100;
+  const bv = printSettings?.printer?.build_volume;
+  const TooBigBanner = tooBig ? (
+    <div className="pointer-events-auto flex max-w-[92vw] items-center gap-3 rounded-xl border px-4 py-2 shadow-lg backdrop-blur-sm" style={{ background: "rgba(30,18,4,0.92)", borderColor: "rgba(255,159,10,0.45)" }}>
+      <svg className="h-5 w-5 shrink-0 text-[#ff9f0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+      <div className="min-w-0 text-xs leading-snug">
+        <p className="font-bold text-[#ffcf80]">Too big for {printSettings?.printer?.name}{bv ? ` (${bv[0]}×${bv[1]}×${bv[2]} mm)` : ""}</p>
+        <p className="text-white/55">Your model is {Math.round(bounds.x)}×{Math.round(bounds.y)}×{Math.round(bounds.z)} mm. Scale to {fitPct}% to fit the build plate.</p>
+      </div>
+      <button
+        onClick={() => void scaleAllToFit(fitPct)}
+        disabled={isBusy}
+        className="shrink-0 rounded-lg bg-[#ff9f0a] px-3 py-1.5 text-xs font-bold text-[#1a1205] transition-colors hover:bg-[#ffb838] disabled:opacity-50"
+      >
+        Scale to fit
+      </button>
+    </div>
+  ) : null;
+
   return (
     <div className="w-full h-[100dvh] relative bg-cadio-bg text-cadio-text font-sans overflow-hidden">
       {/* Global notice popup (e.g. non-editable model) */}
@@ -652,6 +677,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
       <div className="hidden md:block relative h-full w-full bg-cadio-bg">
 
         {/* Viewport — fills entire space */}
+        <ErrorBoundary label="viewport">
         <CadViewport
           objects={objects}
           selectedObjectId={selectedObjectId}
@@ -675,6 +701,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           onCreatePrimitive={(payload) => void createPrimitive(payload)}
           showMeasurements={showMeasurements}
         />
+        </ErrorBoundary>
         {modelBusy && <ModelLoadingOverlay status={status} />}
 
         {/* Source / license + file picker — top-left, clearly labelled and
@@ -760,6 +787,13 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
 
         {/* Model variations (Next / Previous source model) */}
         <DesktopModelVariantBar />
+
+        {/* Per-printer "too big" warning */}
+        {tooBig && (
+          <div className="pointer-events-none absolute inset-x-0 top-[68px] z-20 flex justify-center px-4">
+            {TooBigBanner}
+          </div>
+        )}
 
         {/* Left tool strip — labelled so it's clear what each button does */}
         <div className="absolute left-4 top-1/2 z-20 -translate-y-1/2 flex flex-col gap-2">
@@ -932,8 +966,16 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
           </button>
         </div>
 
+        {/* Per-printer "too big" warning (mobile) */}
+        {tooBig && (
+          <div className="flex justify-center border-b border-cadio-border/30 bg-cadio-bg/90 px-3 py-2">
+            {TooBigBanner}
+          </div>
+        )}
+
         {/* Viewport */}
         <div className="relative flex-1 min-h-0">
+          <ErrorBoundary label="viewport">
           <CadViewport
             objects={objects}
             selectedObjectId={selectedObjectId}
@@ -947,6 +989,7 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
             mobileMode
             showMeasurements={showMeasurements}
           />
+          </ErrorBoundary>
           {modelBusy && <ModelLoadingOverlay status={status} />}
           {sourceInfo.length > 0 && (
             <button
