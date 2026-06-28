@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCadioAccount, signOutCadioAccount, getCadioAuthToken, updateCadioAccount } from "../utils/auth";
-import { getAccountProfile, createBillingPortalSession } from "../utils/api";
+import { getAccountProfile, createBillingPortalSession, refreshAccountPlan } from "../utils/api";
 import type { CadioAccount } from "../utils/auth";
 
 const ACCENT = "#2bb8dc";
@@ -70,6 +70,8 @@ export default function ProfilePanel({
   const [refreshing, setRefreshing] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreMsg, setRestoreMsg] = useState<{ kind: "ok" | "info" | "err"; text: string } | null>(null);
 
   useEffect(() => {
     const update = () => setAccount(getCadioAccount());
@@ -109,6 +111,32 @@ export default function ProfilePanel({
       setPortalError(msg);
     } finally {
       setPortalLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    const token = getCadioAuthToken();
+    if (!token) return;
+    setRestoring(true);
+    setRestoreMsg(null);
+    try {
+      const prevPlan = account.plan ?? "free";
+      const { account: a } = await refreshAccountPlan(token);
+      updateCadioAccount(a);
+      setAccount(getCadioAccount());
+      const newPlan = a.plan ?? "free";
+      if (newPlan !== prevPlan && newPlan !== "free") {
+        setRestoreMsg({ kind: "ok", text: `Your ${PLAN_LABELS[newPlan] ?? newPlan} plan is now active. Welcome back!` });
+      } else if (newPlan !== "free") {
+        setRestoreMsg({ kind: "ok", text: `Your ${PLAN_LABELS[newPlan] ?? newPlan} plan is active and up to date.` });
+      } else {
+        setRestoreMsg({ kind: "info", text: "No active paid subscription found for this account in Stripe. Make sure you subscribed with this same email." });
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Could not refresh plan";
+      setRestoreMsg({ kind: "err", text: msg });
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -250,6 +278,50 @@ export default function ProfilePanel({
                 </p>
               </div>
             )}
+
+            {/* Restore / refresh subscription from Stripe */}
+            <div className="mt-3">
+              <button
+                onClick={handleRestore}
+                disabled={restoring}
+                className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-medium transition-all hover:scale-[1.005] active:scale-[0.998] disabled:opacity-60"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.09)",
+                  color: "rgba(232,237,242,0.6)",
+                }}
+              >
+                <svg
+                  className={`h-4 w-4 text-white/40 ${restoring ? "animate-spin" : ""}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {restoring ? "Checking Stripe…" : "Restore / refresh subscription"}
+              </button>
+              {restoreMsg && (
+                <p
+                  className="mt-2 px-1 text-xs leading-relaxed"
+                  style={{
+                    color:
+                      restoreMsg.kind === "ok"
+                        ? "#34d399"
+                        : restoreMsg.kind === "err"
+                        ? "#f87171"
+                        : "rgba(232,237,242,0.45)",
+                  }}
+                >
+                  {restoreMsg.text}
+                </p>
+              )}
+              {!restoreMsg && (
+                <p className="mt-1.5 px-1 text-[11px] leading-relaxed text-white/25">
+                  Already paid but still on Free? Tap to sync your plan from Stripe.
+                </p>
+              )}
+            </div>
 
             {/* Upgrade CTA */}
             {canUpgrade && onUpgrade && (
