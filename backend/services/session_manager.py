@@ -1250,6 +1250,7 @@ def _try_replace_with_imported_source_model(
         _remove_object_direct(session, obj["id"])
         add_object(session, source_obj)
         session["selected_object_id"] = ""
+        session["source_info"] = [source_example]
         session["source_files"] = _build_source_file_options(
             source_files, prompt, preferred_slots, session=session, active_id=candidate.get("id")
         )
@@ -1451,6 +1452,11 @@ def select_source_file(session: Session, file_id: str) -> list[str]:
     )
     if placed_obj is not None and len(existing) > 1:
         _remove_object_direct(session, placed_obj["id"])
+        # If only one source part is left, recentre it on the plate so a part
+        # that was added off to the side doesn't end up stranded there alone.
+        remaining = _imported_source_objects(session)
+        if len(remaining) == 1:
+            center_object_on_plate(remaining[0])
         session["selected_object_id"] = ""
         session["source_files"] = _build_source_file_options(source_files, prompt, 0, session=session)
         return [f"source-files: removed {_source_file_name(candidate)}"]

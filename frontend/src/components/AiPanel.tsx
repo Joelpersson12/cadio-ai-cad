@@ -224,7 +224,7 @@ export function SourceFilesModal({
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${
+                    className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${
                       f.active ? "border-cadio-accent/40" : "border-white/10"
                     }`}
                     style={{ background: "rgba(255,255,255,0.04)" }}
