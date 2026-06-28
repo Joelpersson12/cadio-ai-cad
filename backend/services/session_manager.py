@@ -1441,44 +1441,33 @@ def select_source_file(session: Session, file_id: str) -> list[str]:
     if candidate is None:
         return ["selected file is no longer available"]
 
-    # Already on the plate → remove it (but keep at least one part).
-    placed_obj = next(
-        (
-            obj
-            for obj in existing
-            if str(((obj.get("source_model") or {}).get("selected_file") or {}).get("id")) == str(file_id)
-        ),
-        None,
+    # Already the only part on the plate → nothing to change.
+    already_only = (
+        len(existing) == 1
+        and str(((existing[0].get("source_model") or {}).get("selected_file") or {}).get("id")) == str(file_id)
     )
-    if placed_obj is not None and len(existing) > 1:
-        _remove_object_direct(session, placed_obj["id"])
-        # If only one source part is left, recentre it on the plate so a part
-        # that was added off to the side doesn't end up stranded there alone.
-        remaining = _imported_source_objects(session)
-        if len(remaining) == 1:
-            center_object_on_plate(remaining[0])
-        session["selected_object_id"] = ""
-        session["source_files"] = _build_source_file_options(source_files, prompt, 0, session=session)
-        return [f"source-files: removed {_source_file_name(candidate)}"]
+    if already_only:
+        return [f"source-files: {_source_file_name(candidate)} is already on the plate"]
 
-    # Otherwise add it as a new part beside the existing ones.
+    # Swap: clicking a file replaces whatever source parts are on the plate with
+    # just that one model. The plate stays a single, clean model and the user
+    # switches between files instead of piling several up. ("All parts" remains
+    # the explicit opt-in for the full multi-part assembly.)
     shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
     if shape is None:
         return [f"could not import {_source_file_name(candidate)}"]
     source_obj = _create_imported_source_object(prompt, shape, source_example, source_files, candidate)
     if color:
         source_obj["color"] = color
-    if existing:
-        mins, maxs = _world_extents_for_objects(existing)
-        obj_mins, obj_maxs = _world_extents(source_obj)
-        gap = max(5.0, 0.12 * max(1.0, maxs[0] - mins[0]))
-        source_obj["transform"].position[0] += (maxs[0] + gap) - obj_mins[0]
+    for obj in existing:
+        _remove_object_direct(session, obj["id"])
+    center_object_on_plate(source_obj)
     add_object(session, source_obj)
     session["selected_object_id"] = ""
     if source_example:
         session["source_info"] = [source_example]
     session["source_files"] = _build_source_file_options(source_files, prompt, 0, session=session, active_id=candidate.get("id"))
-    return [f"source-files: placed {_source_file_name(candidate)}"]
+    return [f"source-files: switched to {_source_file_name(candidate)}"]
 
 
 def switch_source_model_variant(session: Session, direction: str = "next") -> list[str]:

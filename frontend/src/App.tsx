@@ -570,6 +570,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
   const [showMeasurements, setShowMeasurements] = useState(false);
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  const [demoLabel, setDemoLabel] = useState<string | null>(null);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
     await runPrompt(example.prompt);
@@ -583,18 +584,30 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
   // (so dismissing it once doesn't hide it forever for the next new model).
   useEffect(() => {
     if (objects.length > 0) setEmptyDismissed(false);
+    else setDemoLabel(null); // cleared plate (New/Home) — no longer a demo
   }, [objects.length]);
 
   // "See demo" from the landing page lands here with a prompt to auto-generate
   // so the visitor immediately sees a real model instead of a blank plate.
+  // We tag it with a "Demo: <name>" badge, cleared as soon as the user makes
+  // their own model.
   const demoRanRef = useRef(false);
   useEffect(() => {
     if (initialPrompt && !demoRanRef.current) {
       demoRanRef.current = true;
+      const label = initialPrompt.replace(/\b\w/g, (c) => c.toUpperCase());
+      setDemoLabel(label);
       void runPrompt(initialPrompt);
       onInitialPromptConsumed?.();
     }
   }, [initialPrompt, runPrompt, onInitialPromptConsumed]);
+
+  // Drop the demo badge the moment the user generates something of their own.
+  useEffect(() => {
+    const clear = () => setDemoLabel(null);
+    window.addEventListener("cadio-user-prompt", clear);
+    return () => window.removeEventListener("cadio-user-prompt", clear);
+  }, []);
 
   // When a NEW multi-file model is imported, pulse the "files to choose" button
   // to draw attention instead of popping a big modal in the user's face.
@@ -666,11 +679,19 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
   const tooBig = !!(objects.length && fitInfo && !fitInfo.fits_without_scaling);
   const fitPct = fitInfo ? Math.max(1, Math.floor(fitInfo.fit_scale_percent)) : 100;
   const bv = printSettings?.printer?.build_volume;
+  // The printer name can be the unselected placeholder ("+ Choose Printer"),
+  // which reads oddly as "Too big for + Choose Printer". Fall back to a neutral
+  // phrase whenever there's no real printer chosen.
+  const rawPrinterName = printSettings?.printer?.name ?? "";
+  const hasRealPrinter = !!rawPrinterName && !rawPrinterName.trim().startsWith("+") && !/choose/i.test(rawPrinterName);
+  const tooBigTitle = hasRealPrinter
+    ? `Too big for your ${rawPrinterName}${bv ? ` (${bv[0]}×${bv[1]}×${bv[2]} mm)` : ""}`
+    : `Too big for the build plate${bv ? ` (${bv[0]}×${bv[1]}×${bv[2]} mm)` : ""}`;
   const TooBigBanner = tooBig ? (
     <div className="pointer-events-auto flex max-w-[92vw] items-center gap-3 rounded-xl border px-4 py-2 shadow-lg backdrop-blur-sm" style={{ background: "rgba(30,18,4,0.92)", borderColor: "rgba(255,159,10,0.45)" }}>
       <svg className="h-5 w-5 shrink-0 text-[#ff9f0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
       <div className="min-w-0 text-xs leading-snug">
-        <p className="font-bold text-[#ffcf80]">Too big for {printSettings?.printer?.name}{bv ? ` (${bv[0]}×${bv[1]}×${bv[2]} mm)` : ""}</p>
+        <p className="font-bold text-[#ffcf80]">{tooBigTitle}</p>
         <p className="text-white/55">Your model is {Math.round(bounds.x)}×{Math.round(bounds.y)}×{Math.round(bounds.z)} mm. Scale to {fitPct}% to fit the build plate.</p>
       </div>
       <button
@@ -807,6 +828,16 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
               <span className="h-4 w-px bg-cadio-border/60" />
               <span className="text-sm font-medium text-cadio-text max-w-[140px] truncate">{projectTitle}</span>
             </button>
+            {demoLabel && (
+              <span
+                className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold backdrop-blur-sm"
+                style={{ borderColor: "rgba(43,184,220,0.5)", background: "rgba(43,184,220,0.12)", color: "#7fe3f6" }}
+                title="This is a demo model — generate your own to replace it"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-cadio-accent" />
+                Demo: {demoLabel}
+              </span>
+            )}
             {sourceInfo.length > 0 && (
               <button
                 onClick={() => setShowDesktopSourceInfo(true)}
@@ -826,8 +857,8 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
                 }`}
                 style={pulseFiles ? { boxShadow: "0 0 0 4px rgba(43,184,220,0.18), 0 0 22px rgba(43,184,220,0.35)" } : undefined}
               >
-                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                <span className="text-xs font-bold">{sourceFiles.filter((f) => f.id !== "__all__").length} files</span>
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" /></svg>
+                <span className="text-xs font-bold">Change model<span className="ml-1 font-normal text-cadio-muted">· {sourceFiles.filter((f) => f.id !== "__all__").length}</span></span>
               </button>
             )}
           </div>
@@ -1118,10 +1149,10 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
               className={`absolute bottom-3 left-14 z-10 flex h-9 items-center gap-1.5 rounded-full border px-3.5 shadow-lg backdrop-blur-sm transition-all ${
                 pulseFiles ? "animate-pulse border-cadio-accent text-cadio-accent ring-2 ring-cadio-accent/50 bg-cadio-surface" : "border-cadio-accent/40 bg-cadio-surface/80 text-cadio-text hover:border-cadio-accent"
               }`}
-              title="Choose model file"
+              title="Change model file"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-              <span className="text-xs font-bold">{sourceFiles.filter((f) => f.id !== "__all__").length} files</span>
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" /></svg>
+              <span className="text-xs font-bold">Change<span className="ml-1 font-normal text-cadio-muted">· {sourceFiles.filter((f) => f.id !== "__all__").length}</span></span>
             </button>
           )}
           {showSourceFiles && sourceFiles.length > 0 && (
@@ -1369,7 +1400,16 @@ export default function App() {
   };
 
   const seeDemo = () => {
-    setDemoPrompt("phone stand");
+    // Rotate through the showcase prompts so repeat visitors see variety.
+    const demos = [
+      "cable organizer",
+      "headset stand",
+      "wall tool holder",
+      "phone stand",
+      "desk pen holder",
+      "pegboard hook",
+    ];
+    setDemoPrompt(demos[Math.floor(Math.random() * demos.length)]);
     startBuilding();
   };
 
