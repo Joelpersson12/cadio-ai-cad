@@ -718,10 +718,10 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
         </ErrorBoundary>
         {modelBusy && <ModelLoadingOverlay status={status} />}
 
-        {/* Source / license + file picker — top-left, clearly labelled and
-            always clickable (legal attribution requirement). */}
+        {/* Source / license + file picker — bottom-left, clear of the Edit tools
+            panel (top-left) and always clickable (legal attribution). */}
         {(sourceInfo.length > 0 || sourceFiles.length > 1) && (
-          <div className="absolute left-4 top-20 z-30 flex flex-col items-start gap-2">
+          <div className="absolute left-4 bottom-6 z-30 flex flex-col items-start gap-2">
             {sourceInfo.length > 0 && (
               <button
                 onClick={() => setShowDesktopSourceInfo(true)}
