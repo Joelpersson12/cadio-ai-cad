@@ -602,36 +602,90 @@ def upgrade_plan(
 _PLAN_RANK = {"free": 0, "pro": 1, "unlimited": 2}
 
 
-def reconcile_plan_with_stripe(account_id: str, email: str, current_plan: str) -> str | None:
-    """Restore a paid plan from Stripe (the source of truth) when the local DB
-    has lost it — e.g. after the Space restarts on ephemeral storage and the
-    account row is recreated as 'free'. Returns the new plan if it upgraded, else
-    None. Only ever upgrades (never downgrades) and never raises.
-    """
+def stripe_active_plan(email: str) -> tuple[str | None, dict[str, Any]]:
+    """Find the best active plan for an email in Stripe + a diagnostic. Checks all
+    customers with that email and any live subscription (active/trialing/past_due).
+    Returns (plan or None, info). Never raises."""
+    info: dict[str, Any] = {}
     try:
         stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
         clean = _clean_email(email)
+        info["email"] = clean
+        info["stripe_configured"] = bool(stripe_key)
         if not stripe_key or not clean:
-            return None
+            return None, info
         import stripe as stripe_lib
 
         stripe_lib.api_key = stripe_key
-        customers = stripe_lib.Customer.list(email=clean, limit=1).get("data", [])
-        if not customers:
-            return None
-        customer_id = customers[0]["id"]
-        subs = stripe_lib.Subscription.list(customer=customer_id, status="active", limit=1).get("data", [])
-        if not subs:
-            return None
-        sub = subs[0]
-        price_id = sub["items"]["data"][0]["price"]["id"]
-        plan = "unlimited" if price_id == os.environ.get("STRIPE_PRICE_UNLIMITED", "") else "pro"
-        if _PLAN_RANK.get(plan, 0) <= _PLAN_RANK.get(current_plan, 0):
-            return None
-        upgrade_plan(account_id, plan, stripe_customer_id=customer_id, stripe_subscription_id=sub.get("id", ""))
-        return plan
+        customers = stripe_lib.Customer.list(email=clean, limit=5).get("data", [])
+        info["customers_found"] = len(customers)
+        price_unlimited = os.environ.get("STRIPE_PRICE_UNLIMITED", "")
+        best_plan: str | None = None
+        best_rank = 0
+        best_customer = ""
+        best_sub = ""
+        statuses: list[str] = []
+        for cust in customers:
+            cid = cust.get("id", "")
+            subs = stripe_lib.Subscription.list(customer=cid, status="all", limit=10).get("data", [])
+            for sub in subs:
+                status = str(sub.get("status", ""))
+                statuses.append(status)
+                if status not in ("active", "trialing", "past_due"):
+                    continue
+                try:
+                    price_id = sub["items"]["data"][0]["price"]["id"]
+                except Exception:
+                    continue
+                plan = "unlimited" if price_id and price_id == price_unlimited else "pro"
+                rank = _PLAN_RANK.get(plan, 0)
+                if rank > best_rank:
+                    best_rank, best_plan, best_customer, best_sub = rank, plan, cid, str(sub.get("id", ""))
+        info["subscription_statuses"] = statuses
+        info["plan"] = best_plan
+        info["customer_id"] = best_customer
+        info["subscription_id"] = best_sub
+        return best_plan, info
+    except Exception as exc:  # noqa: BLE001
+        info["error"] = repr(exc)
+        return None, info
+
+
+def reconcile_plan_with_stripe(account_id: str, email: str, current_plan: str) -> str | None:
+    """Restore a paid plan from Stripe (source of truth) when the local DB shows
+    free. Only ever upgrades, never raises."""
+    plan, info = stripe_active_plan(email)
+    try:
+        if plan and _PLAN_RANK.get(plan, 0) > _PLAN_RANK.get(current_plan, 0):
+            upgrade_plan(
+                account_id,
+                plan,
+                stripe_customer_id=str(info.get("customer_id", "")),
+                stripe_subscription_id=str(info.get("subscription_id", "")),
+            )
+            return plan
     except Exception:
-        return None
+        pass
+    return None
+
+
+def refresh_account_plan(token: str | None) -> dict[str, Any]:
+    """Force a Stripe re-check for the logged-in user and apply any paid plan.
+    Returns the (possibly upgraded) account plus a Stripe diagnostic."""
+    account = account_from_token(token)
+    if account is None:
+        raise PermissionError("Login required")
+    plan, info = stripe_active_plan(str(account.get("email", "")))
+    current = str(account.get("plan", "free"))
+    if plan and _PLAN_RANK.get(plan, 0) > _PLAN_RANK.get(current, 0):
+        upgrade_plan(
+            str(account.get("accountId", "")),
+            plan,
+            stripe_customer_id=str(info.get("customer_id", "")),
+            stripe_subscription_id=str(info.get("subscription_id", "")),
+        )
+        account = _refetch_account(str(account.get("accountId", ""))) or account
+    return {"account": account, "stripe": info}
 
 
 def _refetch_account(account_id: str) -> dict[str, Any] | None:

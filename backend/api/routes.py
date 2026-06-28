@@ -614,6 +614,23 @@ def get_account_me(
         return _error(500, str(exc))
 
 
+@router.post("/api/account/refresh-plan", response_model=None)
+def account_refresh_plan(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any] | JSONResponse:
+    """Force a Stripe re-check and restore the user's paid plan if found."""
+    try:
+        from backend.services.account_store import refresh_account_plan
+        token = _bearer_token(authorization)
+        result = refresh_account_plan(token)
+        return {"status": "ok", **result}
+    except PermissionError as exc:
+        return _error(401, str(exc))
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, str(exc))
+
+
 @router.get("/api/account/saved-models", response_model=None)
 def get_account_saved_models(
     authorization: str | None = Header(default=None),
