@@ -723,41 +723,6 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
         </ErrorBoundary>
         {modelBusy && <ModelLoadingOverlay status={status} />}
 
-        {/* Source / license + file picker — bottom-left, clear of the Edit tools
-            panel (top-left) and always clickable (legal attribution). */}
-        {(sourceInfo.length > 0 || sourceFiles.length > 1) && (
-          <div className="absolute left-4 bottom-6 z-30 flex flex-col items-start gap-2">
-            {sourceInfo.length > 0 && (
-              <button
-                onClick={() => setShowDesktopSourceInfo(true)}
-                title="Where this model is from and what you may do with it"
-                className="flex items-center gap-2 rounded-xl border border-cadio-accent/40 bg-cadio-surface/90 px-3 py-2 text-cadio-accent shadow-lg backdrop-blur-sm transition-all hover:bg-cadio-accent/10"
-              >
-                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-xs font-semibold">Source &amp; license</span>
-              </button>
-            )}
-            {sourceFiles.length > 1 && (
-              <button
-                onClick={() => { setShowSourceFiles(true); setPulseFiles(false); }}
-                title="Choose which model file to place on the build plate"
-                className={`flex items-center gap-2.5 rounded-xl border bg-cadio-surface/90 px-4 py-2.5 shadow-lg backdrop-blur-sm transition-all ${
-                  pulseFiles
-                    ? "animate-pulse border-cadio-accent text-cadio-accent ring-2 ring-cadio-accent/50"
-                    : "border-cadio-accent/40 text-cadio-text hover:border-cadio-accent hover:text-cadio-accent"
-                }`}
-                style={pulseFiles ? { boxShadow: "0 0 0 4px rgba(43,184,220,0.18), 0 0 22px rgba(43,184,220,0.35)" } : undefined}
-              >
-                <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span className="text-sm font-bold">{sourceFiles.filter((f) => f.id !== "__all__").length} files to choose</span>
-              </button>
-            )}
-          </div>
-        )}
         {showDesktopSourceInfo && sourceInfo.length > 0 && (
           <SourceInfoModal sources={sourceInfo} onClose={() => setShowDesktopSourceInfo(false)} />
         )}
@@ -773,12 +738,37 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
 
         {/* Top bar */}
         <div className="absolute inset-x-0 top-0 z-20 flex h-14 items-center justify-between px-5 pointer-events-none">
-          {/* Logo + home */}
-          <button onClick={onHome} className="pointer-events-auto flex items-center gap-2 rounded-xl bg-cadio-surface/80 border border-cadio-border/50 px-3 py-2 backdrop-blur-sm hover:border-cadio-accent/40 transition-colors">
-            <span className="text-cadio-accent flex-shrink-0"><CadioMark size={22} /></span>
-            <span className="h-4 w-px bg-cadio-border/60" />
-            <span className="text-sm font-medium text-cadio-text max-w-[160px] truncate">{projectTitle}</span>
-          </button>
+          {/* Logo + home + source/file controls (top, side by side) */}
+          <div className="pointer-events-auto flex items-center gap-2">
+            <button onClick={onHome} className="flex items-center gap-2 rounded-xl bg-cadio-surface/80 border border-cadio-border/50 px-3 py-2 backdrop-blur-sm hover:border-cadio-accent/40 transition-colors">
+              <span className="text-cadio-accent flex-shrink-0"><CadioMark size={22} /></span>
+              <span className="h-4 w-px bg-cadio-border/60" />
+              <span className="text-sm font-medium text-cadio-text max-w-[140px] truncate">{projectTitle}</span>
+            </button>
+            {sourceInfo.length > 0 && (
+              <button
+                onClick={() => setShowDesktopSourceInfo(true)}
+                title="Where this model is from and what you may do with it"
+                className="flex items-center gap-1.5 rounded-xl border border-cadio-accent/40 bg-cadio-surface/80 px-3 py-2 text-cadio-accent backdrop-blur-sm transition-all hover:bg-cadio-accent/10"
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span className="hidden xl:inline text-xs font-semibold">Source &amp; license</span>
+              </button>
+            )}
+            {sourceFiles.length > 1 && (
+              <button
+                onClick={() => { setShowSourceFiles(true); setPulseFiles(false); }}
+                title="Choose which model file to place on the build plate"
+                className={`flex items-center gap-1.5 rounded-xl border bg-cadio-surface/80 px-3 py-2 backdrop-blur-sm transition-all ${
+                  pulseFiles ? "animate-pulse border-cadio-accent text-cadio-accent ring-2 ring-cadio-accent/50" : "border-cadio-accent/40 text-cadio-text hover:border-cadio-accent hover:text-cadio-accent"
+                }`}
+                style={pulseFiles ? { boxShadow: "0 0 0 4px rgba(43,184,220,0.18), 0 0 22px rgba(43,184,220,0.35)" } : undefined}
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <span className="text-xs font-bold">{sourceFiles.filter((f) => f.id !== "__all__").length}<span className="hidden xl:inline"> files</span></span>
+              </button>
+            )}
+          </div>
 
           {/* Status pill — center */}
           {(isBusy || status) && (
@@ -810,7 +800,13 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
               </span>
             )}
             <button onClick={() => setShareOpen(true)} className="text-xs font-medium text-cadio-muted hover:text-cadio-text transition-colors">Share</button>
-            <button onClick={() => setExportOpen(true)} className="h-8 rounded-lg bg-cadio-accent px-4 text-xs font-bold text-cadio-bg hover:bg-cadio-accent-hover transition-colors">Export</button>
+            <button
+              onClick={() => setExportOpen(true)}
+              className="h-8 rounded-lg bg-cadio-accent px-4 text-xs font-bold text-cadio-bg hover:bg-cadio-accent-hover transition-all hover:scale-[1.03] active:scale-[0.97]"
+              style={{ boxShadow: "0 0 24px -8px rgba(43,184,220,0.7)" }}
+            >
+              Export
+            </button>
           </div>
         </div>
 
@@ -845,7 +841,10 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
         {/* Bottom AI bar — outer wrapper is click-through so it never blocks the
             viewport buttons sitting in the same band; the panel itself is not. */}
         <div className="pointer-events-none absolute inset-x-0 bottom-5 z-20 flex justify-center px-6">
-          <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-cadio-border/60 bg-cadio-surface/90 shadow-2xl backdrop-blur-xl">
+          <div
+            className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-white/10 bg-cadio-surface/90 backdrop-blur-2xl"
+            style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 70px -24px rgba(0,0,0,0.8), 0 0 50px -32px rgba(43,184,220,0.55)" }}
+          >
             <AiPanel floating />
           </div>
         </div>
