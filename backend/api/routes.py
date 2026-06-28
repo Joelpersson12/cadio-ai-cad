@@ -13,7 +13,7 @@ import re
 import traceback
 from typing import Any
 
-from fastapi import APIRouter, Header, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, File, Form, Header, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 
 from backend.models.schema import (
@@ -86,6 +86,7 @@ from backend.services.session_manager import (
     get_or_create_empty_session,
     get_selected_object,
     get_session,
+    import_uploaded_mesh,
     is_bottom_plate_prompt,
     is_structural_ai_edit_prompt,
     is_text_label_prompt,
@@ -877,6 +878,46 @@ async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
     except Exception as exc:
         traceback.print_exc()
         return _error(500, str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Local file import (drag & drop)
+# ---------------------------------------------------------------------------
+
+MAX_UPLOAD_BYTES = 48 * 1024 * 1024
+
+
+@router.post("/api/import/upload", response_model=None)
+async def import_upload(
+    session_id: str = Form(...),
+    file: UploadFile = File(...),
+) -> ScenePayload | JSONResponse:
+    """Import a mesh file the user dragged into the workspace (STL / OBJ / ZIP)."""
+    try:
+        data = await file.read()
+        if not data:
+            return _error(400, "Empty file")
+        if len(data) > MAX_UPLOAD_BYTES:
+            return _error(413, "File too large (max 48 MB)")
+
+        lock = acquire_lock()
+        with lock:
+            session = get_session(session_id)
+            if session is None:
+                return _error(404, "Session not found")
+            save_undo_snapshot(session)
+            messages = import_uploaded_mesh(session, data, file.filename or "model")
+            if not any(m.startswith("imported ") for m in messages):
+                return _error(400, messages[0] if messages else "Could not import file")
+            bump_version(session)
+            add_history(session, "import-upload", [file.filename or "model"])
+            payload = build_scene_payload(session, include_mesh=True, model_updated=True)
+
+        await broadcast(session["session_id"], payload.model_dump())
+        return payload
+    except Exception as exc:
+        traceback.print_exc()
+        return _error(500, f"{type(exc).__name__}: {exc}")
 
 
 # ---------------------------------------------------------------------------

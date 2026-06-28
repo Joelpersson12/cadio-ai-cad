@@ -550,6 +550,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
     sourceInfo,
     sourceFiles,
     selectSourceFile,
+    importLocalFile,
     notice,
     setNotice,
   } = useCadStore();
@@ -571,6 +572,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   const [demoLabel, setDemoLabel] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
     await runPrompt(example.prompt);
@@ -704,8 +706,45 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
     </div>
   ) : null;
 
+  const dragDepth = useRef(0);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) void importLocalFile(file);
+  };
+
   return (
-    <div className="w-full h-[100dvh] relative bg-cadio-bg text-cadio-text font-sans overflow-hidden">
+    <div
+      className="w-full h-[100dvh] relative bg-cadio-bg text-cadio-text font-sans overflow-hidden"
+      onDragEnter={(e) => {
+        if (!Array.from(e.dataTransfer.types || []).includes("Files")) return;
+        e.preventDefault();
+        dragDepth.current += 1;
+        setDragActive(true);
+      }}
+      onDragOver={(e) => {
+        if (Array.from(e.dataTransfer.types || []).includes("Files")) e.preventDefault();
+      }}
+      onDragLeave={() => {
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setDragActive(false);
+      }}
+      onDrop={handleDrop}
+    >
+      {/* Drag-and-drop import overlay */}
+      {dragActive && (
+        <div className="pointer-events-none absolute inset-0 z-[250] grid place-items-center" style={{ background: "rgba(8,12,16,0.86)", backdropFilter: "blur(8px)" }}>
+          <div className="flex flex-col items-center gap-4 rounded-3xl border-2 border-dashed px-16 py-12 text-center" style={{ borderColor: "rgba(43,184,220,0.6)", background: "rgba(43,184,220,0.06)" }}>
+            <svg className="h-14 w-14 text-cadio-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" /></svg>
+            <div>
+              <p className="text-xl font-bold text-white">Drop to import</p>
+              <p className="mt-1 text-sm text-white/50">STL, OBJ or ZIP — placed straight on your build plate</p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Global notice popup (e.g. non-editable model) */}
       {notice && (
         <div

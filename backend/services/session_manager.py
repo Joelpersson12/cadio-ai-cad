@@ -1470,6 +1470,56 @@ def select_source_file(session: Session, file_id: str) -> list[str]:
     return [f"source-files: switched to {_source_file_name(candidate)}"]
 
 
+def import_uploaded_mesh(session: Session, data: bytes, file_name: str) -> list[str]:
+    """Import a mesh file the user dragged/dropped into the workspace.
+
+    Parses STL / OBJ / ZIP bytes into real geometry, clears the plate and places
+    the dropped model on it as an editable manual body."""
+    try:
+        from backend.services.stl_importer import import_mesh_from_bytes
+    except Exception:
+        return ["mesh importer unavailable"]
+
+    name = (file_name or "model").strip()
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext and ext not in {"stl", "obj", "zip"}:
+        return [f"unsupported file type: .{ext} (use STL, OBJ or ZIP)"]
+
+    shape = import_mesh_from_bytes(data, file_name=name)
+    if shape is None or not shape.verts:
+        return ["could not read that file — is it a valid STL/OBJ/ZIP mesh?"]
+
+    dimensions = _mesh_dimensions(shape)
+    params = dict(DEFAULT_PARAMETERS)
+    params.update(
+        {
+            "width": max(1.0, dimensions["width"]),
+            "depth": max(1.0, dimensions["depth"]),
+            "height": max(0.5, dimensions["height"]),
+            "thickness": max(0.5, min(12.0, dimensions["height"])),
+            "fillet_radius": 0.0,
+            "chamfer_size": 0.0,
+            "hole_count": 0.0,
+            "wall_thickness": 2.0,
+        }
+    )
+    clean_name = re.sub(r"[^a-zA-Z0-9]+", "_", name.rsplit(".", 1)[0]).strip("_").lower()[:64] or "uploaded_model"
+    obj = create_manual_object(clean_name, shape, params)
+    obj["primitive"] = "imported_source_mesh"
+    obj["imported_source_mesh"] = True
+    obj["assembly_source"] = "uploaded-file"
+    obj["operation_history"] = [{"operation": "upload_import", "file": name}]
+    center_object_on_plate(obj)
+
+    for existing in list(session.get("objects", {}).values()):
+        _remove_object_direct(session, existing["id"])
+    session["source_info"] = []
+    session["source_files"] = []
+    add_object(session, obj)
+    session["selected_object_id"] = obj["id"]
+    return [f"imported {name}"]
+
+
 def switch_source_model_variant(session: Session, direction: str = "next") -> list[str]:
     """Swap the active source model to another ranked importable result."""
     current = _active_source_object(session)

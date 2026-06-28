@@ -149,6 +149,37 @@ export async function resetPassword(token: string, newPassword: string): Promise
   });
 }
 
+export async function uploadModelFile(sessionId: string, file: File): Promise<ScenePayload> {
+  const form = new FormData();
+  form.append("session_id", sessionId);
+  form.append("file", file);
+  let lastError: unknown = null;
+  for (const base of API_FALLBACKS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      // No Content-Type header — the browser sets the multipart boundary.
+      const res = await fetch(`${base}/api/import/upload`, {
+        method: "POST",
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const contentType = res.headers.get("content-type") || "";
+      const data = contentType.includes("application/json") ? await res.json() : await res.text();
+      if (!res.ok) {
+        const message = typeof data === "string" ? data : data?.detail || data?.error || "Upload failed";
+        throw new Error(message);
+      }
+      return data as ScenePayload;
+    } catch (err) {
+      clearTimeout(timer);
+      lastError = err;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Upload failed");
+}
+
 export async function getAccountProfile(token: string): Promise<{
   status: string;
   account: AccountProfile;
