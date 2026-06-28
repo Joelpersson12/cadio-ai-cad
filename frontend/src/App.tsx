@@ -706,10 +706,10 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
     </div>
   ) : null;
 
-  const dragDepth = useRef(0);
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types || []).includes("Files");
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    dragDepth.current = 0;
+    e.stopPropagation();
     setDragActive(false);
     const file = e.dataTransfer.files?.[0];
     if (file) void importLocalFile(file);
@@ -719,24 +719,33 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
     <div
       className="w-full h-[100dvh] relative bg-cadio-bg text-cadio-text font-sans overflow-hidden"
       onDragEnter={(e) => {
-        if (!Array.from(e.dataTransfer.types || []).includes("Files")) return;
+        if (!hasFiles(e)) return;
         e.preventDefault();
-        dragDepth.current += 1;
         setDragActive(true);
       }}
       onDragOver={(e) => {
-        if (Array.from(e.dataTransfer.types || []).includes("Files")) e.preventDefault();
+        // Must preventDefault on every dragover for the browser to allow a drop.
+        if (hasFiles(e)) {
+          e.preventDefault();
+          if (!dragActive) setDragActive(true);
+        }
       }}
-      onDragLeave={() => {
-        dragDepth.current = Math.max(0, dragDepth.current - 1);
-        if (dragDepth.current === 0) setDragActive(false);
-      }}
-      onDrop={handleDrop}
     >
-      {/* Drag-and-drop import overlay */}
+      {/* Drag-and-drop import overlay — captures the drop itself (pointer-events
+          auto) so the file never falls through to the 3D canvas underneath. */}
       {dragActive && (
-        <div className="pointer-events-none absolute inset-0 z-[250] grid place-items-center" style={{ background: "rgba(8,12,16,0.86)", backdropFilter: "blur(8px)" }}>
-          <div className="flex flex-col items-center gap-4 rounded-3xl border-2 border-dashed px-16 py-12 text-center" style={{ borderColor: "rgba(43,184,220,0.6)", background: "rgba(43,184,220,0.06)" }}>
+        <div
+          className="absolute inset-0 z-[250] grid place-items-center"
+          style={{ background: "rgba(8,12,16,0.86)", backdropFilter: "blur(8px)" }}
+          onDragOver={(e) => { e.preventDefault(); }}
+          onDragLeave={(e) => {
+            // Only hide when the pointer actually leaves the overlay (not when
+            // moving over the inner card).
+            if (e.currentTarget === e.target) setDragActive(false);
+          }}
+          onDrop={handleDrop}
+        >
+          <div className="pointer-events-none flex flex-col items-center gap-4 rounded-3xl border-2 border-dashed px-16 py-12 text-center" style={{ borderColor: "rgba(43,184,220,0.6)", background: "rgba(43,184,220,0.06)" }}>
             <svg className="h-14 w-14 text-cadio-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" /></svg>
             <div>
               <p className="text-xl font-bold text-white">Drop to import</p>
