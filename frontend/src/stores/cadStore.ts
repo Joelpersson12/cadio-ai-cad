@@ -23,6 +23,7 @@ import {
   updateObjectTransform as apiUpdateTransform,
   switchSourceModel as apiSwitchSourceModel,
   selectSourceFile as apiSelectSourceFile,
+  uploadModelFile as apiUploadModelFile,
   createPrimitive as apiCreatePrimitive,
   applyExpertOperation as apiApplyExpertOperation,
   listPrinters as apiListPrinters,
@@ -108,6 +109,7 @@ interface CadState {
   snapSelectedObjects: (snap: "on_plate" | "center_on_plate") => Promise<void>;
   switchSourceModel: (direction: "next" | "previous") => Promise<void>;
   selectSourceFile: (fileId: string) => Promise<void>;
+  importLocalFile: (file: File) => Promise<void>;
   setNotice: (notice: string | null) => void;
   createPrimitive: (payload: {
     primitive: ExpertTool;
@@ -483,6 +485,22 @@ export const useCadStore = create<CadState>((set, get) => ({
     } catch (err) {
       await waitForMinimumBusy(startedAt);
       set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
+    }
+  },
+
+  importLocalFile: async (file) => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    const startedAt = Date.now();
+    set({ status: `Importing ${file.name}...`, isBusy: true });
+    try {
+      const data = await apiUploadModelFile(sessionId, file);
+      get().applyScenePayload(data);
+      await waitForMinimumBusy(startedAt);
+      set({ status: `Imported ${file.name}`, isBusy: false });
+    } catch (err) {
+      await waitForMinimumBusy(startedAt);
+      set({ status: err instanceof Error ? err.message : "Import failed", isBusy: false });
     }
   },
 

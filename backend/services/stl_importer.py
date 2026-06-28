@@ -291,6 +291,34 @@ def _looks_like_zip(url: str, data: bytes) -> bool:
     return url.lower().split("?", 1)[0].endswith(".zip") or data[:4] == b"PK\x03\x04"
 
 
+def import_mesh_from_bytes(
+    data: bytes,
+    *,
+    file_name: str = "",
+    prefer_flat: bool = False,
+    center_xy: bool = True,
+    shift_to_plate: bool = True,
+) -> TriMesh | None:
+    """Parse already-downloaded mesh bytes (STL, OBJ, or a ZIP of them) into a
+    TriMesh. Used for local files the user drags into the workspace."""
+    if not data:
+        return None
+    name = file_name or ""
+    try:
+        if _looks_like_zip(name, data) or name.lower().endswith(".zip"):
+            mesh = _extract_mesh_from_zip(data)
+        else:
+            mesh = _parse_mesh_bytes(data, name)
+        return _finalize_mesh(
+            mesh,
+            prefer_flat=prefer_flat,
+            center_xy=center_xy,
+            shift_to_plate=shift_to_plate,
+        )
+    except Exception:
+        return None
+
+
 def import_mesh_from_url(
     url: str,
     *,

@@ -602,45 +602,86 @@ def upgrade_plan(
 _PLAN_RANK = {"free": 0, "pro": 1, "unlimited": 2}
 
 
-def stripe_active_plan(email: str) -> tuple[str | None, dict[str, Any]]:
-    """Find the best active plan for an email in Stripe + a diagnostic. Checks all
-    customers with that email and any live subscription (active/trialing/past_due).
-    Returns (plan or None, info). Never raises."""
+def _plan_from_subscriptions(subs: list[Any], price_unlimited: str, statuses: list[str]) -> tuple[str | None, str]:
+    """Return (best plan, subscription_id) from a list of Stripe subscriptions."""
+    best_plan: str | None = None
+    best_rank = 0
+    best_sub = ""
+    for sub in subs:
+        status = str(sub.get("status", ""))
+        statuses.append(status)
+        if status not in ("active", "trialing", "past_due"):
+            continue
+        try:
+            price_id = sub["items"]["data"][0]["price"]["id"]
+        except Exception:
+            price_id = ""
+        plan = "unlimited" if price_id and price_id == price_unlimited else "pro"
+        rank = _PLAN_RANK.get(plan, 0)
+        if rank > best_rank:
+            best_rank, best_plan, best_sub = rank, plan, str(sub.get("id", ""))
+    return best_plan, best_sub
+
+
+def stripe_active_plan(email: str, known_customer_id: str = "") -> tuple[str | None, dict[str, Any]]:
+    """Find the best active plan for a user in Stripe + a diagnostic. Looks up by a
+    known customer id first (covers customers created before persistence worked),
+    then by email across up to 5 matching customers, accepting any live
+    subscription (active/trialing/past_due). Returns (plan or None, info). Never raises."""
     info: dict[str, Any] = {}
     try:
         stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
         clean = _clean_email(email)
         info["email"] = clean
         info["stripe_configured"] = bool(stripe_key)
-        if not stripe_key or not clean:
+        # Surface whether we're in test or live mode — a test/live key mismatch
+        # is a common reason a clearly-active subscription "can't be found".
+        info["key_mode"] = (
+            "live" if stripe_key.startswith("sk_live") or stripe_key.startswith("rk_live")
+            else "test" if stripe_key.startswith("sk_test") or stripe_key.startswith("rk_test")
+            else "unknown"
+        )
+        if not stripe_key or not (clean or known_customer_id):
             return None, info
         import stripe as stripe_lib
 
         stripe_lib.api_key = stripe_key
-        customers = stripe_lib.Customer.list(email=clean, limit=5).get("data", [])
-        info["customers_found"] = len(customers)
         price_unlimited = os.environ.get("STRIPE_PRICE_UNLIMITED", "")
+        statuses: list[str] = []
         best_plan: str | None = None
-        best_rank = 0
         best_customer = ""
         best_sub = ""
-        statuses: list[str] = []
-        for cust in customers:
-            cid = cust.get("id", "")
-            subs = stripe_lib.Subscription.list(customer=cid, status="all", limit=10).get("data", [])
-            for sub in subs:
-                status = str(sub.get("status", ""))
-                statuses.append(status)
-                if status not in ("active", "trialing", "past_due"):
-                    continue
-                try:
-                    price_id = sub["items"]["data"][0]["price"]["id"]
-                except Exception:
-                    continue
-                plan = "unlimited" if price_id and price_id == price_unlimited else "pro"
-                rank = _PLAN_RANK.get(plan, 0)
-                if rank > best_rank:
-                    best_rank, best_plan, best_customer, best_sub = rank, plan, cid, str(sub.get("id", ""))
+        best_rank = 0
+
+        # 1) Direct lookup by a customer id we already have on file.
+        customer_ids: list[str] = []
+        if known_customer_id:
+            customer_ids.append(known_customer_id)
+
+        # 2) Lookup by email.
+        if clean:
+            try:
+                customers = stripe_lib.Customer.list(email=clean, limit=5).get("data", [])
+                info["customers_found"] = len(customers)
+                for cust in customers:
+                    cid = cust.get("id", "")
+                    if cid and cid not in customer_ids:
+                        customer_ids.append(cid)
+            except Exception as exc:  # noqa: BLE001
+                info["customer_list_error"] = repr(exc)
+
+        for cid in customer_ids:
+            try:
+                subs = stripe_lib.Subscription.list(customer=cid, status="all", limit=10).get("data", [])
+            except Exception as exc:  # noqa: BLE001
+                info.setdefault("subscription_errors", []).append(repr(exc))
+                continue
+            plan, sub_id = _plan_from_subscriptions(subs, price_unlimited, statuses)
+            rank = _PLAN_RANK.get(plan or "free", 0)
+            if rank > best_rank:
+                best_rank, best_plan, best_customer, best_sub = rank, plan, cid, sub_id
+
+        info["customers_checked"] = len(customer_ids)
         info["subscription_statuses"] = statuses
         info["plan"] = best_plan
         info["customer_id"] = best_customer
@@ -651,10 +692,28 @@ def stripe_active_plan(email: str) -> tuple[str | None, dict[str, Any]]:
         return None, info
 
 
+def _account_stripe_customer_id(account_id: str) -> str:
+    """Read the stored Stripe customer id for an account (not in the public profile)."""
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT stripe_customer_id FROM accounts WHERE id = ?", (account_id,)
+            ).fetchone()
+        if row is None:
+            return ""
+        try:
+            value = row["stripe_customer_id"]
+        except Exception:
+            value = row[0]
+        return str(value or "")
+    except Exception:
+        return ""
+
+
 def reconcile_plan_with_stripe(account_id: str, email: str, current_plan: str) -> str | None:
     """Restore a paid plan from Stripe (source of truth) when the local DB shows
     free. Only ever upgrades, never raises."""
-    plan, info = stripe_active_plan(email)
+    plan, info = stripe_active_plan(email, _account_stripe_customer_id(account_id))
     try:
         if plan and _PLAN_RANK.get(plan, 0) > _PLAN_RANK.get(current_plan, 0):
             upgrade_plan(
@@ -675,16 +734,17 @@ def refresh_account_plan(token: str | None) -> dict[str, Any]:
     account = account_from_token(token)
     if account is None:
         raise PermissionError("Login required")
-    plan, info = stripe_active_plan(str(account.get("email", "")))
+    account_id = str(account.get("accountId", ""))
+    plan, info = stripe_active_plan(str(account.get("email", "")), _account_stripe_customer_id(account_id))
     current = str(account.get("plan", "free"))
     if plan and _PLAN_RANK.get(plan, 0) > _PLAN_RANK.get(current, 0):
         upgrade_plan(
-            str(account.get("accountId", "")),
+            account_id,
             plan,
             stripe_customer_id=str(info.get("customer_id", "")),
             stripe_subscription_id=str(info.get("subscription_id", "")),
         )
-        account = _refetch_account(str(account.get("accountId", ""))) or account
+        account = _refetch_account(account_id) or account
     return {"account": account, "stripe": info}
 
 

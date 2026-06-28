@@ -475,10 +475,12 @@ function ScaledMesh({
     return geo;
   }, [obj.mesh]);
  
-  // Pre-build edge geometry once so it never rebuilds when selection state changes
+  // Pre-build edge geometry once so it never rebuilds when selection state changes.
+  // A high angle threshold (40°) means only genuinely sharp corners get an outline —
+  // tessellation seams on curved/organic surfaces no longer draw as "scratches".
   const edgesGeometry = useMemo(() => {
     if (!geometry) return null;
-    return new THREE.EdgesGeometry(geometry, 15);
+    return new THREE.EdgesGeometry(geometry, 40);
   }, [geometry]);
 
   // Use the single shared scene scale so every object (model + text labels +
@@ -579,12 +581,12 @@ function ScaledMesh({
         polygonOffsetUnits={1}
       />
     </mesh>
-    {edgesGeometry && (
+    {edgesGeometry && (selected || hovered) && (
       <lineSegments renderOrder={2} geometry={edgesGeometry}>
         <lineBasicMaterial
-          color={selected ? VIEW_COLORS.edgeSelectedInk : hovered ? VIEW_COLORS.edgeHover : VIEW_COLORS.edgeSubtle}
+          color={selected ? VIEW_COLORS.edgeSelectedInk : VIEW_COLORS.edgeHover}
           transparent
-          opacity={selected ? 0.75 : hovered ? 0.6 : 0.38}
+          opacity={selected ? 0.6 : 0.32}
           depthTest
         />
       </lineSegments>
@@ -1104,13 +1106,13 @@ export default function CadViewport({
 
       {/* Soft contact shadow grounds the model so it doesn't float. */}
       <ContactShadows
-        position={[0, 0.04, 0]}
-        scale={Math.max(printerVolume[0], printerVolume[1]) * 2.4}
+        position={[0, 0.03, 0]}
+        scale={Math.max(printerVolume[0], printerVolume[1]) * 2.6}
         far={Math.max(printerVolume[2], 120)}
-        blur={2.6}
-        opacity={0.5}
-        resolution={512}
-        color="#01060d"
+        blur={3.6}
+        opacity={0.32}
+        resolution={1024}
+        color="#020509"
       />
  
       <Grid

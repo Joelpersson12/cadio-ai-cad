@@ -13,6 +13,23 @@ const PLAN_COLORS: Record<string, string> = {
   unlimited: "#a78bfa",
 };
 
+// Compact technical line from the backend Stripe diagnostic, so a stuck
+// "not found" can actually be debugged (test/live mode, customers seen, errors).
+function stripeDiagnostic(stripe?: Record<string, unknown>): string {
+  if (!stripe || typeof stripe !== "object") return "";
+  const s = stripe as Record<string, unknown>;
+  const parts: string[] = [];
+  if (s.stripe_configured === false) parts.push("payments not configured");
+  if (typeof s.key_mode === "string" && s.key_mode !== "unknown") parts.push(`${s.key_mode} mode`);
+  if (typeof s.customers_found === "number") parts.push(`${s.customers_found} customer(s) for this email`);
+  if (Array.isArray(s.subscription_statuses) && s.subscription_statuses.length)
+    parts.push(`subs: ${(s.subscription_statuses as unknown[]).join(", ")}`);
+  if (typeof s.error === "string") parts.push(`error: ${s.error}`);
+  if (typeof s.customer_list_error === "string") parts.push(`lookup error: ${s.customer_list_error}`);
+  if (!parts.length) return "";
+  return `Diagnostics — ${parts.join(" · ")}`;
+}
+
 function initials(account: CadioAccount) {
   const name = account.name || account.email || "?";
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
@@ -121,7 +138,7 @@ export default function ProfilePanel({
     setRestoreMsg(null);
     try {
       const prevPlan = account.plan ?? "free";
-      const { account: a } = await refreshAccountPlan(token);
+      const { account: a, stripe } = await refreshAccountPlan(token);
       updateCadioAccount(a);
       setAccount(getCadioAccount());
       const newPlan = a.plan ?? "free";
@@ -130,7 +147,11 @@ export default function ProfilePanel({
       } else if (newPlan !== "free") {
         setRestoreMsg({ kind: "ok", text: `Your ${PLAN_LABELS[newPlan] ?? newPlan} plan is active and up to date.` });
       } else {
-        setRestoreMsg({ kind: "info", text: "No active paid subscription found for this account in Stripe. Make sure you subscribed with this same email." });
+        const diag = stripeDiagnostic(stripe);
+        setRestoreMsg({
+          kind: "info",
+          text: "No active paid subscription found. Make sure you subscribed with this same email." + (diag ? `\n${diag}` : ""),
+        });
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Could not refresh plan";
@@ -303,7 +324,7 @@ export default function ProfilePanel({
               </button>
               {restoreMsg && (
                 <p
-                  className="mt-2 px-1 text-xs leading-relaxed"
+                  className="mt-2 whitespace-pre-line px-1 text-xs leading-relaxed"
                   style={{
                     color:
                       restoreMsg.kind === "ok"

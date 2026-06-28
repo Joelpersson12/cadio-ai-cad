@@ -174,7 +174,7 @@ export function SourceFilesModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/7" style={{ background: "#0d1318" }}>
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-white/30">Choose a model file</p>
-            <p className="mt-0.5 text-[11px] text-white/40">This design has several files — pick which one to place on the build plate.</p>
+            <p className="mt-0.5 text-[11px] text-white/40">This design has several files — pick one to place. Choosing another swaps it out.</p>
           </div>
           <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -250,10 +250,10 @@ export function SourceFilesModal({
                   <span className="shrink-0 text-[11px] font-semibold text-cadio-accent">Place all →</span>
                 ) : f.active ? (
                   <span className="shrink-0 rounded-full bg-cadio-accent/15 px-2 py-0.5 text-[10px] font-bold text-cadio-accent">
-                    On plate<span className="text-white/40 group-hover:text-[#ff6961]"> · remove</span>
+                    On plate
                   </span>
                 ) : (
-                  <span className="shrink-0 text-[11px] font-semibold text-cadio-accent">+ Add</span>
+                  <span className="shrink-0 text-[11px] font-semibold text-cadio-accent opacity-0 transition-opacity group-hover:opacity-100">Use this →</span>
                 )}
               </button>
             );
@@ -261,10 +261,7 @@ export function SourceFilesModal({
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-white/7 px-5 py-3" style={{ background: "#0d1318" }}>
           <span className="text-[11px] text-white/35">
-            {(() => {
-              const n = files.filter((f) => f.id !== "__all__" && f.active).length;
-              return n > 0 ? `${n} part${n > 1 ? "s" : ""} on plate` : "Add the parts you want";
-            })()}
+            Choosing a file replaces the current model. “All parts” builds the full assembly.
           </span>
           <button
             onClick={onClose}
@@ -326,6 +323,8 @@ export default function AiPanel({ floating = false }: { floating?: boolean }) {
     // prompt is used as-is (no hidden re-appending).
     const query = text.trim();
     if (!query || isLoading) return;
+    // The user is generating their own model — drop any "Demo:" badge.
+    window.dispatchEvent(new CustomEvent("cadio-user-prompt"));
     setIsLoading(true);
     setPrompt("");
     setActiveFilters([]);
