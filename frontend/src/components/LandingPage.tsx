@@ -1061,7 +1061,7 @@ const MODELS = [
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
-export default function LandingPage({ onStartBuilding }: { onStartBuilding: () => void }) {
+export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBuilding: () => void; onSeeDemo?: () => void }) {
   const [language, setLanguage] = useState<Language>("en");
   const [authMode, setAuthMode] = useState<AuthMode>(null);
   const [pendingPlan, setPendingPlan] = useState<string | null>(null);
@@ -1308,7 +1308,7 @@ export default function LandingPage({ onStartBuilding }: { onStartBuilding: () =
                   {text.hero.primary}
                 </button>
                 <button
-                  onClick={() => setAuthMode("signup")}
+                  onClick={() => (onSeeDemo ? onSeeDemo() : onStartBuilding())}
                   className="rounded-xl px-8 text-base font-semibold transition-all hover:text-white"
                   style={{
                     height: "52px",
