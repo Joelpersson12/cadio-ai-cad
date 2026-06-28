@@ -1013,7 +1013,25 @@ export default function CadViewport({
           // Filmic tonemapping for richer contrast and a premium, cinematic look.
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 1.05;
-          scene.background = new THREE.Color(VIEW_COLORS.background);
+          // Subtle vertical gradient backdrop (lighter top, near-black bottom) for
+          // a deeper, premium "OLED" sense of space instead of a flat fill.
+          const grad = document.createElement("canvas");
+          grad.width = 2;
+          grad.height = 512;
+          const ctx = grad.getContext("2d");
+          if (ctx) {
+            const g = ctx.createLinearGradient(0, 0, 0, 512);
+            g.addColorStop(0, "#171d24");
+            g.addColorStop(0.55, "#0f1318");
+            g.addColorStop(1, "#070a0d");
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 2, 512);
+            const tex = new THREE.CanvasTexture(grad);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            scene.background = tex;
+          } else {
+            scene.background = new THREE.Color(VIEW_COLORS.background);
+          }
         }}
         onPointerUp={() => setTransformDragging(false)}
       >
