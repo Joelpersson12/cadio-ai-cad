@@ -3,6 +3,8 @@
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls, Environment, Lightformer, ContactShadows } from "@react-three/drei";
+import { EffectComposer, N8AO, Bloom, SMAA, Vignette, ToneMapping } from "@react-three/postprocessing";
+import { ToneMappingMode } from "postprocessing";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
 
@@ -851,6 +853,39 @@ function SketchPlane({
   );
 }
  
+// ---------------------------------------------------------------------------
+// Premium postprocessing — N8AO ambient occlusion deepens crevices and contact
+// areas, a high-threshold Bloom lets specular highlights glow like real plastic
+// under studio light, SMAA cleans the silhouettes, and a whisper-soft vignette
+// frames the build. Disabled on mobile/low-power to protect framerate.
+// ---------------------------------------------------------------------------
+function PremiumEffects({ enabled, sceneRadius }: { enabled: boolean; sceneRadius: number }) {
+  if (!enabled) return null;
+  const aoRadius = Math.max(8, Math.min(sceneRadius * 0.45, 60));
+  return (
+    <EffectComposer multisampling={0} enableNormalPass>
+      <N8AO
+        aoRadius={aoRadius}
+        distanceFalloff={1.0}
+        intensity={2.4}
+        quality="medium"
+        halfRes
+        color="#05080d"
+      />
+      <Bloom
+        intensity={0.34}
+        luminanceThreshold={0.85}
+        luminanceSmoothing={0.2}
+        mipmapBlur
+        radius={0.6}
+      />
+      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+      <Vignette eskil={false} offset={0.28} darkness={0.46} />
+      <SMAA />
+    </EffectComposer>
+  );
+}
+
 export default function CadViewport({
   objects,
   selectedObjectId,
@@ -887,6 +922,14 @@ export default function CadViewport({
   const [transformDragging, setTransformDragging] = useState(false);
   
   const sceneScale = useMemo(() => computeSceneScale(objects, printerVolume), [objects, printerVolume]);
+
+  // High-end graphics (AO + bloom) on capable desktops only; mobile keeps the
+  // lighter forward pipeline so it stays smooth.
+  const highGraphics = !mobileMode;
+  const sceneRadius = useMemo(
+    () => Math.max(bounds.x, bounds.y, bounds.z, printerVolume[0] * 0.4, 60),
+    [bounds, printerVolume],
+  );
 
   const measurementSpecs = useMemo(() => {
     if (!showMeasurements) return [];
@@ -1146,6 +1189,9 @@ export default function CadViewport({
         }}
       />
  
+      {/* Premium postprocessing (desktop only) */}
+      <PremiumEffects enabled={highGraphics} sceneRadius={sceneRadius} />
+
       {/* Orientation gizmo */}
       <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
         <GizmoViewport
