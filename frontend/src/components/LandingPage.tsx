@@ -16,14 +16,14 @@ import CheckoutModal from "./CheckoutModal";
 type Language = "en" | "sv" | "es" | "fr" | "it" | "de" | "pt";
 type AuthMode = "login" | "signup" | "forgot" | null;
 
-const languageOptions: Array<{ value: Language; label: string }> = [
-  { value: "en", label: "EN" },
-  { value: "sv", label: "SV" },
-  { value: "es", label: "ES" },
-  { value: "fr", label: "FR" },
-  { value: "it", label: "IT" },
-  { value: "de", label: "DE" },
-  { value: "pt", label: "PT" },
+const languageOptions: Array<{ value: Language; label: string; native: string; flag: string }> = [
+  { value: "en", label: "EN", native: "English", flag: "🇬🇧" },
+  { value: "sv", label: "SV", native: "Svenska", flag: "🇸🇪" },
+  { value: "es", label: "ES", native: "Español", flag: "🇪🇸" },
+  { value: "fr", label: "FR", native: "Français", flag: "🇫🇷" },
+  { value: "it", label: "IT", native: "Italiano", flag: "🇮🇹" },
+  { value: "de", label: "DE", native: "Deutsch", flag: "🇩🇪" },
+  { value: "pt", label: "PT", native: "Português", flag: "🇵🇹" },
 ];
 
 const copy = {
@@ -61,81 +61,81 @@ const copy = {
   },
   es: {
     nav: { product: "Producto", workflow: "Flujo", pricing: "Precios", login: "Iniciar", start: "Empezar" },
-    hero: { eyebrow: "Beta Early Access", headline1: "Diseña.", headline2: "Genera.", headline3: "Imprime.", body: "El workspace CAD con IA que transforma ideas en geometría de precisión.", primary: "Empezar gratis", secondary: "Ver demo" },
-    stats: [["IA Paramétrica", "De lenguaje natural a geometría real"], ["Herramientas Pro", "Control CAD manual en cada paso"], ["Listo para imprimir", "STL · 3MF · STEP"]],
-    product: { label: "Producto", title: "Precisión de ingeniería con velocidad IA", body: "Describe lo que quieres construir. La IA de Cadio genera geometría paramétrica válida." },
+    hero: { eyebrow: "Early Access Beta", headline1: "Diseña.", headline2: "Genera.", headline3: "Imprime.", body: "El workspace CAD con IA que convierte ideas en geometría de precisión — lista para tu impresora 3D.", primary: "Empezar gratis", secondary: "Ver demo" },
+    stats: [["Sin conocimientos de CAD", "Escribe lo que quieres — recibe una pieza real y editable"], ["Decenas de miles de modelos", "Printables, Thingiverse y MakerWorld, en una sola búsqueda"], ["Exportación lista para imprimir", "STL · 3MF · STEP, ajustado a tu impresora"]],
+    product: { label: "Producto", title: "De una frase a algo que puedes sostener", body: "Escribe una idea o trae un diseño real de las grandes bibliotecas de impresión. Cadio te da una pieza acotada y editable en la placa — y te deja mover aristas, hacer agujeros y cambiar el tamaño para que encaje, sin abrir CAD tradicional." },
     cards: [
-      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Búsqueda IA", body: "Encuentra puntos de partida imprimibles de las mayores bibliotecas de modelos 3D." },
-      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Edición directa", body: "Selecciona aristas, extruye caras, aplica filetes con control de precisión." },
-      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Exportación inteligente", body: "Archivos optimizados para FDM, SLA e impresión 3D industrial." },
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Encuentra, no empieces de cero", body: "Busca en Printables, Thingiverse y MakerWorld desde un solo cuadro y coloca un modelo real en tu placa — con su fuente y licencia a la vista." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Modifícalo como arcilla", body: "Haz clic en una arista para redondearla, corta una ranura, añade agujeros de montaje o ajústalo a tu medida — cada cambio se actualiza en vivo en 3D." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Ajustado a tu impresora", body: "Cadio compara el modelo con el volumen de tu impresora y te avisa antes de desperdiciar una impresión. Exporta STL, 3MF o STEP." },
     ],
-    workflow: { label: "Flujo", title: "De idea a objeto en cuatro pasos", steps: [["Busca", "Describe lo que necesitas o encuentra un diseño."], ["Genera", "La IA crea geometría paramétrica válida."], ["Refina", "Herramientas CAD profesionales para control preciso."], ["Exporta", "Archivos listos para tu impresora y material."]] },
-    pricingTitle: "Precio simple, siempre",
-    pricingBody: "Gratis durante early access.",
+    workflow: { label: "Flujo", title: "De la idea a la pieza impresa en cuatro pasos", steps: [["Busca", "Descríbelo o toma un diseño existente de las bibliotecas de impresión."], ["Genera", "Un modelo real y acotado llega a tu placa en segundos."], ["Refina", "Redondea aristas, corta agujeros, cambia el tamaño — hazlo tuyo."], ["Exporta", "Descarga un archivo listo para imprimir, ajustado a tu impresora y material."]] },
+    pricingTitle: "Precios simples y transparentes",
+    pricingBody: "Empieza gratis con 3 descargas. Mejora cuando quieras construir más.",
     auth: { loginTitle: "Bienvenido de nuevo", signupTitle: "Empieza a construir hoy", email: "Correo electrónico", password: "Contraseña", name: "Nombre completo", continue: "Entrar al Workspace", hint: "Al continuar aceptas nuestros términos y política de privacidad." },
     cta: { title: "Empieza a construir hoy", body: "Únete a ingenieros y makers que construyen más rápido.", button: "Abrir Workspace" },
   },
   fr: {
     nav: { product: "Produit", workflow: "Flux", pricing: "Tarifs", login: "Connexion", start: "Commencer" },
-    hero: { eyebrow: "Beta Accès anticipé", headline1: "Dessinez.", headline2: "Générez.", headline3: "Imprimez.", body: "L'espace de travail CAO IA qui transforme les idées en géométrie de précision.", primary: "Commencer gratuitement", secondary: "Voir la démo" },
-    stats: [["IA Paramétrique", "Du langage naturel à la vraie géométrie"], ["Outils Pro", "Contrôle CAO manuel à chaque étape"], ["Prêt à imprimer", "STL · 3MF · STEP"]],
-    product: { label: "Produit", title: "Précision ingénierie, vitesse IA", body: "Décrivez ce que vous voulez construire. L'IA de Cadio génère une géométrie paramétrique valide." },
+    hero: { eyebrow: "Early Access Beta", headline1: "Dessinez.", headline2: "Générez.", headline3: "Imprimez.", body: "L'espace de travail CAO IA qui transforme vos idées en géométrie de précision — prête pour votre imprimante 3D.", primary: "Commencer gratuitement", secondary: "Voir la démo" },
+    stats: [["Aucune compétence CAO requise", "Décrivez ce que vous voulez — obtenez une pièce réelle et modifiable"], ["Des dizaines de milliers de modèles", "Printables, Thingiverse et MakerWorld, en une seule recherche"], ["Exports prêts à imprimer", "STL · 3MF · STEP, dimensionnés pour votre imprimante"]],
+    product: { label: "Produit", title: "D'une phrase à un objet que vous pouvez tenir", body: "Décrivez une idée ou importez un vrai modèle des grandes bibliothèques d'impression. Cadio vous remet une pièce cotée et modifiable sur le plateau — puis vous laisse ajuster les arêtes, percer des trous et la redimensionner, sans jamais ouvrir un logiciel CAO classique." },
     cards: [
-      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Recherche IA", body: "Trouvez des points de départ imprimables dans les plus grandes bibliothèques." },
-      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Édition directe", body: "Sélectionnez les arêtes, extrudez les faces, appliquez des congés." },
-      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Export intelligent", body: "Fichiers optimisés pour FDM, SLA et impression 3D industrielle." },
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Trouvez, ne repartez pas de zéro", body: "Cherchez dans Printables, Thingiverse et MakerWorld depuis un seul champ et posez un vrai modèle sur votre plateau — sa source et sa licence affichées." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Modelez-le comme de l'argile", body: "Cliquez sur une arête pour l'arrondir, taillez une fente, ajoutez des trous de fixation ou redimensionnez — chaque changement se met à jour en direct en 3D." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Dimensionné pour votre imprimante", body: "Cadio compare le modèle au volume d'impression de votre machine et vous prévient avant de gâcher une impression. Exportez en STL, 3MF ou STEP." },
     ],
-    workflow: { label: "Flux", title: "De l'idée à l'objet en quatre étapes", steps: [["Cherchez", "Décrivez ce dont vous avez besoin."], ["Générez", "L'IA crée une géométrie paramétrique valide."], ["Affinez", "Outils CAO professionnels pour un contrôle précis."], ["Exportez", "Fichiers prêts pour votre imprimante et matériau."]] },
-    pricingTitle: "Tarifs simples, toujours",
-    pricingBody: "Gratuit pendant l'accès anticipé.",
+    workflow: { label: "Flux", title: "De l'idée à la pièce imprimée en quatre étapes", steps: [["Cherchez", "Décrivez-le ou récupérez un modèle existant des bibliothèques d'impression."], ["Générez", "Un vrai modèle coté arrive sur votre plateau en quelques secondes."], ["Affinez", "Arrondissez les arêtes, percez des trous, redimensionnez — rendez-le unique."], ["Exportez", "Téléchargez un fichier prêt à imprimer, adapté à votre imprimante et matériau."]] },
+    pricingTitle: "Une tarification simple et transparente",
+    pricingBody: "Commencez gratuitement avec 3 téléchargements. Passez à l'offre supérieure quand vous voulez créer plus.",
     auth: { loginTitle: "Bon retour", signupTitle: "Commencez à construire", email: "Adresse e-mail", password: "Mot de passe", name: "Nom complet", continue: "Accéder au Workspace", hint: "En continuant, vous acceptez nos conditions et notre politique de confidentialité." },
     cta: { title: "Commencez à construire", body: "Rejoignez des ingénieurs et des makers qui construisent plus vite.", button: "Ouvrir le Workspace" },
   },
   it: {
     nav: { product: "Prodotto", workflow: "Flusso", pricing: "Prezzi", login: "Accedi", start: "Inizia" },
-    hero: { eyebrow: "Beta Accesso anticipato", headline1: "Progetta.", headline2: "Genera.", headline3: "Stampa.", body: "Il workspace CAD AI che trasforma le idee in geometria di precisione.", primary: "Inizia gratis", secondary: "Guarda la demo" },
-    stats: [["IA Parametrica", "Dal linguaggio naturale alla vera geometria"], ["Strumenti Pro", "Controllo CAD manuale ad ogni passo"], ["Pronto per la stampa", "STL · 3MF · STEP"]],
-    product: { label: "Prodotto", title: "Precisione ingegneristica, velocità IA", body: "Descrivi cosa vuoi costruire. L'IA di Cadio genera geometria parametrica valida." },
+    hero: { eyebrow: "Early Access Beta", headline1: "Progetta.", headline2: "Genera.", headline3: "Stampa.", body: "Lo spazio di lavoro CAD con IA che trasforma le idee in geometria di precisione — pronta per la tua stampante 3D.", primary: "Inizia gratis", secondary: "Guarda la demo" },
+    stats: [["Nessuna competenza CAD", "Scrivi cosa vuoi — ottieni una parte reale e modificabile"], ["Decine di migliaia di modelli", "Printables, Thingiverse e MakerWorld, in un'unica ricerca"], ["Export pronti per la stampa", "STL · 3MF · STEP, dimensionati per la tua stampante"]],
+    product: { label: "Prodotto", title: "Da una frase a qualcosa che puoi tenere in mano", body: "Scrivi un'idea o importa un modello reale dalle grandi librerie di stampa. Cadio ti consegna una parte quotata e modificabile sul piatto — poi ti lascia spostare i bordi, fare fori e ridimensionarla, senza mai aprire un CAD tradizionale." },
     cards: [
-      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Ricerca IA", body: "Trova punti di partenza stampabili dalle più grandi librerie di modelli 3D." },
-      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Modifica diretta", body: "Seleziona bordi, estrudi facce, applica raccordi con controllo preciso." },
-      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Esportazione intelligente", body: "File ottimizzati per FDM, SLA e stampa 3D industriale." },
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Trova, non ricominciare", body: "Cerca in Printables, Thingiverse e MakerWorld da un'unica casella e metti un modello reale sul piatto — con fonte e licenza in vista." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Modellalo come argilla", body: "Clicca un bordo per arrotondarlo, taglia una scanalatura, aggiungi fori di montaggio o ridimensiona — ogni modifica si aggiorna dal vivo in 3D." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Dimensionato per la tua stampante", body: "Cadio confronta il modello con il volume di stampa della tua macchina e ti avvisa prima di sprecare una stampa. Esporta STL, 3MF o STEP." },
     ],
-    workflow: { label: "Flusso", title: "Dall'idea all'oggetto in quattro passi", steps: [["Cerca", "Descrivi di cosa hai bisogno."], ["Genera", "L'IA crea geometria parametrica valida."], ["Affina", "Strumenti CAD professionali per il controllo preciso."], ["Esporta", "File pronti per la tua stampante e materiale."]] },
-    pricingTitle: "Prezzi semplici, sempre",
-    pricingBody: "Gratuito durante l'accesso anticipato.",
+    workflow: { label: "Flusso", title: "Dall'idea alla parte stampata in quattro passi", steps: [["Cerca", "Descrivilo o prendi un modello esistente dalle librerie di stampa."], ["Genera", "Un modello reale e quotato arriva sul piatto in pochi secondi."], ["Affina", "Arrotonda i bordi, taglia fori, ridimensiona — rendilo tuo."], ["Esporta", "Scarica un file pronto per la stampa, adatto alla tua stampante e materiale."]] },
+    pricingTitle: "Prezzi semplici e trasparenti",
+    pricingBody: "Inizia gratis con 3 download. Passa a un piano superiore quando vuoi costruire di più.",
     auth: { loginTitle: "Bentornato", signupTitle: "Inizia a costruire oggi", email: "Indirizzo email", password: "Password", name: "Nome completo", continue: "Accedi al Workspace", hint: "Continuando accetti i nostri termini e la nostra politica sulla privacy." },
     cta: { title: "Inizia a costruire oggi", body: "Unisciti a ingegneri e maker che costruiscono più velocemente.", button: "Apri il Workspace" },
   },
   de: {
     nav: { product: "Produkt", workflow: "Workflow", pricing: "Preise", login: "Anmelden", start: "Starten" },
-    hero: { eyebrow: "Early Access Beta", headline1: "Designen.", headline2: "Generieren.", headline3: "Drucken.", body: "Der KI-CAD-Workspace, der Ideen in Präzisionsgeometrie verwandelt.", primary: "Kostenlos starten", secondary: "Demo ansehen" },
-    stats: [["Parametrische KI", "Von natürlicher Sprache zur echten Geometrie"], ["Profi-Werkzeuge", "Manuelle CAD-Kontrolle bei jedem Schritt"], ["Druckbereit", "STL · 3MF · STEP Export"]],
-    product: { label: "Produkt", title: "Ingenieurspräzision trifft KI-Geschwindigkeit", body: "Beschreibe, was du bauen möchtest. Cadios KI generiert gültige parametrische Geometrie." },
+    hero: { eyebrow: "Early Access Beta", headline1: "Designen.", headline2: "Generieren.", headline3: "Drucken.", body: "Der KI-CAD-Workspace, der Ideen in Präzisionsgeometrie verwandelt — bereit für deinen 3D-Drucker.", primary: "Kostenlos starten", secondary: "Demo ansehen" },
+    stats: [["Keine CAD-Kenntnisse nötig", "Schreib, was du willst — bekomm ein echtes, bearbeitbares Teil"], ["Zehntausende Modelle", "Printables, Thingiverse & MakerWorld in einer Suche"], ["Druckfertige Exporte", "STL · 3MF · STEP, passend für deinen Drucker"]],
+    product: { label: "Produkt", title: "Von einem Satz zu etwas, das du in der Hand hältst", body: "Schreib eine Idee oder hol dir ein echtes Design aus den großen Druck-Bibliotheken. Cadio gibt dir ein bemaßtes, bearbeitbares Teil auf der Druckplatte — dann kannst du Kanten anpassen, Löcher bohren und die Größe ändern, ganz ohne klassisches CAD." },
     cards: [
-      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "KI-Suche", body: "Finde druckbare Ausgangspunkte aus den größten 3D-Modellbibliotheken." },
-      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Direktbearbeitung", body: "Kanten auswählen, Flächen extrudieren, Verrundungen mit Präzision." },
-      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Intelligenter Export", body: "Optimierte Dateien für FDM, SLA und industriellen 3D-Druck." },
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Finden statt neu anfangen", body: "Durchsuche Printables, Thingiverse und MakerWorld in einem Feld und setz ein echtes Modell direkt auf die Platte — mit Quelle und Lizenz sichtbar." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Form es wie Ton", body: "Klick auf eine Kante zum Abrunden, schneide eine Nut, füge Montagelöcher hinzu oder skaliere es passend — jede Änderung aktualisiert sich live in 3D." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Passend für deinen Drucker", body: "Cadio prüft das Modell gegen das Bauvolumen deines Druckers und warnt dich, bevor du einen Druck verschwendest. Exportiere STL, 3MF oder STEP." },
     ],
-    workflow: { label: "Workflow", title: "Von der Idee zum Objekt in vier Schritten", steps: [["Suchen", "Beschreibe, was du brauchst."], ["Generieren", "KI erstellt gültige parametrische Geometrie."], ["Verfeinern", "Professionelle CAD-Werkzeuge für präzise Kontrolle."], ["Exportieren", "Produktionsreife Dateien für deinen Drucker."]] },
-    pricingTitle: "Einfache Preise, immer",
-    pricingBody: "Kostenlos während des Early Access.",
+    workflow: { label: "Workflow", title: "Von der Idee zum gedruckten Teil in vier Schritten", steps: [["Suchen", "Beschreib es oder hol ein bestehendes Design aus den Druck-Bibliotheken."], ["Generieren", "Ein echtes, bemaßtes Modell landet in Sekunden auf deiner Platte."], ["Verfeinern", "Kanten runden, Löcher schneiden, skalieren — mach es zu deinem."], ["Exportieren", "Lade eine druckfertige Datei, abgestimmt auf Drucker und Material."]] },
+    pricingTitle: "Einfache, transparente Preise",
+    pricingBody: "Starte gratis mit 3 Downloads. Upgrade, wenn du mehr bauen willst.",
     auth: { loginTitle: "Willkommen zurück", signupTitle: "Beginne heute zu bauen", email: "E-Mail-Adresse", password: "Passwort", name: "Vollständiger Name", continue: "Zum Workspace", hint: "Mit der Fortsetzung stimmst du unseren Bedingungen zu." },
     cta: { title: "Beginne heute zu bauen", body: "Schließe dich Ingenieuren und Makern an.", button: "Workspace öffnen" },
   },
   pt: {
     nav: { product: "Produto", workflow: "Fluxo", pricing: "Preços", login: "Entrar", start: "Começar" },
-    hero: { eyebrow: "Beta Acesso antecipado", headline1: "Projete.", headline2: "Gere.", headline3: "Imprima.", body: "O workspace CAD com IA que transforma ideias em geometria de precisão.", primary: "Começar grátis", secondary: "Ver demo" },
-    stats: [["IA Paramétrica", "Da linguagem natural à geometria real"], ["Ferramentas Pro", "Controle CAD manual a cada passo"], ["Pronto para impressão", "STL · 3MF · STEP"]],
-    product: { label: "Produto", title: "Precisão de engenharia com velocidade de IA", body: "Descreva o que você quer construir. A IA da Cadio gera geometria paramétrica válida." },
+    hero: { eyebrow: "Early Access Beta", headline1: "Projete.", headline2: "Gere.", headline3: "Imprima.", body: "O workspace CAD com IA que transforma ideias em geometria de precisão — pronta para a sua impressora 3D.", primary: "Começar grátis", secondary: "Ver demo" },
+    stats: [["Sem conhecimentos de CAD", "Escreva o que quer — receba uma peça real e editável"], ["Dezenas de milhares de modelos", "Printables, Thingiverse e MakerWorld numa só busca"], ["Exportações prontas para imprimir", "STL · 3MF · STEP, dimensionado para a sua impressora"]],
+    product: { label: "Produto", title: "De uma frase a algo que você pode segurar", body: "Escreva uma ideia ou traga um design real das grandes bibliotecas de impressão. A Cadio entrega uma peça cotada e editável na placa — e deixa você mover arestas, fazer furos e redimensionar para encaixar, sem nunca abrir um CAD tradicional." },
     cards: [
-      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Busca IA", body: "Encontre pontos de partida imprimíveis das maiores bibliotecas de modelos 3D." },
-      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4a2 2 0 012-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Edição direta", body: "Selecione arestas, extrude faces, aplique filetes com controle preciso." },
-      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Exportação inteligente", body: "Arquivos otimizados para FDM, SLA e impressão 3D industrial." },
+      { icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z", title: "Encontre, não comece do zero", body: "Busque no Printables, Thingiverse e MakerWorld numa só caixa e coloque um modelo real direto na placa — com fonte e licença à vista." },
+      { icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", title: "Molde como argila", body: "Clique numa aresta para arredondá-la, corte um rasgo, adicione furos de montagem ou ajuste o tamanho — cada mudança atualiza ao vivo em 3D." },
+      { icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4", title: "Dimensionado para a sua impressora", body: "A Cadio compara o modelo com o volume de impressão da sua máquina e avisa antes de você desperdiçar uma impressão. Exporte STL, 3MF ou STEP." },
     ],
-    workflow: { label: "Fluxo", title: "Da ideia ao objeto em quatro etapas", steps: [["Busque", "Descreva o que você precisa."], ["Gere", "A IA cria geometria paramétrica válida."], ["Refine", "Ferramentas CAD profissionais para controle preciso."], ["Exporte", "Arquivos prontos para sua impressora e material."]] },
-    pricingTitle: "Preços simples, sempre",
-    pricingBody: "Grátis durante o acesso antecipado.",
+    workflow: { label: "Fluxo", title: "Da ideia à peça impressa em quatro etapas", steps: [["Busque", "Descreva ou pegue um design existente das bibliotecas de impressão."], ["Gere", "Um modelo real e cotado chega à sua placa em segundos."], ["Refine", "Arredonde arestas, corte furos, redimensione — faça dele o seu."], ["Exporte", "Baixe um arquivo pronto para impressão, ajustado à sua impressora e material."]] },
+    pricingTitle: "Preços simples e transparentes",
+    pricingBody: "Comece grátis com 3 downloads. Faça upgrade quando quiser construir mais.",
     auth: { loginTitle: "Bem-vindo de volta", signupTitle: "Comece a construir hoje", email: "Endereço de e-mail", password: "Senha", name: "Nome completo", continue: "Entrar no Workspace", hint: "Ao continuar, você concorda com nossos termos e política de privacidade." },
     cta: { title: "Comece a construir hoje", body: "Junte-se a engenheiros e makers que constroem mais rápido.", button: "Abrir Workspace" },
   },
@@ -156,6 +156,105 @@ const CURRENCY: Record<Language, { pro: string; unlimited: string; period: strin
 const ACCENT = "#2bb8dc";
 const ACCENT_DIM = "rgba(43,184,220,";
 const BG = "#080c10";
+
+// ─── LANGUAGE SWITCHER ──────────────────────────────────────────────────────
+// Custom dark dropdown — the native <select> rendered its option list with the
+// OS's white system styling, which looked broken on the dark theme.
+function LanguageSwitcher({
+  language,
+  onChange,
+}: {
+  language: Language;
+  onChange: (lang: Language) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = languageOptions.find((o) => o.value === language) ?? languageOptions[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors sm:h-9"
+        style={{
+          background: open ? "rgba(43,184,220,0.12)" : "rgba(43,184,220,0.06)",
+          border: "1px solid rgba(43,184,220,0.18)",
+          color: "rgba(232,237,242,0.82)",
+        }}
+      >
+        <svg className="h-3.5 w-3.5 text-cadio-accent/80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.5-2.5 3.5-6 3.5-9S14.5 5.5 12 3m0 18c-2.5-2.5-3.5-6-3.5-9S9.5 5.5 12 3M3.5 12h17" />
+        </svg>
+        <span aria-hidden className="text-[13px] leading-none">{current.flag}</span>
+        <span className="leading-none">{current.label}</span>
+        <svg
+          className={`h-3 w-3 text-white/40 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          className="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl py-1 shadow-2xl"
+          style={{
+            background: "rgba(13,19,24,0.98)",
+            border: "1px solid rgba(43,184,220,0.18)",
+            backdropFilter: "blur(20px)",
+          }}
+        >
+          {languageOptions.map((o) => {
+            const active = o.value === language;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm transition-colors"
+                style={{
+                  background: active ? "rgba(43,184,220,0.12)" : "transparent",
+                  color: active ? "#8fe3f6" : "rgba(232,237,242,0.78)",
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+              >
+                <span aria-hidden className="text-base leading-none">{o.flag}</span>
+                <span className="flex-1 font-medium">{o.native}</span>
+                {active && (
+                  <svg className="h-4 w-4 text-cadio-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── 3D MODELS ──────────────────────────────────────────────────────────────
 // Popular prints: Gyroscope (precision rings), Rocket, Twisted Vase, Flexi Coil
@@ -1140,6 +1239,18 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
   const s3 = useReveal();
   const s4 = useReveal();
 
+  // Cursor-reactive spotlight over the hero (desktop pointer only).
+  const [spot, setSpot] = useState({ x: 50, y: 42, active: false });
+  const onHeroMove = (e: React.MouseEvent<HTMLElement>) => {
+    if (window.matchMedia("(pointer: coarse)").matches) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    setSpot({
+      x: ((e.clientX - r.left) / r.width) * 100,
+      y: ((e.clientY - r.top) / r.height) * 100,
+      active: true,
+    });
+  };
+
   const reveal = (v: boolean, delay = 0) =>
     `transition-all duration-700 ease-out ${v ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`
     + (delay ? ` delay-[${delay}ms]` : "");
@@ -1193,21 +1304,8 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
               <a href="#pricing" className="transition-colors hover:text-white">{text.nav.pricing}</a>
             </nav>
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* Language selector — hidden on mobile to avoid crowding */}
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as Language)}
-                className="h-8 sm:h-9 rounded-lg px-2 text-xs outline-none transition-colors"
-                style={{
-                  background: "rgba(43,184,220,0.06)",
-                  border: "1px solid rgba(43,184,220,0.15)",
-                  color: "rgba(232,237,242,0.7)",
-                }}
-              >
-                {languageOptions.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+              {/* Language selector — custom dark dropdown */}
+              <LanguageSwitcher language={language} onChange={setLanguage} />
               {isAuthed ? (
                 <>
                   <ProfileAvatar size={32} onClick={() => setProfileOpen(true)} />
@@ -1248,9 +1346,22 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
         </header>
 
         {/* ── HERO ──────────────────────────────────────────────────────── */}
-        <section className="relative min-h-screen overflow-hidden">
+        <section
+          className="relative min-h-screen overflow-hidden"
+          onMouseMove={onHeroMove}
+          onMouseLeave={() => setSpot((s) => ({ ...s, active: false }))}
+        >
           {/* 3D scene fills entire hero */}
           <HeroScene displayModel={displayModel} exitingModel={exitingModel} inTransition={inTransition} />
+
+          {/* Cursor-reactive spotlight — a soft cyan glow that tracks the pointer */}
+          <div
+            className="pointer-events-none absolute inset-0 z-[5] transition-opacity duration-500"
+            style={{
+              opacity: spot.active ? 1 : 0,
+              background: `radial-gradient(420px circle at ${spot.x}% ${spot.y}%, rgba(43,184,220,0.14), transparent 60%)`,
+            }}
+          />
 
           {/* Hero text — centered, above the model */}
           <div className="relative z-10 flex min-h-screen flex-col items-center justify-center pt-16 pb-32">
