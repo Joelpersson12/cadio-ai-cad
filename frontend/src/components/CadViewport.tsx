@@ -2,7 +2,7 @@
  
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls } from "@react-three/drei";
+import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls, Environment, Lightformer, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
 
@@ -561,13 +561,15 @@ function ScaledMesh({
         if ((e.nativeEvent as PointerEvent).pointerType !== "touch") setHovered(false);
       }}
     >
-      <meshStandardMaterial
+      <meshPhysicalMaterial
         color={visibleBodyColor(obj, selected, hovered)}
-        roughness={selected ? 0.88 : 0.92}
-        metalness={0}
-        envMapIntensity={0}
+        roughness={selected ? 0.42 : 0.5}
+        metalness={0.04}
+        clearcoat={0.55}
+        clearcoatRoughness={0.4}
+        envMapIntensity={1.05}
         emissive={selected ? "#3a1800" : "#000000"}
-        emissiveIntensity={selected ? 0.04 : 0}
+        emissiveIntensity={selected ? 0.05 : 0}
         side={THREE.DoubleSide}
         polygonOffset
         polygonOffsetFactor={1}
@@ -1003,27 +1005,48 @@ export default function CadViewport({
       </div>
 
       <Canvas
-        dpr={[1, 1.5]}
+        dpr={[1, 2]}
         camera={{ position: [500, 380, 500], fov: 45, near: 1, far: 5000 }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl, scene }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
-          gl.toneMapping = THREE.NeutralToneMapping;
-          gl.toneMappingExposure = 1.2;
+          // Filmic tonemapping for richer contrast and a premium, cinematic look.
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.05;
           scene.background = new THREE.Color(VIEW_COLORS.background);
         }}
         onPointerUp={() => setTransformDragging(false)}
       >
+      {/* In-scene studio environment — gives the matte bodies soft realistic
+          reflections without fetching an HDR (works offline). Computed once. */}
+      <Environment resolution={256} frames={1}>
+        <Lightformer intensity={2.2} rotation-x={Math.PI / 2} position={[0, 6, -9]} scale={[12, 12, 1]} color="#eaf3ff" />
+        <Lightformer intensity={1.1} rotation-y={Math.PI / 2} position={[-7, 2, 0]} scale={[14, 3, 1]} color="#cfe2f5" />
+        <Lightformer intensity={1.1} rotation-y={-Math.PI / 2} position={[7, 2, 0]} scale={[14, 3, 1]} color="#ffffff" />
+        <Lightformer intensity={1.6} rotation-x={-Math.PI / 2} position={[0, 8, 0]} scale={[12, 12, 1]} color="#dfeefc" />
+      </Environment>
+
       {/* Key light — top-right-front, main shading source */}
-      <directionalLight position={[300, 500, 300]} intensity={2.2} color="#f5f8ff" />
+      <directionalLight position={[300, 500, 300]} intensity={1.7} color="#f5f8ff" />
       {/* Fill — soft left, reduces harsh shadows */}
-      <directionalLight position={[-350, 250, -150]} intensity={1.0} color="#c8dff0" />
+      <directionalLight position={[-350, 250, -150]} intensity={0.7} color="#c8dff0" />
       {/* Rim — back edge separation */}
-      <directionalLight position={[0, 150, -500]} intensity={0.45} color="#ffffff" />
+      <directionalLight position={[0, 150, -500]} intensity={0.4} color="#ffffff" />
       {/* Bottom fill — prevents underside faces from going black */}
-      <directionalLight position={[0, -300, 0]} intensity={0.6} color="#8ab4cc" />
+      <directionalLight position={[0, -300, 0]} intensity={0.45} color="#8ab4cc" />
       {/* Ambient hemisphere — warmer ground so floor-facing faces stay visible */}
-      <hemisphereLight intensity={0.35} color="#dde8f0" groundColor="#3a4a5a" />
+      <hemisphereLight intensity={0.3} color="#dde8f0" groundColor="#3a4a5a" />
+
+      {/* Soft contact shadow grounds the model so it doesn't float. */}
+      <ContactShadows
+        position={[0, 0.04, 0]}
+        scale={Math.max(printerVolume[0], printerVolume[1]) * 2.4}
+        far={Math.max(printerVolume[2], 120)}
+        blur={2.6}
+        opacity={0.5}
+        resolution={512}
+        color="#01060d"
+      />
  
       <Grid
         args={[printerVolume[0] * 3, printerVolume[1] * 3]}
