@@ -63,6 +63,17 @@ const TRANSFORM_MODES: Array<{ id: TransformMode; label: string }> = [
   { id: "scale", label: "Scale" },
 ];
 
+// Wayfinding examples for the empty builder — concrete, printable starting
+// points so users aren't faced with a blank prompt (AI-wayfinders skill).
+const EMPTY_STATE_EXAMPLES: Array<{ label: string; prompt: string; icon: string }> = [
+  { label: "Phone stand", prompt: "phone stand", icon: "M7 4h10a1 1 0 011 1v14a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1zm5 13h.01" },
+  { label: "Headset stand", prompt: "headset stand", icon: "M4 14v-3a8 8 0 0116 0v3m0 0a2 2 0 01-2 2h-1v-5h1a2 2 0 012 2zm-16 0a2 2 0 002 2h1v-5H6a2 2 0 00-2 2z" },
+  { label: "Wall tool holder", prompt: "wall mounted tool holder", icon: "M4 6h16M4 12h16M4 18h10" },
+  { label: "Cable organizer", prompt: "cable organizer clip", icon: "M8 7a4 4 0 108 0M8 7v6a4 4 0 008 0V7" },
+  { label: "Desk pen holder", prompt: "desk pen holder", icon: "M5 8h14l-1 12H6L5 8zm2-3h10v3H7V5z" },
+  { label: "Pegboard hook", prompt: "pegboard hook", icon: "M6 4v10a4 4 0 008 0M6 4H4m2 0h2" },
+];
+
 const FALLBACK_MATERIAL_ENTRIES: Array<[string, MaterialProfile]> = [
   [
     "PLA",
@@ -723,6 +734,37 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
         </ErrorBoundary>
         {modelBusy && <ModelLoadingOverlay status={status} />}
 
+        {/* Empty-state wayfinding — guide first-time users with real examples
+            instead of a blank prompt. */}
+        {objects.length === 0 && !modelBusy && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6">
+            <div
+              className="pointer-events-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-cadio-surface/60 p-8 text-center backdrop-blur-2xl"
+              style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 30px 80px -30px rgba(0,0,0,0.85)" }}
+            >
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-cadio-accent/12 text-cadio-accent">
+                <CadioMark size={26} />
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight text-white">What do you want to make?</h2>
+              <p className="mt-2 text-sm text-white/50">Describe it below, or start from an example — Cadio finds a real model and makes it printable.</p>
+              <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                {EMPTY_STATE_EXAMPLES.map((ex) => (
+                  <button
+                    key={ex.label}
+                    onClick={() => void runPrompt(ex.prompt)}
+                    className="group flex flex-col items-start gap-2 rounded-xl border border-white/8 bg-white/[0.03] p-3 text-left transition-all hover:border-cadio-accent/50 hover:bg-cadio-accent/[0.06]"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-cadio-muted transition-colors group-hover:text-cadio-accent">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d={ex.icon} /></svg>
+                    </span>
+                    <span className="text-xs font-semibold text-white/80 group-hover:text-white">{ex.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {showDesktopSourceInfo && sourceInfo.length > 0 && (
           <SourceInfoModal sources={sourceInfo} onClose={() => setShowDesktopSourceInfo(false)} />
         )}
@@ -1016,6 +1058,25 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
           />
           </ErrorBoundary>
           {modelBusy && <ModelLoadingOverlay status={status} />}
+          {objects.length === 0 && !modelBusy && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-5">
+              <div className="pointer-events-auto w-full rounded-2xl border border-white/10 bg-cadio-surface/60 p-5 text-center backdrop-blur-2xl">
+                <h2 className="text-lg font-bold text-white">What do you want to make?</h2>
+                <p className="mt-1 text-xs text-white/50">Pick an example or describe it below.</p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  {EMPTY_STATE_EXAMPLES.map((ex) => (
+                    <button
+                      key={ex.label}
+                      onClick={() => void runPrompt(ex.prompt)}
+                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/80 transition-colors hover:border-cadio-accent/50 hover:text-white"
+                    >
+                      {ex.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           {sourceInfo.length > 0 && (
             <button
               onClick={() => setShowMobileSourceInfo(true)}
