@@ -559,6 +559,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
   const [showDesktopSourceInfo, setShowDesktopSourceInfo] = useState(false);
   const [showSourceFiles, setShowSourceFiles] = useState(false);
   const [pulseFiles, setPulseFiles] = useState(false);
+  const [emptyDismissed, setEmptyDismissed] = useState(false);
   const sourceFilesSig = useRef("");
   const [mobileExamplesOpen, setMobileExamplesOpen] = useState(false);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
@@ -577,6 +578,12 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
   useEffect(() => {
     void loadPrinters();
   }, [loadPrinters]);
+
+  // Re-show the empty-state welcome whenever the plate becomes occupied again
+  // (so dismissing it once doesn't hide it forever for the next new model).
+  useEffect(() => {
+    if (objects.length > 0) setEmptyDismissed(false);
+  }, [objects.length]);
 
   // "See demo" from the landing page lands here with a prompt to auto-generate
   // so the visitor immediately sees a real model instead of a blank plate.
@@ -735,18 +742,25 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
         {modelBusy && <ModelLoadingOverlay status={status} />}
 
         {/* Empty-state wayfinding — guide first-time users with real examples
-            instead of a blank prompt. */}
-        {objects.length === 0 && !modelBusy && (
+            instead of a blank prompt. Dismissible. */}
+        {objects.length === 0 && !modelBusy && !emptyDismissed && (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6">
             <div
-              className="pointer-events-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-cadio-surface/60 p-8 text-center backdrop-blur-2xl"
+              className="pointer-events-auto relative w-full max-w-2xl rounded-3xl border border-white/10 bg-cadio-surface/60 p-8 text-center backdrop-blur-2xl"
               style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 30px 80px -30px rgba(0,0,0,0.85)" }}
             >
+              <button
+                onClick={() => setEmptyDismissed(true)}
+                title="Close"
+                className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-cadio-accent/12 text-cadio-accent">
                 <CadioMark size={26} />
               </div>
               <h2 className="text-2xl font-bold tracking-tight text-white">What do you want to make?</h2>
-              <p className="mt-2 text-sm text-white/50">Describe it below, or start from an example — Cadio finds a real model and makes it printable.</p>
+              <p className="mt-2 text-sm text-white/50">Describe it in the box below, or start from an example — Cadio finds a real model and makes it printable.</p>
               <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {EMPTY_STATE_EXAMPLES.map((ex) => (
                   <button
@@ -761,6 +775,12 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
                   </button>
                 ))}
               </div>
+              <button
+                onClick={() => setEmptyDismissed(true)}
+                className="mt-5 text-xs font-medium text-white/40 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
+              >
+                Skip — I'll type my own
+              </button>
             </div>
           </div>
         )}
@@ -794,7 +814,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
                 className="flex items-center gap-1.5 rounded-xl border border-cadio-accent/40 bg-cadio-surface/80 px-3 py-2 text-cadio-accent backdrop-blur-sm transition-all hover:bg-cadio-accent/10"
               >
                 <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span className="hidden xl:inline text-xs font-semibold">Source &amp; license</span>
+                <span className="text-xs font-semibold">Source</span>
               </button>
             )}
             {sourceFiles.length > 1 && (
@@ -807,7 +827,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
                 style={pulseFiles ? { boxShadow: "0 0 0 4px rgba(43,184,220,0.18), 0 0 22px rgba(43,184,220,0.35)" } : undefined}
               >
                 <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                <span className="text-xs font-bold">{sourceFiles.filter((f) => f.id !== "__all__").length}<span className="hidden xl:inline"> files</span></span>
+                <span className="text-xs font-bold">{sourceFiles.filter((f) => f.id !== "__all__").length} files</span>
               </button>
             )}
           </div>
@@ -1058,9 +1078,12 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
           />
           </ErrorBoundary>
           {modelBusy && <ModelLoadingOverlay status={status} />}
-          {objects.length === 0 && !modelBusy && (
+          {objects.length === 0 && !modelBusy && !emptyDismissed && (
             <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-5">
-              <div className="pointer-events-auto w-full rounded-2xl border border-white/10 bg-cadio-surface/60 p-5 text-center backdrop-blur-2xl">
+              <div className="pointer-events-auto relative w-full rounded-2xl border border-white/10 bg-cadio-surface/60 p-5 text-center backdrop-blur-2xl">
+                <button onClick={() => setEmptyDismissed(true)} title="Close" className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-lg text-white/40 hover:text-white">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
                 <h2 className="text-lg font-bold text-white">What do you want to make?</h2>
                 <p className="mt-1 text-xs text-white/50">Pick an example or describe it below.</p>
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
