@@ -634,7 +634,12 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
     : [220, 220, 250];
 
   const latestPrompt = promptFromHistory(editHistory[editHistory.length - 1]);
-  const projectTitle = creationName(latestPrompt);
+  // Prefer the imported model's real name (e.g. "Headset Stand") over the last
+  // (often technical) prompt like "select-source-file".
+  const projectTitle = sourceInfo[0]?.title?.trim() || creationName(latestPrompt);
+  const printerDims = printer !== "choose_printer" && printers[printer]?.build_volume
+    ? `${printers[printer].build_volume[0]} × ${printers[printer].build_volume[1]} × ${printers[printer].build_volume[2]} mm`
+    : "";
   const selectedCount = selectedObjectIds.length || (selectedObjectId ? 1 : 0);
   const modelBusy = isBusy || isModelBusyStatus(status);
 
@@ -799,6 +804,11 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
             ) : (
               <span className="text-xs text-cadio-muted">{printerProfile?.name ?? "Standard"}</span>
             )}
+            {printerDims && (
+              <span className="hidden lg:inline whitespace-nowrap rounded-md border border-cadio-border/40 bg-cadio-surface/50 px-2 py-1 text-[11px] font-medium text-cadio-muted backdrop-blur-sm">
+                {printerDims}
+              </span>
+            )}
             <button onClick={() => setShareOpen(true)} className="text-xs font-medium text-cadio-muted hover:text-cadio-text transition-colors">Share</button>
             <button onClick={() => setExportOpen(true)} className="h-8 rounded-lg bg-cadio-accent px-4 text-xs font-bold text-cadio-bg hover:bg-cadio-accent-hover transition-colors">Export</button>
           </div>
@@ -876,6 +886,9 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
                   <option value={key} key={key}>{p.name}</option>
                 ))}
               </select>
+              {printerDims && (
+                <p className="mt-1.5 text-[11px] text-cadio-muted/70">Build volume: {printerDims}</p>
+              )}
             </div>
           )}
 
