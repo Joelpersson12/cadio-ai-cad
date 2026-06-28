@@ -889,7 +889,7 @@ MAX_UPLOAD_BYTES = 48 * 1024 * 1024
 
 @router.post("/api/import/upload", response_model=None)
 async def import_upload(
-    session_id: str = Form(...),
+    session_id: str = Form(default=""),
     file: UploadFile = File(...),
 ) -> ScenePayload | JSONResponse:
     """Import a mesh file the user dragged into the workspace (STL / OBJ / ZIP)."""
@@ -902,9 +902,9 @@ async def import_upload(
 
         lock = acquire_lock()
         with lock:
-            session = get_session(session_id)
-            if session is None:
-                return _error(404, "Session not found")
+            # Create a session on the fly when the user drops a file onto a fresh,
+            # empty workspace (there's no session yet at that point).
+            session = get_or_create_empty_session(session_id or None)
             save_undo_snapshot(session)
             messages = import_uploaded_mesh(session, data, file.filename or "model")
             if not any(m.startswith("imported ") for m in messages):

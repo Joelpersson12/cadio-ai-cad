@@ -489,8 +489,9 @@ export const useCadStore = create<CadState>((set, get) => ({
   },
 
   importLocalFile: async (file) => {
+    // No session-id guard: dropping a file onto a fresh, empty workspace is the
+    // common case, and the backend creates a session on the fly.
     const { sessionId } = get();
-    if (!sessionId) return;
     const startedAt = Date.now();
     set({ status: `Importing ${file.name}...`, isBusy: true });
     try {
