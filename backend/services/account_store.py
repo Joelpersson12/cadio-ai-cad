@@ -355,6 +355,9 @@ def login_or_create_account(
             (token, account_id, now, now),
         )
         conn.commit()
+    # Self-heal a paid plan from Stripe if the local record lost it.
+    if reconcile_plan_with_stripe(account_id, clean_email or "", str(account.get("plan", "free"))):
+        account = _refetch_account(account_id) or account
     return {"token": token, "account": account}
 
 
@@ -437,6 +440,8 @@ def login_or_create_with_google(
             (token, account_id, now, now),
         )
         conn.commit()
+    if reconcile_plan_with_stripe(account_id, clean_email, str(account.get("plan", "free"))):
+        account = _refetch_account(account_id) or account
     return {"token": token, "account": account}
 
 
@@ -468,6 +473,11 @@ def get_account_profile(token: str | None) -> dict[str, Any]:
     account = account_from_token(token)
     if account is None:
         raise PermissionError("Login required")
+    # Self-heal a paid plan from Stripe if the local record shows free (e.g. the
+    # account row was recreated after the Space restarted on ephemeral storage).
+    if str(account.get("plan", "free")) == "free" and account.get("email"):
+        if reconcile_plan_with_stripe(str(account.get("accountId", "")), str(account.get("email", "")), "free"):
+            account = _refetch_account(str(account.get("accountId", ""))) or account
     return account
 
 
@@ -560,6 +570,50 @@ def upgrade_plan(
         if row is None:
             raise ValueError("Account not found")
         return _account_from_row(row)
+
+
+_PLAN_RANK = {"free": 0, "pro": 1, "unlimited": 2}
+
+
+def reconcile_plan_with_stripe(account_id: str, email: str, current_plan: str) -> str | None:
+    """Restore a paid plan from Stripe (the source of truth) when the local DB
+    has lost it — e.g. after the Space restarts on ephemeral storage and the
+    account row is recreated as 'free'. Returns the new plan if it upgraded, else
+    None. Only ever upgrades (never downgrades) and never raises.
+    """
+    try:
+        stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
+        clean = _clean_email(email)
+        if not stripe_key or not clean:
+            return None
+        import stripe as stripe_lib
+
+        stripe_lib.api_key = stripe_key
+        customers = stripe_lib.Customer.list(email=clean, limit=1).get("data", [])
+        if not customers:
+            return None
+        customer_id = customers[0]["id"]
+        subs = stripe_lib.Subscription.list(customer=customer_id, status="active", limit=1).get("data", [])
+        if not subs:
+            return None
+        sub = subs[0]
+        price_id = sub["items"]["data"][0]["price"]["id"]
+        plan = "unlimited" if price_id == os.environ.get("STRIPE_PRICE_UNLIMITED", "") else "pro"
+        if _PLAN_RANK.get(plan, 0) <= _PLAN_RANK.get(current_plan, 0):
+            return None
+        upgrade_plan(account_id, plan, stripe_customer_id=customer_id, stripe_subscription_id=sub.get("id", ""))
+        return plan
+    except Exception:
+        return None
+
+
+def _refetch_account(account_id: str) -> dict[str, Any] | None:
+    try:
+        with _connect() as conn:
+            row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+            return _account_from_row(row) if row else None
+    except Exception:
+        return None
 
 
 def load_saved_library(token: str) -> dict[str, Any]:
