@@ -902,7 +902,10 @@ export default function CadViewport({
       style={{ touchAction: "none" }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-6 top-[72px] z-10 w-64 flex-col gap-2 rounded-2xl border border-cadio-border/50 bg-cadio-surface/90 p-3 shadow-2xl backdrop-blur-xl transition-all`}>
+      <div
+        className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-6 top-[72px] z-10 w-64 flex-col gap-2 rounded-2xl border border-white/10 bg-cadio-surface/85 p-3 backdrop-blur-2xl transition-all`}
+        style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 60px -24px rgba(0,0,0,0.8)" }}
+      >
         <div className="flex items-center justify-between px-2 py-1 mb-2">
           <div className="text-[10px] font-bold uppercase tracking-widest text-cadio-muted">
             Edit tools
