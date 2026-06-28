@@ -498,7 +498,7 @@ function ModelLoadingOverlay({ status }: { status: string }) {
   );
 }
 
-function WorkspaceApp({ onHome }: { onHome: () => void }) {
+function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHome: () => void; initialPrompt?: string | null; onInitialPromptConsumed?: () => void }) {
   const {
     sessionId,
     objects,
@@ -566,6 +566,17 @@ function WorkspaceApp({ onHome }: { onHome: () => void }) {
   useEffect(() => {
     void loadPrinters();
   }, [loadPrinters]);
+
+  // "See demo" from the landing page lands here with a prompt to auto-generate
+  // so the visitor immediately sees a real model instead of a blank plate.
+  const demoRanRef = useRef(false);
+  useEffect(() => {
+    if (initialPrompt && !demoRanRef.current) {
+      demoRanRef.current = true;
+      void runPrompt(initialPrompt);
+      onInitialPromptConsumed?.();
+    }
+  }, [initialPrompt, runPrompt, onInitialPromptConsumed]);
 
   // When a NEW multi-file model is imported, pulse the "files to choose" button
   // to draw attention instead of popping a big modal in the user's face.
@@ -1228,6 +1239,7 @@ function AuthRequiredDialog({
 export default function App() {
   const [showBuilder, setShowBuilder] = useState(() => window.location.hash.startsWith("#builder"));
   const [pathname, setPathname] = useState(() => window.location.pathname);
+  const [demoPrompt, setDemoPrompt] = useState<string | null>(null);
 
   useEffect(() => {
     initAnalytics();
@@ -1260,6 +1272,11 @@ export default function App() {
     setShowBuilder(true);
   };
 
+  const seeDemo = () => {
+    setDemoPrompt("phone stand");
+    startBuilding();
+  };
+
   const goHome = () => {
     useCadStore.getState().startBlankCreation();
     if (window.location.pathname !== "/" || window.location.hash) {
@@ -1276,7 +1293,11 @@ export default function App() {
 
   return (
     <>
-      {showBuilder ? <WorkspaceApp onHome={goHome} /> : <LandingPage onStartBuilding={startBuilding} />}
+      {showBuilder ? (
+        <WorkspaceApp onHome={goHome} initialPrompt={demoPrompt} onInitialPromptConsumed={() => setDemoPrompt(null)} />
+      ) : (
+        <LandingPage onStartBuilding={startBuilding} onSeeDemo={seeDemo} />
+      )}
     </>
   );
 }
