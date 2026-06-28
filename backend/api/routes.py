@@ -180,14 +180,23 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-27T-license-and-multisource-import"
+BUILD_MARKER = "2026-06-28T-turso-persistence-fix"
 
 
 @router.get("/api/debug/version")
 def debug_version() -> dict[str, Any]:
     """Return the live build marker so we can confirm HF actually redeployed."""
     import time as _time
-    return {"build": BUILD_MARKER, "server_time": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())}
+    try:
+        from backend.services.account_store import db_backend_status
+        db = db_backend_status()
+    except Exception as exc:
+        db = {"error": str(exc)}
+    return {
+        "build": BUILD_MARKER,
+        "server_time": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
+        "database": db,
+    }
 
 
 @router.get("/api/debug/search")
