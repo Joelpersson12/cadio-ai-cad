@@ -384,7 +384,8 @@ function CameraController({
     const hasModel = bounds.x > 1 || bounds.y > 1 || bounds.z > 1;
     const plate = Math.max(printerVolume[0], printerVolume[1], printerVolume[2], 120);
     const size = hasModel ? Math.max(bounds.x, bounds.y, bounds.z, 20) : plate;
-    const distance = hasModel ? Math.max(size * 2.3, 90) : plate * 1.7;
+    // A touch more breathing room so a freshly generated model isn't framed too tight.
+    const distance = hasModel ? Math.max(size * 2.9, 130) : plate * 1.7;
 
     // Better camera positioning for isometric-like view
     camera.position.set(distance * 0.7, distance * 0.7, distance * 0.7);
