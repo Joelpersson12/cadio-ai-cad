@@ -6,3 +6,4 @@ openai
 cadquery==2.7.0
 google-auth
 stripe
+libsql-experimental

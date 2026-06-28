@@ -50,13 +50,40 @@ def _connect():
             _init(conn)
             return conn
         except ImportError:
-            pass  # fall back to local sqlite if package not installed
+            # Driver missing — the persistent DB silently degrades to ephemeral
+            # local storage. Loud warning so this is caught instead of losing data.
+            print(
+                "[account_store] WARNING: TURSO_DATABASE_URL is set but "
+                "'libsql-experimental' is not installed — falling back to "
+                "EPHEMERAL local SQLite (accounts/plans will be lost on restart). "
+                "Add 'libsql-experimental' to requirements.txt."
+            )
+        except Exception as exc:  # noqa: BLE001 — never let DB setup crash the app
+            print(f"[account_store] WARNING: Turso connection failed ({exc!r}); falling back to local SQLite.")
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     _init(conn)
     return conn
+
+
+def db_backend_status() -> dict[str, Any]:
+    """Report which database backend is actually in use (for diagnostics)."""
+    turso_url = os.environ.get("TURSO_DATABASE_URL", "")
+    if not turso_url:
+        return {"backend": "local-ephemeral", "turso_configured": False, "persistent": False}
+    try:
+        import libsql_experimental as libsql  # type: ignore[import] # noqa: F401
+        return {"backend": "turso", "turso_configured": True, "persistent": True, "driver_installed": True}
+    except ImportError:
+        return {
+            "backend": "local-ephemeral",
+            "turso_configured": True,
+            "persistent": False,
+            "driver_installed": False,
+            "warning": "libsql-experimental not installed; Turso vars ignored.",
+        }
 
 
 def _init(conn: sqlite3.Connection) -> None:
