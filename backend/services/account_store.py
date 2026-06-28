@@ -602,13 +602,33 @@ def upgrade_plan(
 _PLAN_RANK = {"free": 0, "pro": 1, "unlimited": 2}
 
 
+def _sf(obj: Any, key: str, default: Any = "") -> Any:
+    """Read a field from a Stripe object. Recent stripe-python objects don't
+    support dict ``.get``, so use index access (which they do support, like the
+    webhook code) and fall back to attribute access."""
+    try:
+        if key in obj:
+            return obj[key]
+    except (TypeError, AttributeError, KeyError):
+        pass
+    return getattr(obj, key, default)
+
+
+def _stripe_list_data(result: Any) -> list[Any]:
+    """Return the ``data`` list from a Stripe ListObject across versions."""
+    data = getattr(result, "data", None)
+    if data is None:
+        data = _sf(result, "data", [])
+    return list(data or [])
+
+
 def _plan_from_subscriptions(subs: list[Any], price_unlimited: str, statuses: list[str]) -> tuple[str | None, str]:
     """Return (best plan, subscription_id) from a list of Stripe subscriptions."""
     best_plan: str | None = None
     best_rank = 0
     best_sub = ""
     for sub in subs:
-        status = str(sub.get("status", ""))
+        status = str(_sf(sub, "status", ""))
         statuses.append(status)
         if status not in ("active", "trialing", "past_due"):
             continue
@@ -619,7 +639,7 @@ def _plan_from_subscriptions(subs: list[Any], price_unlimited: str, statuses: li
         plan = "unlimited" if price_id and price_id == price_unlimited else "pro"
         rank = _PLAN_RANK.get(plan, 0)
         if rank > best_rank:
-            best_rank, best_plan, best_sub = rank, plan, str(sub.get("id", ""))
+            best_rank, best_plan, best_sub = rank, plan, str(_sf(sub, "id", ""))
     return best_plan, best_sub
 
 
@@ -661,10 +681,10 @@ def stripe_active_plan(email: str, known_customer_id: str = "") -> tuple[str | N
         # 2) Lookup by email.
         if clean:
             try:
-                customers = stripe_lib.Customer.list(email=clean, limit=5).get("data", [])
+                customers = _stripe_list_data(stripe_lib.Customer.list(email=clean, limit=5))
                 info["customers_found"] = len(customers)
                 for cust in customers:
-                    cid = cust.get("id", "")
+                    cid = str(_sf(cust, "id", ""))
                     if cid and cid not in customer_ids:
                         customer_ids.append(cid)
             except Exception as exc:  # noqa: BLE001
@@ -672,7 +692,7 @@ def stripe_active_plan(email: str, known_customer_id: str = "") -> tuple[str | N
 
         for cid in customer_ids:
             try:
-                subs = stripe_lib.Subscription.list(customer=cid, status="all", limit=10).get("data", [])
+                subs = _stripe_list_data(stripe_lib.Subscription.list(customer=cid, status="all", limit=10))
             except Exception as exc:  # noqa: BLE001
                 info.setdefault("subscription_errors", []).append(repr(exc))
                 continue
