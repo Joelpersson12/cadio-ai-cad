@@ -195,10 +195,22 @@ export async function refreshAccountPlan(token: string): Promise<{
   account: AccountProfile;
   stripe?: Record<string, unknown>;
 }> {
-  return request("/api/account/refresh-plan", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  // The backend (a Hugging Face Space) can be asleep and fail the first request
+  // while it cold-starts. Retry a couple of times with backoff so a sleeping
+  // backend doesn't surface as a hard "API request failed".
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await request("/api/account/refresh-plan", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (err) {
+      lastError = err;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Could not reach the server — please try again in a moment.");
 }
 
 export async function createBillingPortalSession(token: string): Promise<{ status: string; url: string }> {
