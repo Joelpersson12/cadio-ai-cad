@@ -26,9 +26,10 @@ jobs:
           from huggingface_hub import HfApi
 
           api = HfApi(token=os.environ["HF_TOKEN"])
+          repo_id = "Persson12/Cadio-ai-cad"
           api.upload_folder(
               folder_path=".",
-              repo_id="Persson12/Cadio-ai-cad",
+              repo_id=repo_id,
               repo_type="space",
               ignore_patterns=[
                   ".git",
@@ -41,4 +42,10 @@ jobs:
               ],
           )
           print("Upload complete!")
+
+          # Force a clean (no-cache) rebuild so the Docker image always picks up
+          # the new backend code. Without this, HF's layer cache can keep serving
+          # stale /api routes even after a successful upload.
+          api.restart_space(repo_id=repo_id, factory_reboot=True)
+          print("Triggered factory rebuild.")
           EOF
