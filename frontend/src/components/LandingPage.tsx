@@ -653,7 +653,7 @@ function HeroScene({
           intensity={16}
           color="#ffffff"
           castShadow
-          shadow-mapSize={[2048, 2048]}
+          shadow-mapSize={[1024, 1024]}
           shadow-bias={-0.0004}
         />
         {/* Cyan underlight — the glow pool */}
@@ -757,7 +757,13 @@ function useScrollMotion(strength = 48) {
     const scroller = document.getElementById("landing-scroll");
     const el = ref.current;
     if (!scroller || !el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setOffset(0); return; }
+    // Skip the per-scroll work on touch devices (and when reduced-motion is set)
+    // — getBoundingClientRect on every scroll frame is a needless jank source on
+    // mobile, where the parallax adds little.
+    if (
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      window.matchMedia("(pointer: coarse)").matches
+    ) { setOffset(0); return; }
     let raf = 0;
     const update = () => {
       raf = 0;
@@ -1344,18 +1350,22 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
         {/* Ambient gradient glow — sits above the base background but behind all
             content (isolate + negative z). Gives the page the deep, lit-from-
             within feel without touching the hero's own 3D stage. */}
+        {/* The softness comes from the radial gradients themselves — NOT a CSS
+            blur() filter. Animating a blurred element re-rasterizes the blur
+            every frame, which tanks scroll performance on mobile. Pure gradients
+            animate on the GPU for free. */}
         <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
           <div
-            className="absolute -left-[10%] top-[20%] h-[55vh] w-[55vh] rounded-full opacity-50"
-            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.22), transparent 70%)", filter: "blur(70px)", animation: "orb-a 18s ease-in-out infinite" }}
+            className="absolute -left-[15%] top-[14%] h-[70vh] w-[70vh] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.16) 0%, transparent 62%)", animation: "orb-a 18s ease-in-out infinite", willChange: "transform" }}
           />
           <div
-            className="absolute right-[-8%] top-[55%] h-[60vh] w-[60vh] rounded-full opacity-40"
-            style={{ background: "radial-gradient(circle, rgba(122,90,248,0.18), transparent 70%)", filter: "blur(80px)", animation: "orb-b 22s ease-in-out infinite" }}
+            className="absolute right-[-12%] top-[50%] h-[72vh] w-[72vh] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(122,90,248,0.13) 0%, transparent 62%)", animation: "orb-b 22s ease-in-out infinite", willChange: "transform" }}
           />
           <div
-            className="absolute left-[35%] bottom-[2%] h-[50vh] w-[50vh] rounded-full opacity-35"
-            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.16), transparent 70%)", filter: "blur(75px)", animation: "orb-c 26s ease-in-out infinite" }}
+            className="absolute left-[30%] bottom-[-6%] h-[62vh] w-[62vh] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.12) 0%, transparent 62%)", animation: "orb-c 26s ease-in-out infinite", willChange: "transform" }}
           />
         </div>
 
@@ -1364,8 +1374,8 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
           <div
             className="flex h-14 w-full max-w-5xl items-center justify-between rounded-2xl px-4 pl-5 transition-all duration-500 lg:px-5"
             style={{
-              background: scrolled ? "rgba(13,19,24,0.8)" : "rgba(13,19,24,0.45)",
-              backdropFilter: "blur(20px)",
+              background: scrolled ? "rgba(13,19,24,0.92)" : "rgba(13,19,24,0.6)",
+              backdropFilter: "blur(12px)",
               border: "1px solid rgba(255,255,255,0.08)",
               boxShadow: scrolled
                 ? "0 12px 40px -16px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)"
