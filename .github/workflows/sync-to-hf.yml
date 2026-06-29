@@ -43,9 +43,15 @@ jobs:
           )
           print("Upload complete!")
 
-          # Force a clean (no-cache) rebuild so the Docker image always picks up
-          # the new backend code. Without this, HF's layer cache can keep serving
-          # stale /api routes even after a successful upload.
-          api.restart_space(repo_id=repo_id, factory_reboot=True)
-          print("Triggered factory rebuild.")
+          # Uploading changed files automatically triggers an incremental HF
+          # rebuild. The Dockerfile copies backend/ and main.py in *late* layers
+          # (after the heavy `pip install`), so any backend change invalidates
+          # those COPY layers and the new code lands in the image — while the
+          # expensive CadQuery/OpenCascade pip layer stays cached.
+          #
+          # We deliberately do NOT force `factory_reboot=True` here: a full
+          # no-cache rebuild re-downloads the large cadquery-ocp wheel every push
+          # and can exceed HF's build limits/timeouts, failing the build and
+          # leaving the previous (stale) container running. The incremental
+          # rebuild is both faster and far more reliable.
           EOF
