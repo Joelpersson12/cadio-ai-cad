@@ -257,6 +257,56 @@ def _apply_deterministic_edit(
     def scale_param(key: str, factor: float, minimum: float = 0.0, maximum: float = 500.0) -> None:
         params[key] = max(minimum, min(maximum, float(params.get(key, 0.0)) * factor))
 
+    # ------------------------------------------------------------------
+    # Explicit numeric dimensions — e.g. "make it 250mm tall", "width 100",
+    # "100 x 60 x 250 mm", "5mm thick". This MUST run deterministically: the
+    # external LLM is often unavailable on the live server, and without this a
+    # "resize to <N>mm" prompt silently does nothing (the #1 user complaint).
+    # Explicit values win over the relative taller/wider scaling below.
+    # ------------------------------------------------------------------
+    def _set_dim(key: str, value: float, lo: float, hi: float) -> None:
+        params[key] = max(lo, min(hi, value))
+
+    # axis -> (keyword alternation, min, max)
+    _dim_axes = {
+        "height": (r"tall|taller|high|height|hoog|hog|hogt|hojd|hög|högt|höjd", 5.0, 1000.0),
+        "width": (r"wide|wider|width|bred|bredd|brett", 5.0, 1000.0),
+        "depth": (r"deep|depth|long|length|djup|djupt|lang|langd|lång|långt|längd", 5.0, 1000.0),
+        "thickness": (r"thick|thickness|tjock|tjockt|tjocklek|vaggtjocklek|väggtjocklek", 1.0, 60.0),
+    }
+    explicit_changes: list[str] = []
+    for _key, (_kw, _lo, _hi) in _dim_axes.items():
+        _val: float | None = None
+        # "<number> mm <keyword>"  (e.g. "250mm tall")
+        _m = re.search(rf"(\d+(?:\.\d+)?)\s*(?:mm|millimeters?|millimetres?|cm)?\s*(?:{_kw})\b", text)
+        if _m:
+            _val = float(_m.group(1))
+        else:
+            # "<keyword> [of/to/=] <number>"  (e.g. "height of 250", "width 100")
+            _m = re.search(rf"\b(?:{_kw})\b\s*(?:of|to|at|is|=|:|av|till|på|pa)?\s*(\d+(?:\.\d+)?)\s*(?:mm|cm)?", text)
+            if _m:
+                _val = float(_m.group(1))
+        if _val is not None:
+            _set_dim(_key, _val, _lo, _hi)
+            explicit_changes.append(f"{_key} {params[_key]:.0f}mm")
+
+    # "WxDxH" shorthand, e.g. "100x60x250" or "100 x 60 x 250 mm"
+    _wdh = re.search(
+        r"\b(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\b",
+        text,
+    )
+    if _wdh:
+        _set_dim("width", float(_wdh.group(1)), 5.0, 1000.0)
+        _set_dim("depth", float(_wdh.group(2)), 5.0, 1000.0)
+        _set_dim("height", float(_wdh.group(3)), 5.0, 1000.0)
+        explicit_changes = [
+            f"width {params['width']:.0f}mm",
+            f"depth {params['depth']:.0f}mm",
+            f"height {params['height']:.0f}mm",
+        ]
+    if explicit_changes:
+        actions.append("set " + ", ".join(explicit_changes))
+
     if any(phrase in text for phrase in ("make it taller", "taller", "increase height", "hogre")):
         scale_param("height", 1.25, 20.0)
         actions.append("increased height")
@@ -349,7 +399,11 @@ def _apply_prompt_shape_inference(
     text = _prompt_match_text(prompt)
     actions: list[str] = []
 
-    if any(word in text for word in ("holder", "mount", "bracket", "clip", "retainer", "rack", "organizer")):
+    if any(word in text for word in (
+        "holder", "mount", "bracket", "clip", "retainer", "rack", "organizer",
+        "guide", "hose guide", "cable guide", "wire guide", "channel",
+        "hook", "hanger", "support", "rest", "cradle", "saddle",
+    )):
         params["width"] = max(float(params.get("width", 70.0)), 86.0)
         params["depth"] = max(float(params.get("depth", 55.0)), 64.0)
         params["height"] = max(float(params.get("height", 24.0)), 34.0)
@@ -371,7 +425,12 @@ def _apply_prompt_shape_inference(
         _ensure_feature(features, "back_support", False)
         actions.append("inferred enclosure-style geometry from prompt")
 
-    if any(word in text for word in ("spacer", "shim", "washer", "plate", "adapter")):
+    flat_hardware = any(word in text for word in ("spacer", "shim", "washer", "plate", "adapter"))
+    # "pressure washer" / "power washer" is a tool, not the flat round hardware —
+    # don't flatten a "pressure washer hose guide" into a plate.
+    if "pressure washer" in text or "power washer" in text:
+        flat_hardware = False
+    if flat_hardware:
         params["width"] = max(float(params.get("width", 50.0)), 60.0)
         params["depth"] = max(float(params.get("depth", 40.0)), 45.0)
         params["height"] = min(max(float(params.get("height", 8.0)), 6.0), 18.0)
@@ -381,6 +440,29 @@ def _apply_prompt_shape_inference(
         actions.append("inferred flat adapter/plate geometry from prompt")
 
     return actions
+
+
+def _apply_neutral_fallback_geometry(
+    params: dict[str, float],
+    features: list[Feature],
+) -> list[str]:
+    """Last-resort geometry for an unrecognized prompt when no template, brief,
+    deterministic edit, specific inference, or LLM produced anything.
+
+    The default parameters are an angled phone-stand wedge (angle=70 +
+    back_support), which reads as a meaningless slab/"rectangle" for unrelated
+    prompts. Give unknown objects a neutral, intentional upright box with a base
+    and rounded edges instead.
+    """
+    params["width"] = max(20.0, float(params.get("width", 80.0)))
+    params["depth"] = max(20.0, float(params.get("depth", 70.0)))
+    params["height"] = max(20.0, float(params.get("height", 60.0)))
+    params["angle"] = 90.0
+    params["fillet_radius"] = max(float(params.get("fillet_radius", 0.0)), 2.0)
+    _ensure_feature(features, "base_extrude", True)
+    _ensure_feature(features, "back_support", False)
+    _ensure_feature(features, "fillet_edges", True)
+    return ["inferred neutral upright body from prompt"]
 
 
 def _feature_tree_for_template(default_features: list[str]) -> list[Feature]:
@@ -556,6 +638,16 @@ def parse_ai_command(
             transform.scale = [max(0.001, float(v)) for v in t["scale"]]
         
         actions = result.get("actions", ["no-op"])
+
+        # If the LLM was unavailable or unhelpful on a fresh create (no params
+        # returned, or an error/no-op), don't leave the default phone-stand wedge
+        # standing in — it reads as a meaningless "rectangle" for unrelated
+        # prompts (e.g. "pressure washer hose guide"). Apply neutral geometry.
+        groq_failed = (not new_params) or any(
+            str(a).startswith("ai-error") or str(a) == "no-op" for a in actions
+        )
+        if not edit_only and groq_failed:
+            actions = _apply_neutral_fallback_geometry(params, features)
     else:
         # Use template directly
         actions = [f"Created {template.name}: {template.description}"]
