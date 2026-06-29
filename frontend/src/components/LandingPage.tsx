@@ -4,7 +4,7 @@
  */
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { loginCadioAccount, loginWithGoogle, sendPasswordReset, confirmPasswordReset, isCadioAuthenticated, getCadioAccount } from "../utils/auth";
 import { GoogleLogin } from "@react-oauth/google";
@@ -735,6 +735,40 @@ function useReveal(threshold = 0.12) {
   return { ref, visible };
 }
 
+// Continuous scroll-driven motion: the element drifts upward as it travels
+// through the viewport, so cards visibly "move" while you scroll. Different
+// `strength` values on neighbouring elements create a parallax stagger.
+function useScrollMotion(strength = 48) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = useState(strength);
+  useEffect(() => {
+    const scroller = document.getElementById("landing-scroll");
+    const el = ref.current;
+    if (!scroller || !el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setOffset(0); return; }
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight || 1;
+      // 0 while still low in the viewport → 1 once it reaches the upper third.
+      const center = r.top + r.height / 2;
+      const p = Math.min(1, Math.max(0, (vh - center) / (vh * 0.7)));
+      setOffset(strength * (1 - p));
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    update();
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [strength]);
+  return { ref, style: { transform: `translate3d(0, ${offset}px, 0)`, transition: "transform 0.12s linear" } as CSSProperties };
+}
+
 // ─── AUTH DIALOG ─────────────────────────────────────────────────────────────
 
 function AuthDialog({
@@ -1238,6 +1272,10 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
   const s2 = useReveal();
   const s3 = useReveal();
   const s4 = useReveal();
+  // Staggered scroll-parallax for the pricing cards so they drift as you scroll.
+  const pm0 = useScrollMotion(70);
+  const pm1 = useScrollMotion(34);
+  const pm2 = useScrollMotion(90);
 
   // Cursor-reactive spotlight over the hero (desktop pointer only).
   const [spot, setSpot] = useState({ x: 50, y: 42, active: false });
@@ -1713,8 +1751,10 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 max-w-4xl">
               {/* Free */}
               <div
+                ref={pm0.ref}
                 className="rounded-2xl p-7"
                 style={{
+                  ...pm0.style,
                   background: `${ACCENT_DIM}0.06)`,
                   border: `1.5px solid ${ACCENT_DIM}0.35)`,
                   boxShadow: `0 0 60px ${ACCENT_DIM}0.08)`,
@@ -1745,8 +1785,10 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
 
               {/* Pro */}
               <div
+                ref={pm1.ref}
                 className="rounded-2xl p-7 relative"
                 style={{
+                  ...pm1.style,
                   background: `${ACCENT_DIM}0.06)`,
                   border: `1.5px solid ${ACCENT_DIM}0.35)`,
                   boxShadow: `0 0 60px ${ACCENT_DIM}0.08)`,
@@ -1778,8 +1820,10 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
 
               {/* Unlimited */}
               <div
+                ref={pm2.ref}
                 className="rounded-2xl p-7"
                 style={{
+                  ...pm2.style,
                   background: `${ACCENT_DIM}0.06)`,
                   border: `1.5px solid ${ACCENT_DIM}0.35)`,
                   boxShadow: `0 0 60px ${ACCENT_DIM}0.08)`,
