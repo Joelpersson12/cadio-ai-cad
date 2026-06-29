@@ -1041,6 +1041,11 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
                 session["objects"] = {}
                 session["object_order"] = []
                 session["selected_object_id"] = ""
+            # Auto-select the last object when none is selected (cleared after AI generation).
+            # Without this, hole/split/cut all fall through to create_primitive_object.
+            if not session.get("selected_object_id") and session.get("object_order"):
+                session["selected_object_id"] = session["object_order"][-1]
+
             if data.primitive.strip().lower() == "hole" and session.get("selected_object_id") and session["object_order"]:
                 obj = get_selected_object(session)
                 diameter = max(0.5, float(data.radius or max(data.size or [5.0]) / 2.0) * 2.0)

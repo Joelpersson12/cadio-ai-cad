@@ -4070,10 +4070,71 @@ def add_hole_to_object(obj: CadObject, center: list[float], diameter: float) -> 
     return [f"cut hole diameter {diameter}mm"]
 
 
+def _split_mesh_by_line(session: Session, obj: CadObject, center: list[float], delta: list[float]) -> list[str]:
+    """Clip any TriMesh object along a line into two new bodies."""
+    shape = obj.get("shape")
+    if not isinstance(shape, TriMesh) or not shape.verts:
+        return ["split skipped: no mesh available"]
+    if len(center) < 2 or len(delta) < 2:
+        return ["split skipped: missing line"]
+
+    # Backend mesh coords: mesh X = world X (scale[0]), mesh Y = world Z (scale[1]).
+    # This mirrors the same transform used by cut_object_by_line for _apply_mesh_rect_cutouts.
+    transform: Transform = obj["transform"]
+    sx = max(0.001, float(transform.scale[0]))
+    sy = max(0.001, float(transform.scale[1]))
+
+    local_cx = (float(center[0]) - float(transform.position[0])) / sx
+    local_cy = (float(center[1]) - float(transform.position[1])) / sy
+
+    ldx = float(delta[0]) / sx
+    ldy = float(delta[1]) / sy
+    local_len = math.sqrt(ldx * ldx + ldy * ldy)
+    if local_len < 0.001:
+        return ["split skipped: line too short in local space"]
+
+    # Normal perpendicular to the line direction in local XY plane (vertical cut).
+    nx = -ldy / local_len  # mesh v[0] component
+    ny = ldx / local_len   # mesh v[1] component
+    nz = 0.0               # mesh v[2] (height) — no tilt
+    d = -(nx * local_cx + ny * local_cy)
+
+    half1 = _plane_clip_trimesh(shape, nx, ny, nz, d, keep_sign=1)
+    half2 = _plane_clip_trimesh(shape, nx, ny, nz, d, keep_sign=-1)
+
+    if not half1.verts or not half2.verts:
+        return ["split skipped: line didn't cross the object"]
+
+    obj_name = obj.get("name", "part")
+    transform_obj: Transform = obj["transform"]
+    for idx, half in enumerate([half1, half2], start=1):
+        part = create_manual_object(f"{obj_name}_part_{idx}", half)
+        part["transform"] = Transform(
+            position=list(transform_obj.position),
+            rotation=list(transform_obj.rotation),
+            scale=list(transform_obj.scale),
+        )
+        part["material"] = obj.get("material", "PLA")
+        part["color"] = obj.get("color", "#b8babd")
+        add_object(session, part)
+
+    object_id = obj["id"]
+    del session["objects"][object_id]
+    session["object_order"] = [oid for oid in session["object_order"] if oid != object_id]
+    session["selected_object_id"] = session["object_order"][-1] if session["object_order"] else ""
+    return [f"split '{obj_name}' into 2 bodies"]
+
+
 def split_object_by_line(session: Session, obj: CadObject, center: list[float], delta: list[float]) -> list[str]:
-    """Split a manual rectangular primitive into two movable bodies."""
+    """Split a CAD object into two bodies along a drawn line.
+
+    For parametric rectangle sketches, the split is done analytically so
+    both halves remain resizable. For any other object (AI-generated STL,
+    imported mesh, cylinder, etc.) the existing TriMesh is clipped along a
+    vertical plane aligned with the drawn line.
+    """
     if not obj.get("manual") or obj.get("primitive") != "rectangle":
-        return ["split skipped: selected object is not a sketched rectangle"]
+        return _split_mesh_by_line(session, obj, center, delta)
     if len(center) < 2 or len(delta) < 2:
         return ["split skipped: missing line"]
 
