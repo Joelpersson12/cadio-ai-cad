@@ -600,46 +600,10 @@ function GroundGrid() {
   return <mesh ref={ref} geometry={geo} material={mat} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.6, 0]} />;
 }
 
-/** Aurora Knot — a sleek mathematical torus knot, the new hero centerpiece.
-    Dark chrome body with a cyan clearcoat sheen and a faint wireframe aura. */
-function AuroraKnot() {
-  const groupRef = useRef<THREE.Group>(null);
-
-  const knotMat = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: "#0c1822",
-    roughness: 0.12,
-    metalness: 0.9,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.06,
-    emissive: ACCENT,
-    emissiveIntensity: 0.06,
-  }), []);
-
-  const knotGeo = useMemo(() => new THREE.TorusKnotGeometry(1.18, 0.34, 240, 32, 2, 3), []);
-
-  useFrame(({ clock }) => {
-    if (!groupRef.current) return;
-    const t = clock.elapsedTime;
-    groupRef.current.rotation.y = t * 0.3;
-    groupRef.current.rotation.x = Math.sin(t * 0.35) * 0.25 + 0.2;
-    groupRef.current.position.y = Math.sin(t * 0.5) * 0.1;
-  });
-
-  return (
-    <group ref={groupRef} scale={1.05} position={[0, 0.1, 0]}>
-      <mesh geometry={knotGeo} material={knotMat} castShadow />
-      <mesh geometry={knotGeo} scale={1.015}>
-        <meshBasicMaterial color={ACCENT} wireframe opacity={0.08} transparent />
-      </mesh>
-    </group>
-  );
-}
-
 function renderLandingModel(index: number) {
-  if (index === 0) return <AuroraKnot />;
-  if (index === 1) return <Gyroscope />;
-  if (index === 2) return <Rocket />;
-  if (index === 3) return <TwistedVase />;
+  if (index === 0) return <Gyroscope />;
+  if (index === 1) return <Rocket />;
+  if (index === 2) return <TwistedVase />;
   return <FlexiCoil />;
 }
 
@@ -1222,7 +1186,6 @@ function ResetPasswordDialog({
 // ─── MODEL SELECTOR LABELS ───────────────────────────────────────────────────
 
 const MODELS = [
-  { label: "Aurora Knot", description: "Parametric torus knot" },
   { label: "Gyroscope", description: "Precision mechanical rings" },
   { label: "Rocket", description: "Classic maker print" },
   { label: "Twisted Vase", description: "#1 most printed decoration" },

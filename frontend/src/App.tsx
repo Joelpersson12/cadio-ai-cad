@@ -60,12 +60,12 @@ const TRANSFORM_MODES: Array<{ id: TransformMode; label: string }> = [
 // Wayfinding examples for the empty builder — concrete, printable starting
 // points so users aren't faced with a blank prompt (AI-wayfinders skill).
 const EMPTY_STATE_EXAMPLES: Array<{ label: string; prompt: string; icon: string }> = [
-  { label: "Phone stand", prompt: "phone stand", icon: "M7 4h10a1 1 0 011 1v14a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1zm5 13h.01" },
+  { label: "Milwaukee M18 holder", prompt: "Milwaukee M18 battery wall mount", icon: "M9 3h6v4H9zM7 7h10v14H7z" },
+  { label: "IKEA Skådis hook", prompt: "IKEA Skadis hook", icon: "M6 4v10a4 4 0 008 0M6 4H4m2 0h2" },
+  { label: "Filament spool holder", prompt: "filament spool holder", icon: "M12 4a8 8 0 100 16 8 8 0 000-16zm0 5a3 3 0 110 6 3 3 0 010-6z" },
+  { label: "3D printer scraper", prompt: "3D printer bed scraper", icon: "M4 14l8-8 4 4-8 8H4v-4zM14 6l3-3 1 1-3 3" },
   { label: "Headset stand", prompt: "headset stand", icon: "M4 14v-3a8 8 0 0116 0v3m0 0a2 2 0 01-2 2h-1v-5h1a2 2 0 012 2zm-16 0a2 2 0 002 2h1v-5H6a2 2 0 00-2 2z" },
-  { label: "Wall tool holder", prompt: "wall mounted tool holder", icon: "M4 6h16M4 12h16M4 18h10" },
-  { label: "Cable organizer", prompt: "cable organizer clip", icon: "M8 7a4 4 0 108 0M8 7v6a4 4 0 008 0V7" },
-  { label: "Desk pen holder", prompt: "desk pen holder", icon: "M5 8h14l-1 12H6L5 8zm2-3h10v3H7V5z" },
-  { label: "Pegboard hook", prompt: "pegboard hook", icon: "M6 4v10a4 4 0 008 0M6 4H4m2 0h2" },
+  { label: "Pegboard tool holder", prompt: "pegboard tool holder", icon: "M4 6h16M4 12h16M4 18h10" },
 ];
 
 const FALLBACK_MATERIAL_ENTRIES: Array<[string, MaterialProfile]> = [
@@ -486,15 +486,15 @@ function DesktopModelVariantBar() {
   );
 }
 
-// Showcase models used by "See demo". Pre-generated and cached so navigating
-// between them with "Next model" is instant.
+// Showcase models used by "See demo" — real, popular, genuinely useful prints
+// (not abstract art). Pre-generated and cached so "Next model" is instant.
 const DEMO_PLAYLIST: Array<{ prompt: string; name: string }> = [
-  { prompt: "cable organizer", name: "Cable Organizer" },
+  { prompt: "Milwaukee M18 battery wall mount", name: "Milwaukee M18 Holder" },
+  { prompt: "IKEA Skadis hook", name: "IKEA Skådis Hook" },
+  { prompt: "filament spool holder", name: "Filament Spool Holder" },
+  { prompt: "3D printer bed scraper", name: "3D Printer Scraper" },
   { prompt: "headset stand", name: "Headset Stand" },
-  { prompt: "wall tool holder", name: "Wall Tool Holder" },
-  { prompt: "phone stand", name: "Phone Stand" },
-  { prompt: "desk pen holder", name: "Desk Pen Holder" },
-  { prompt: "pegboard hook", name: "Pegboard Hook" },
+  { prompt: "pegboard tool holder", name: "Pegboard Tool Holder" },
 ];
 
 function isModelBusyStatus(status: string) {
