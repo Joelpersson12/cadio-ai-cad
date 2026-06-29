@@ -1299,6 +1299,21 @@ def _try_replace_with_imported_source_model(
             f"imported real multi-part {_source_label(source_example_obj.source)} assembly as editable parts",
         ], source_objects[0]
 
+    # No STL imported as scene geometry (parse/fetch/signed-link failures are the
+    # most fragile step), but if the search DID find matching models with real
+    # downloadable files, still surface attribution + the file picker as a *side
+    # effect* on the session. We deliberately return EMPTY actions so the caller
+    # falls through to normal AI generation (the seed becomes a real model), while
+    # the Source button + "Change model" picker now appear and the user can pick /
+    # retry a source file. Without this the buttons silently vanish whenever the
+    # live import step fails even though we found the source.
+    if ranked_candidates:
+        _score, source_example_obj, source_files, _candidate = ranked_candidates[0]
+        session["source_info"] = [source_example_obj.to_dict()]
+        session["source_files"] = _build_source_file_options(
+            source_files, prompt, preferred_slots, session=session, active_id=None
+        )
+
     return [], None
 
 
