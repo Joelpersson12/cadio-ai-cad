@@ -29,7 +29,7 @@ const languageOptions: Array<{ value: Language; label: string; native: string; f
 const copy = {
   en: {
     nav: { product: "Product", workflow: "Workflow", pricing: "Pricing", login: "Sign In", start: "Start Building" },
-    hero: { eyebrow: "Early Access Beta", headline1: "Design.", headline2: "Generate.", headline3: "Print.", body: "The AI CAD workspace that transforms ideas into precision geometry — ready for your 3D printer.", primary: "Start Building Free", secondary: "See Demo" },
+    hero: { eyebrow: "Early Access Beta", headline1: "Generate.", headline2: "Design.", headline3: "Print.", body: "The AI CAD workspace that transforms ideas into precision geometry — ready for your 3D printer.", primary: "Start Building Free", secondary: "See Demo" },
     stats: [["No CAD skills needed", "Type what you want — get a real, editable part"], ["Tens of thousands of models", "Printables, Thingiverse & MakerWorld, searched together"], ["Print-ready exports", "STL · 3MF · STEP, sized for your printer"]],
     product: { label: "Product", title: "From a sentence to something you can hold", body: "Type an idea or pull in a real design from the big print libraries. Cadio hands you a dimensioned, editable part on the build plate — then lets you nudge edges, drill holes and resize it to fit, without ever opening traditional CAD." },
     cards: [
@@ -45,7 +45,7 @@ const copy = {
   },
   sv: {
     nav: { product: "Produkt", workflow: "Arbetsflöde", pricing: "Priser", login: "Logga in", start: "Börja Bygga" },
-    hero: { eyebrow: "Early Access Beta", headline1: "Designa.", headline2: "Generera.", headline3: "Printa.", body: "AI CAD-workspace som omvandlar idéer till precisionsgometri — redo för din 3D-skrivare.", primary: "Börja Gratis", secondary: "Se Demo" },
+    hero: { eyebrow: "Early Access Beta", headline1: "Generera.", headline2: "Designa.", headline3: "Printa.", body: "AI CAD-workspace som omvandlar idéer till precisionsgometri — redo för din 3D-skrivare.", primary: "Börja Gratis", secondary: "Se Demo" },
     stats: [["Inga CAD-kunskaper krävs", "Skriv vad du vill ha — få en riktig, redigerbar del"], ["Tiotusentals modeller", "Printables, Thingiverse & MakerWorld i en sökning"], ["Printklart", "STL · 3MF · STEP, anpassat för din skrivare"]],
     product: { label: "Produkt", title: "Från en mening till något du kan hålla i", body: "Skriv en idé eller hämta in en riktig design från de stora print-biblioteken. Cadio ger dig en måttsatt, redigerbar del på byggplattan — sen kan du runda kanter, borra hål och ändra storlek så den passar, utan att öppna traditionell CAD." },
     cards: [
@@ -61,7 +61,7 @@ const copy = {
   },
   es: {
     nav: { product: "Producto", workflow: "Flujo", pricing: "Precios", login: "Iniciar", start: "Empezar" },
-    hero: { eyebrow: "Early Access Beta", headline1: "Diseña.", headline2: "Genera.", headline3: "Imprime.", body: "El workspace CAD con IA que convierte ideas en geometría de precisión — lista para tu impresora 3D.", primary: "Empezar gratis", secondary: "Ver demo" },
+    hero: { eyebrow: "Early Access Beta", headline1: "Genera.", headline2: "Diseña.", headline3: "Imprime.", body: "El workspace CAD con IA que convierte ideas en geometría de precisión — lista para tu impresora 3D.", primary: "Empezar gratis", secondary: "Ver demo" },
     stats: [["Sin conocimientos de CAD", "Escribe lo que quieres — recibe una pieza real y editable"], ["Decenas de miles de modelos", "Printables, Thingiverse y MakerWorld, en una sola búsqueda"], ["Exportación lista para imprimir", "STL · 3MF · STEP, ajustado a tu impresora"]],
     product: { label: "Producto", title: "De una frase a algo que puedes sostener", body: "Escribe una idea o trae un diseño real de las grandes bibliotecas de impresión. Cadio te da una pieza acotada y editable en la placa — y te deja mover aristas, hacer agujeros y cambiar el tamaño para que encaje, sin abrir CAD tradicional." },
     cards: [
@@ -77,7 +77,7 @@ const copy = {
   },
   fr: {
     nav: { product: "Produit", workflow: "Flux", pricing: "Tarifs", login: "Connexion", start: "Commencer" },
-    hero: { eyebrow: "Early Access Beta", headline1: "Dessinez.", headline2: "Générez.", headline3: "Imprimez.", body: "L'espace de travail CAO IA qui transforme vos idées en géométrie de précision — prête pour votre imprimante 3D.", primary: "Commencer gratuitement", secondary: "Voir la démo" },
+    hero: { eyebrow: "Early Access Beta", headline1: "Générez.", headline2: "Dessinez.", headline3: "Imprimez.", body: "L'espace de travail CAO IA qui transforme vos idées en géométrie de précision — prête pour votre imprimante 3D.", primary: "Commencer gratuitement", secondary: "Voir la démo" },
     stats: [["Aucune compétence CAO requise", "Décrivez ce que vous voulez — obtenez une pièce réelle et modifiable"], ["Des dizaines de milliers de modèles", "Printables, Thingiverse et MakerWorld, en une seule recherche"], ["Exports prêts à imprimer", "STL · 3MF · STEP, dimensionnés pour votre imprimante"]],
     product: { label: "Produit", title: "D'une phrase à un objet que vous pouvez tenir", body: "Décrivez une idée ou importez un vrai modèle des grandes bibliothèques d'impression. Cadio vous remet une pièce cotée et modifiable sur le plateau — puis vous laisse ajuster les arêtes, percer des trous et la redimensionner, sans jamais ouvrir un logiciel CAO classique." },
     cards: [
@@ -93,7 +93,7 @@ const copy = {
   },
   it: {
     nav: { product: "Prodotto", workflow: "Flusso", pricing: "Prezzi", login: "Accedi", start: "Inizia" },
-    hero: { eyebrow: "Early Access Beta", headline1: "Progetta.", headline2: "Genera.", headline3: "Stampa.", body: "Lo spazio di lavoro CAD con IA che trasforma le idee in geometria di precisione — pronta per la tua stampante 3D.", primary: "Inizia gratis", secondary: "Guarda la demo" },
+    hero: { eyebrow: "Early Access Beta", headline1: "Genera.", headline2: "Progetta.", headline3: "Stampa.", body: "Lo spazio di lavoro CAD con IA che trasforma le idee in geometria di precisione — pronta per la tua stampante 3D.", primary: "Inizia gratis", secondary: "Guarda la demo" },
     stats: [["Nessuna competenza CAD", "Scrivi cosa vuoi — ottieni una parte reale e modificabile"], ["Decine di migliaia di modelli", "Printables, Thingiverse e MakerWorld, in un'unica ricerca"], ["Export pronti per la stampa", "STL · 3MF · STEP, dimensionati per la tua stampante"]],
     product: { label: "Prodotto", title: "Da una frase a qualcosa che puoi tenere in mano", body: "Scrivi un'idea o importa un modello reale dalle grandi librerie di stampa. Cadio ti consegna una parte quotata e modificabile sul piatto — poi ti lascia spostare i bordi, fare fori e ridimensionarla, senza mai aprire un CAD tradizionale." },
     cards: [
@@ -109,7 +109,7 @@ const copy = {
   },
   de: {
     nav: { product: "Produkt", workflow: "Workflow", pricing: "Preise", login: "Anmelden", start: "Starten" },
-    hero: { eyebrow: "Early Access Beta", headline1: "Designen.", headline2: "Generieren.", headline3: "Drucken.", body: "Der KI-CAD-Workspace, der Ideen in Präzisionsgeometrie verwandelt — bereit für deinen 3D-Drucker.", primary: "Kostenlos starten", secondary: "Demo ansehen" },
+    hero: { eyebrow: "Early Access Beta", headline1: "Generieren.", headline2: "Designen.", headline3: "Drucken.", body: "Der KI-CAD-Workspace, der Ideen in Präzisionsgeometrie verwandelt — bereit für deinen 3D-Drucker.", primary: "Kostenlos starten", secondary: "Demo ansehen" },
     stats: [["Keine CAD-Kenntnisse nötig", "Schreib, was du willst — bekomm ein echtes, bearbeitbares Teil"], ["Zehntausende Modelle", "Printables, Thingiverse & MakerWorld in einer Suche"], ["Druckfertige Exporte", "STL · 3MF · STEP, passend für deinen Drucker"]],
     product: { label: "Produkt", title: "Von einem Satz zu etwas, das du in der Hand hältst", body: "Schreib eine Idee oder hol dir ein echtes Design aus den großen Druck-Bibliotheken. Cadio gibt dir ein bemaßtes, bearbeitbares Teil auf der Druckplatte — dann kannst du Kanten anpassen, Löcher bohren und die Größe ändern, ganz ohne klassisches CAD." },
     cards: [
@@ -125,7 +125,7 @@ const copy = {
   },
   pt: {
     nav: { product: "Produto", workflow: "Fluxo", pricing: "Preços", login: "Entrar", start: "Começar" },
-    hero: { eyebrow: "Early Access Beta", headline1: "Projete.", headline2: "Gere.", headline3: "Imprima.", body: "O workspace CAD com IA que transforma ideias em geometria de precisão — pronta para a sua impressora 3D.", primary: "Começar grátis", secondary: "Ver demo" },
+    hero: { eyebrow: "Early Access Beta", headline1: "Gere.", headline2: "Projete.", headline3: "Imprima.", body: "O workspace CAD com IA que transforma ideias em geometria de precisão — pronta para a sua impressora 3D.", primary: "Começar grátis", secondary: "Ver demo" },
     stats: [["Sem conhecimentos de CAD", "Escreva o que quer — receba uma peça real e editável"], ["Dezenas de milhares de modelos", "Printables, Thingiverse e MakerWorld numa só busca"], ["Exportações prontas para imprimir", "STL · 3MF · STEP, dimensionado para a sua impressora"]],
     product: { label: "Produto", title: "De uma frase a algo que você pode segurar", body: "Escreva uma ideia ou traga um design real das grandes bibliotecas de impressão. A Cadio entrega uma peça cotada e editável na placa — e deixa você mover arestas, fazer furos e redimensionar para encaixar, sem nunca abrir um CAD tradicional." },
     cards: [
@@ -600,10 +600,46 @@ function GroundGrid() {
   return <mesh ref={ref} geometry={geo} material={mat} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.6, 0]} />;
 }
 
+/** Aurora Knot — a sleek mathematical torus knot, the new hero centerpiece.
+    Dark chrome body with a cyan clearcoat sheen and a faint wireframe aura. */
+function AuroraKnot() {
+  const groupRef = useRef<THREE.Group>(null);
+
+  const knotMat = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: "#0c1822",
+    roughness: 0.12,
+    metalness: 0.9,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.06,
+    emissive: ACCENT,
+    emissiveIntensity: 0.06,
+  }), []);
+
+  const knotGeo = useMemo(() => new THREE.TorusKnotGeometry(1.18, 0.34, 240, 32, 2, 3), []);
+
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    const t = clock.elapsedTime;
+    groupRef.current.rotation.y = t * 0.3;
+    groupRef.current.rotation.x = Math.sin(t * 0.35) * 0.25 + 0.2;
+    groupRef.current.position.y = Math.sin(t * 0.5) * 0.1;
+  });
+
+  return (
+    <group ref={groupRef} scale={1.05} position={[0, 0.1, 0]}>
+      <mesh geometry={knotGeo} material={knotMat} castShadow />
+      <mesh geometry={knotGeo} scale={1.015}>
+        <meshBasicMaterial color={ACCENT} wireframe opacity={0.08} transparent />
+      </mesh>
+    </group>
+  );
+}
+
 function renderLandingModel(index: number) {
-  if (index === 0) return <Gyroscope />;
-  if (index === 1) return <Rocket />;
-  if (index === 2) return <TwistedVase />;
+  if (index === 0) return <AuroraKnot />;
+  if (index === 1) return <Gyroscope />;
+  if (index === 2) return <Rocket />;
+  if (index === 3) return <TwistedVase />;
   return <FlexiCoil />;
 }
 
@@ -1186,6 +1222,7 @@ function ResetPasswordDialog({
 // ─── MODEL SELECTOR LABELS ───────────────────────────────────────────────────
 
 const MODELS = [
+  { label: "Aurora Knot", description: "Parametric torus knot" },
   { label: "Gyroscope", description: "Precision mechanical rings" },
   { label: "Rocket", description: "Classic maker print" },
   { label: "Twisted Vase", description: "#1 most printed decoration" },
@@ -1347,16 +1384,19 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
           />
         </div>
 
-        {/* ── NAVBAR ────────────────────────────────────────────────────── */}
-        <header
-          className="fixed inset-x-0 top-0 z-40 transition-all duration-500"
-          style={{
-            background: scrolled ? "rgba(8,12,16,0.9)" : "transparent",
-            backdropFilter: scrolled ? "blur(20px)" : "none",
-            borderBottom: scrolled ? "1px solid rgba(43,184,220,0.1)" : "1px solid transparent",
-          }}
-        >
-          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8">
+        {/* ── NAVBAR — floating glass pill ──────────────────────────────── */}
+        <header className="fixed inset-x-0 top-0 z-40 flex justify-center px-3 pt-3 transition-all duration-500">
+          <div
+            className="flex h-14 w-full max-w-5xl items-center justify-between rounded-2xl px-4 pl-5 transition-all duration-500 lg:px-5"
+            style={{
+              background: scrolled ? "rgba(13,19,24,0.8)" : "rgba(13,19,24,0.45)",
+              backdropFilter: "blur(20px)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              boxShadow: scrolled
+                ? "0 12px 40px -16px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)"
+                : "0 8px 30px -18px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)",
+            }}
+          >
             <CadioLogo
               subtitle=""
               onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
@@ -1417,8 +1457,11 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
           onMouseMove={onHeroMove}
           onMouseLeave={() => setSpot((s) => ({ ...s, active: false }))}
         >
-          {/* 3D scene fills entire hero */}
-          <HeroScene displayModel={displayModel} exitingModel={exitingModel} inTransition={inTransition} />
+          {/* 3D scene — fills the hero on mobile, shifts to the right half on
+              desktop so the headline sits beside it (split hero). */}
+          <div className="absolute inset-0 lg:left-[30%]">
+            <HeroScene displayModel={displayModel} exitingModel={exitingModel} inTransition={inTransition} />
+          </div>
 
           {/* Cursor-reactive spotlight — a soft cyan glow that tracks the pointer */}
           <div
@@ -1429,9 +1472,9 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
             }}
           />
 
-          {/* Hero text — centered, above the model */}
-          <div className="relative z-10 flex min-h-screen flex-col items-center justify-center pt-16 pb-32">
-            <div className="flex flex-col items-center text-center px-6">
+          {/* Hero text — centered on mobile, left-aligned beside the 3D on desktop */}
+          <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col items-center justify-center px-6 pt-16 pb-32 lg:items-start">
+            <div className="flex max-w-xl flex-col items-center text-center lg:max-w-2xl lg:items-start lg:text-left">
               {/* Eyebrow */}
               <div
                 className="anim-in mb-8 inline-flex items-center gap-2 rounded-full px-4 py-1.5"
@@ -1455,7 +1498,7 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
               {/* Headline */}
               <h1
                 className="mb-6 font-black leading-[0.88] tracking-[-0.04em]"
-                style={{ fontSize: "clamp(60px, 9vw, 120px)" }}
+                style={{ fontSize: "clamp(56px, 8.2vw, 108px)" }}
               >
                 <span className="anim-in-1 block text-white">{text.hero.headline1}</span>
                 <span className="anim-in-2 accent-gradient block">{text.hero.headline2}</span>
@@ -1471,7 +1514,7 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
               </p>
 
               {/* CTAs */}
-              <div className="anim-in-3 flex flex-wrap justify-center gap-4">
+              <div className="anim-in-3 flex flex-wrap justify-center gap-4 lg:justify-start">
                 <button
                   onClick={onStartBuilding}
                   className="rounded-xl px-8 text-base font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
