@@ -181,7 +181,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-29T-warm-source-search"
+BUILD_MARKER = "2026-06-29T-source-survives-import-failure"
 
 
 @router.get("/api/debug/version")
@@ -818,7 +818,10 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
                 research_brief = parsed.get("research_brief")
                 if research_brief and not edit_only:
                     examples = research_brief.get("source_examples", [])
-                    if examples:
+                    # Don't clobber attribution already set by the source-import
+                    # path (which pairs source_info with a resolved source_files
+                    # list). Only fill in from the research brief when empty.
+                    if examples and not session.get("source_info"):
                         session["source_info"] = examples[:3]
 
                 research_actions = []
@@ -1041,6 +1044,11 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
                 session["objects"] = {}
                 session["object_order"] = []
                 session["selected_object_id"] = ""
+            # Auto-select the last object when none is selected (cleared after AI generation).
+            # Without this, hole/split/cut all fall through to create_primitive_object.
+            if not session.get("selected_object_id") and session.get("object_order"):
+                session["selected_object_id"] = session["object_order"][-1]
+
             if data.primitive.strip().lower() == "hole" and session.get("selected_object_id") and session["object_order"]:
                 obj = get_selected_object(session)
                 diameter = max(0.5, float(data.radius or max(data.size or [5.0]) / 2.0) * 2.0)
