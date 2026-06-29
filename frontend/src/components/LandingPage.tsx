@@ -1272,14 +1272,42 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
         .float-y   { animation: float-y 4s ease-in-out infinite; }
         .card-hover { transition: transform .3s ease, box-shadow .3s ease, border-color .3s ease; }
         .card-hover:hover { transform: translateY(-4px); }
+        @keyframes orb-a { 0%,100% { transform: translate(0,0) scale(1) } 50% { transform: translate(6%, 4%) scale(1.12) } }
+        @keyframes orb-b { 0%,100% { transform: translate(0,0) scale(1) } 50% { transform: translate(-5%, -6%) scale(1.08) } }
+        @keyframes orb-c { 0%,100% { transform: translate(0,0) scale(1) } 50% { transform: translate(4%, -4%) scale(1.15) } }
+        @keyframes grad-x { 0%,100% { background-position: 0% 50% } 50% { background-position: 100% 50% } }
+        .accent-gradient {
+          background: linear-gradient(100deg, #2bb8dc 0%, #6fe6ff 25%, #7a5af8 55%, #2bb8dc 100%);
+          background-size: 220% 100%;
+          -webkit-background-clip: text; background-clip: text;
+          -webkit-text-fill-color: transparent; color: transparent;
+          animation: grad-x 7s ease-in-out infinite;
+        }
       `}</style>
 
       <div
         id="landing-scroll"
         ref={scrollRef}
-        className="h-full overflow-y-auto"
+        className="relative isolate h-full overflow-y-auto"
         style={{ background: BG, color: "#e8edf2", fontFamily: "'Inter', system-ui, sans-serif" }}
       >
+        {/* Ambient gradient glow — sits above the base background but behind all
+            content (isolate + negative z). Gives the page the deep, lit-from-
+            within feel without touching the hero's own 3D stage. */}
+        <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+          <div
+            className="absolute -left-[10%] top-[20%] h-[55vh] w-[55vh] rounded-full opacity-50"
+            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.22), transparent 70%)", filter: "blur(70px)", animation: "orb-a 18s ease-in-out infinite" }}
+          />
+          <div
+            className="absolute right-[-8%] top-[55%] h-[60vh] w-[60vh] rounded-full opacity-40"
+            style={{ background: "radial-gradient(circle, rgba(122,90,248,0.18), transparent 70%)", filter: "blur(80px)", animation: "orb-b 22s ease-in-out infinite" }}
+          />
+          <div
+            className="absolute left-[35%] bottom-[2%] h-[50vh] w-[50vh] rounded-full opacity-35"
+            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.16), transparent 70%)", filter: "blur(75px)", animation: "orb-c 26s ease-in-out infinite" }}
+          />
+        </div>
 
         {/* ── NAVBAR ────────────────────────────────────────────────────── */}
         <header
@@ -1392,7 +1420,7 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
                 style={{ fontSize: "clamp(60px, 9vw, 120px)" }}
               >
                 <span className="anim-in-1 block text-white">{text.hero.headline1}</span>
-                <span className="anim-in-2 block" style={{ color: ACCENT }}>{text.hero.headline2}</span>
+                <span className="anim-in-2 accent-gradient block">{text.hero.headline2}</span>
                 <span className="anim-in-3 block text-white">{text.hero.headline3}</span>
               </h1>
 
@@ -1552,48 +1580,52 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
                 {text.product.body}
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-              {text.cards.map((card, i) => (
-                <div
-                  key={i}
-                  className="card-hover group rounded-2xl p-8"
-                  style={{
-                    background: `linear-gradient(135deg, rgba(43,184,220,0.04) 0%, rgba(43,184,220,0.01) 100%)`,
-                    border: `1px solid ${ACCENT_DIM}0.1)`,
-                    transitionDelay: `${i * 60}ms`,
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_DIM}0.3)`;
-                    (e.currentTarget as HTMLElement).style.boxShadow = `0 0 40px ${ACCENT_DIM}0.06)`;
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_DIM}0.1)`;
-                    (e.currentTarget as HTMLElement).style.boxShadow = "none";
-                  }}
-                >
+            {/* Bento grid — first card is the hero tile, the other two flank it,
+                the last spans full width. Glassmorphism + accent glow on hover. */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
+              {text.cards.map((card, i) => {
+                const span = i === 0 ? "sm:col-span-4 sm:row-span-2" : i === 1 ? "sm:col-span-2" : "sm:col-span-2";
+                const feature = i === 0;
+                return (
                   <div
-                    className="mb-6 flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-110"
+                    key={i}
+                    className={`card-hover group relative overflow-hidden rounded-3xl p-7 ${span} ${feature ? "sm:p-9" : ""}`}
                     style={{
-                      background: `${ACCENT_DIM}0.1)`,
-                      border: `1px solid ${ACCENT_DIM}0.2)`,
+                      background: "linear-gradient(160deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 100%)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      backdropFilter: "blur(14px)",
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                      transitionDelay: `${i * 60}ms`,
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_DIM}0.4)`;
+                      (e.currentTarget as HTMLElement).style.boxShadow = `inset 0 1px 0 rgba(255,255,255,0.08), 0 0 50px ${ACCENT_DIM}0.1)`;
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.08)";
+                      (e.currentTarget as HTMLElement).style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.06)";
                     }}
                   >
-                    <svg
-                      className="h-5 w-5"
-                      style={{ color: ACCENT }}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+                    {/* corner glow */}
+                    <div
+                      className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                      style={{ background: `radial-gradient(circle, ${ACCENT_DIM}0.18), transparent 70%)`, filter: "blur(20px)" }}
+                    />
+                    <div
+                      className={`mb-6 flex items-center justify-center rounded-2xl transition-all duration-300 group-hover:scale-110 ${feature ? "h-14 w-14" : "h-11 w-11"}`}
+                      style={{ background: `${ACCENT_DIM}0.12)`, border: `1px solid ${ACCENT_DIM}0.25)` }}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={card.icon} />
-                    </svg>
+                      <svg className={feature ? "h-7 w-7" : "h-5 w-5"} style={{ color: ACCENT }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={card.icon} />
+                      </svg>
+                    </div>
+                    <p className={`mb-3 font-bold text-white ${feature ? "text-2xl" : "text-base"}`}>{card.title}</p>
+                    <p className={`leading-relaxed ${feature ? "text-base" : "text-sm"}`} style={{ color: "rgba(232,237,242,0.5)" }}>
+                      {card.body}
+                    </p>
                   </div>
-                  <p className="mb-3 text-base font-bold text-white">{card.title}</p>
-                  <p className="text-sm leading-relaxed" style={{ color: "rgba(232,237,242,0.42)" }}>
-                    {card.body}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
