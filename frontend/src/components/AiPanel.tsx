@@ -153,7 +153,7 @@ export function SourceFilesModal({
 }: {
   files: import("../utils/types").SourceFileOption[];
   source?: SourceExample;
-  onSelect: (fileId: string, mode?: "swap" | "add") => void;
+  onSelect: (fileId: string, mode?: "swap" | "add" | "remove") => void;
   onClose: () => void;
   busy?: boolean;
 }) {
@@ -258,14 +258,25 @@ export function SourceFilesModal({
                     Place all →
                   </button>
                 ) : f.active ? (
-                  <button
-                    disabled={busy}
-                    onClick={() => onSelect(f.id, "add")}
-                    title="Remove this part from the plate"
-                    className="group/rm shrink-0 rounded-full bg-cadio-accent/15 px-2.5 py-1 text-[10px] font-bold text-cadio-accent transition-colors hover:bg-[#ff6961]/15 hover:text-[#ff8a80] disabled:opacity-50"
-                  >
-                    On plate<span className="text-white/40 group-hover/rm:text-[#ff8a80]"> · remove</span>
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span className="rounded-full bg-cadio-accent/15 px-2 py-1 text-[10px] font-bold text-cadio-accent">On plate</span>
+                    <button
+                      disabled={busy}
+                      onClick={() => onSelect(f.id, "add")}
+                      title="Add another copy of this part"
+                      className="rounded-lg border border-white/12 px-2.5 py-1.5 text-[11px] font-bold text-white/60 transition-colors hover:border-cadio-accent/40 hover:text-cadio-accent disabled:opacity-50"
+                    >
+                      + Add
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => onSelect(f.id, "remove")}
+                      title="Remove one copy from the plate"
+                      className="rounded-lg border border-white/12 px-2.5 py-1.5 text-[11px] font-bold text-white/45 transition-colors hover:border-[#ff8a80]/40 hover:text-[#ff8a80] disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex shrink-0 items-center gap-1.5">
                     <button

@@ -50,12 +50,6 @@ const EASY_ACTIONS = [
 ];
 
 
-const SELECTION_MODES: Array<{ id: SelectionMode; label: string }> = [
-  { id: "body", label: "Body" },
-  { id: "face", label: "Face" },
-  { id: "edge", label: "Edge" },
-];
-
 const TRANSFORM_MODES: Array<{ id: TransformMode; label: string }> = [
   { id: "off", label: "Off" },
   { id: "translate", label: "Move" },
@@ -736,19 +730,19 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
   const selectedCount = selectedObjectIds.length || (selectedObjectId ? 1 : 0);
   const modelBusy = isBusy || isModelBusyStatus(status);
 
+  // A real printer is selected only when it isn't the "+ Choose Printer"
+  // placeholder. The too-big check is meaningless without a chosen build volume.
+  const rawPrinterName = printSettings?.printer?.name ?? "";
+  const hasRealPrinter = printer !== "choose_printer"
+    && !!rawPrinterName && !rawPrinterName.trim().startsWith("+") && !/choose/i.test(rawPrinterName);
+
   // Per-printer "model too big" warning (backend computes the fit scale).
+  // Only shown once a real printer is chosen.
   const fitInfo = printSettings?.scale;
-  const tooBig = !!(objects.length && fitInfo && !fitInfo.fits_without_scaling);
+  const tooBig = !!(hasRealPrinter && objects.length && fitInfo && !fitInfo.fits_without_scaling);
   const fitPct = fitInfo ? Math.max(1, Math.floor(fitInfo.fit_scale_percent)) : 100;
   const bv = printSettings?.printer?.build_volume;
-  // The printer name can be the unselected placeholder ("+ Choose Printer"),
-  // which reads oddly as "Too big for + Choose Printer". Fall back to a neutral
-  // phrase whenever there's no real printer chosen.
-  const rawPrinterName = printSettings?.printer?.name ?? "";
-  const hasRealPrinter = !!rawPrinterName && !rawPrinterName.trim().startsWith("+") && !/choose/i.test(rawPrinterName);
-  const tooBigTitle = hasRealPrinter
-    ? `Too big for your ${rawPrinterName}${bv ? ` (${bv[0]}×${bv[1]}×${bv[2]} mm)` : ""}`
-    : `Too big for the build plate${bv ? ` (${bv[0]}×${bv[1]}×${bv[2]} mm)` : ""}`;
+  const tooBigTitle = `Too big for your ${rawPrinterName}${bv ? ` (${bv[0]}×${bv[1]}×${bv[2]} mm)` : ""}`;
   const TooBigBanner = tooBig ? (
     <div className="pointer-events-auto flex max-w-[92vw] items-center gap-3 rounded-xl border px-4 py-2 shadow-lg backdrop-blur-sm" style={{ background: "rgba(30,18,4,0.92)", borderColor: "rgba(255,159,10,0.45)" }}>
       <svg className="h-5 w-5 shrink-0 text-[#ff9f0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
@@ -850,6 +844,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
           selectedObjectIds={selectedObjectIds}
           onSelectObject={(id) => void onSelectObject(id)}
           transformMode={transformMode}
+          onSetTransformMode={setTransformMode}
           onTransformCommit={(id, t) => void onTransformCommit(id, t)}
           printerVolume={printerVolume}
           bounds={bounds}
@@ -1025,9 +1020,10 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
         {/* Model variations (Next / Previous source model) */}
         <DesktopModelVariantBar />
 
-        {/* Per-printer "too big" warning */}
+        {/* Per-printer "too big" warning — bottom center so it never covers the
+            top variations bar (Next / Previous). */}
         {tooBig && (
-          <div className="pointer-events-none absolute inset-x-0 top-[68px] z-20 flex justify-center px-4">
+          <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex justify-center px-4">
             {TooBigBanner}
           </div>
         )}
@@ -1097,37 +1093,6 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
                   <option value={key} key={key}>{p.name}</option>
                 ))}
               </select>
-              {printerDims && (
-                <p className="mt-1.5 text-[11px] text-cadio-muted/70">Build volume: {printerDims}</p>
-              )}
-            </div>
-          )}
-
-          {/* Expert tools */}
-          {expertMode && (
-            <div className="border-b border-cadio-border/30 px-4 py-3 space-y-3">
-              <div>
-                <p className="mb-2 text-[11px] font-semibold text-cadio-muted">Select</p>
-                <div className="flex gap-1">
-                  {SELECTION_MODES.map(m => (
-                    <button key={m.id} onClick={() => setSelectionMode(m.id)}
-                      className={`flex-1 rounded-md py-2 text-[11px] font-medium transition-all ${selectionMode === m.id ? "bg-cadio-surface border border-cadio-border text-cadio-text" : "text-cadio-muted hover:text-cadio-text"}`}>
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="mb-2 text-[11px] font-semibold text-cadio-muted">Transform</p>
-                <div className="flex gap-1">
-                  {TRANSFORM_MODES.map(m => (
-                    <button key={m.id} onClick={() => setTransformMode(m.id)}
-                      className={`flex-1 rounded-md py-2 text-[11px] font-medium transition-all ${transformMode === m.id ? "bg-cadio-accent text-cadio-bg" : "text-cadio-muted hover:text-cadio-text"}`}>
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 

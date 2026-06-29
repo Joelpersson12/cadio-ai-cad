@@ -5,6 +5,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, GizmoHelper, GizmoViewport, Html, OrbitControls, TransformControls, Environment, Lightformer, ContactShadows } from "@react-three/drei";
 import { EffectComposer, N8AO, Bloom, SMAA, Vignette, ToneMapping } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
+import { toCreasedNormals } from "three-stdlib";
 import * as THREE from "three";
 import type { CadObject, ExpertTool, SelectionMode, TransformMode } from "../utils/types";
 
@@ -181,10 +182,12 @@ function meshBounds(obj: CadObject) {
   return { min, max };
 }
 
-// Single shared scale for the entire scene.  Computes the union AABB of every
-// object (in three-space, after each object's own transform), then fits that
-// whole bounding box into the printer volume.  Every object is then scaled by
-// this same factor about the origin, so relative positions are preserved.
+// Single shared display scale for the scene. Fits the union of every object's
+// RAW mesh bounds (ignoring each object's user transform) into the printer
+// volume. Crucially this does NOT depend on transform position/scale, so moving
+// or scaling a part with the gizmo doesn't recompute the factor and "snap" the
+// model to a refitted size on release. The user's own transform scale is then
+// applied on top of this factor.
 function computeSceneScale(objects: CadObject[], printerVolume: [number, number, number]): number {
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
@@ -193,20 +196,9 @@ function computeSceneScale(objects: CadObject[], printerVolume: [number, number,
     const b = meshBounds(obj);
     if (!b) continue;
     found = true;
-    const t = obj.transform;
-    // transform scale/position are stored backend-space; swap to three-space.
-    const tsx = t?.scale?.[0] ?? 1;
-    const tsy = t?.scale?.[2] ?? 1;
-    const tsz = t?.scale?.[1] ?? 1;
-    const tpx = t?.position?.[0] ?? 0;
-    const tpy = t?.position?.[2] ?? 0;
-    const tpz = t?.position?.[1] ?? 0;
-    const xs = [b.min.x * tsx + tpx, b.max.x * tsx + tpx];
-    const ys = [b.min.y * tsy + tpy, b.max.y * tsy + tpy];
-    const zs = [b.min.z * tsz + tpz, b.max.z * tsz + tpz];
-    minX = Math.min(minX, ...xs); maxX = Math.max(maxX, ...xs);
-    minY = Math.min(minY, ...ys); maxY = Math.max(maxY, ...ys);
-    minZ = Math.min(minZ, ...zs); maxZ = Math.max(maxZ, ...zs);
+    minX = Math.min(minX, b.min.x); maxX = Math.max(maxX, b.max.x);
+    minY = Math.min(minY, b.min.y); maxY = Math.max(maxY, b.max.y);
+    minZ = Math.min(minZ, b.min.z); maxZ = Math.max(maxZ, b.max.z);
   }
   if (!found) return 1;
   const sx = maxX - minX;
@@ -469,10 +461,19 @@ function ScaledMesh({
     const indices = new Uint32Array(obj.mesh.indices);
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geo.setIndex(new THREE.BufferAttribute(indices, 1));
-    geo.computeVertexNormals();
-    geo.computeBoundingBox();
-    geo.normalizeNormals();
-    return geo;
+    // Crease-aware normals: flat faces stay crisp and only true curves (below
+    // the crease angle) get smoothed. Plain computeVertexNormals() averages
+    // normals across sharp edges, which smears ugly starburst shading onto flat
+    // faces around holes — the main reason imported models looked low quality.
+    let finalGeo = geo;
+    try {
+      finalGeo = toCreasedNormals(geo, Math.PI / 5); // 36° crease threshold
+    } catch {
+      geo.computeVertexNormals();
+      finalGeo = geo;
+    }
+    finalGeo.computeBoundingBox();
+    return finalGeo;
   }, [obj.mesh]);
  
   // Pre-build edge geometry once so it never rebuilds when selection state changes.
@@ -724,6 +725,7 @@ interface CadViewportProps {
   onSetExpertMode?: (enabled: boolean) => void;
   onSetExpertTool?: (tool: ExpertTool) => void;
   onSetSelectionMode?: (mode: SelectionMode) => void;
+  onSetTransformMode?: (mode: TransformMode) => void;
   onSetSketchHeight?: (height: number) => void;
   onSetOperationAmount?: (amount: number) => void;
   onApplyExpertOperation?: (
@@ -906,6 +908,7 @@ export default function CadViewport({
   onSetExpertMode,
   onSetExpertTool,
   onSetSelectionMode,
+  onSetTransformMode,
   onSetSketchHeight,
   onSetOperationAmount,
   onApplyExpertOperation,
@@ -1001,6 +1004,24 @@ export default function CadViewport({
               }`}
             >
               {SELECTION_LABELS[mode]}
+            </button>
+          ))}
+        </div>
+        <div className="my-1 h-px bg-cadio-border/30 mx-2" />
+        <p className="px-2 pt-1 text-[9px] font-bold uppercase tracking-widest text-cadio-muted/70">Move / rotate / scale</p>
+        <div className="grid grid-cols-4 gap-1 px-1">
+          {([["off", "Off"], ["translate", "Move"], ["rotate", "Rotate"], ["scale", "Scale"]] as Array<[TransformMode, string]>).map(([mode, label]) => (
+            <button
+              key={mode}
+              disabled={!expertMode}
+              onClick={() => onSetTransformMode?.(mode)}
+              className={`py-2 rounded-md text-[10px] font-bold transition-all ${
+                expertMode && transformMode === mode
+                  ? "bg-cadio-accent text-cadio-bg"
+                  : "border border-transparent text-cadio-muted hover:text-white disabled:opacity-30"
+              }`}
+            >
+              {label}
             </button>
           ))}
         </div>
@@ -1106,16 +1127,22 @@ export default function CadViewport({
       {/* Ambient hemisphere — warmer ground so floor-facing faces stay visible */}
       <hemisphereLight intensity={0.28} color="#dde8f0" groundColor="#3a4a5a" />
 
-      {/* Soft contact shadow grounds the model so it doesn't float. */}
-      <ContactShadows
-        position={[0, 0.03, 0]}
-        scale={Math.max(printerVolume[0], printerVolume[1]) * 2.6}
-        far={Math.max(printerVolume[2], 120)}
-        blur={3.6}
-        opacity={0.32}
-        resolution={1024}
-        color="#020509"
-      />
+      {/* Soft contact shadow grounds the model so it doesn't float. Only render
+          it when there's actually a model — otherwise the baked shadow texture
+          lingers as a "ghost" on the empty plate. The key forces a fresh bake
+          when the set of objects changes (so an old silhouette never sticks). */}
+      {objects.length > 0 && (
+        <ContactShadows
+          key={objects.map((o) => o.id).join("|")}
+          position={[0, 0.03, 0]}
+          scale={Math.max(printerVolume[0], printerVolume[1]) * 2.6}
+          far={Math.max(printerVolume[2], 120)}
+          blur={3.6}
+          opacity={0.32}
+          resolution={1024}
+          color="#020509"
+        />
+      )}
  
       <Grid
         args={[printerVolume[0] * 3, printerVolume[1] * 3]}

@@ -112,7 +112,7 @@ interface CadState {
   scaleAllToFit: (percent: number) => Promise<void>;
   snapSelectedObjects: (snap: "on_plate" | "center_on_plate") => Promise<void>;
   switchSourceModel: (direction: "next" | "previous") => Promise<void>;
-  selectSourceFile: (fileId: string, mode?: "swap" | "add") => Promise<void>;
+  selectSourceFile: (fileId: string, mode?: "swap" | "add" | "remove") => Promise<void>;
   importLocalFile: (file: File) => Promise<void>;
   prefetchDemoModels: (prompts: string[]) => void;
   showDemoModel: (prompt: string) => Promise<void>;

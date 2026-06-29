@@ -1452,20 +1452,23 @@ def select_source_file(session: Session, file_id: str, mode: str = "swap") -> li
         None,
     )
 
+    # ── Remove mode ──────────────────────────────────────────────────────────
+    # Take one copy of this file off the plate.
+    if mode == "remove":
+        if placed_obj is None:
+            return [f"source-files: {_source_file_name(candidate)} is not on the plate"]
+        _remove_object_direct(session, placed_obj["id"])
+        remaining = _imported_source_objects(session)
+        if len(remaining) == 1:
+            center_object_on_plate(remaining[0])
+        session["selected_object_id"] = ""
+        session["source_files"] = _build_source_file_options(source_files, prompt, 0, session=session)
+        return [f"source-files: removed {_source_file_name(candidate)}"]
+
     # ── Add mode ───────────────────────────────────────────────────────────
-    # Clicking a placed file removes it (keeping at least one part); clicking an
-    # unplaced file adds it beside the others so an assembly can be built up.
+    # Always places another copy beside the existing parts — so you can have two
+    # (or more) of the same file. Removal is the separate "remove" action.
     if mode == "add":
-        if placed_obj is not None and len(existing) > 1:
-            _remove_object_direct(session, placed_obj["id"])
-            remaining = _imported_source_objects(session)
-            if len(remaining) == 1:
-                center_object_on_plate(remaining[0])
-            session["selected_object_id"] = ""
-            session["source_files"] = _build_source_file_options(source_files, prompt, 0, session=session)
-            return [f"source-files: removed {_source_file_name(candidate)}"]
-        if placed_obj is not None:
-            return [f"source-files: {_source_file_name(candidate)} is already on the plate"]
         shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
         if shape is None:
             return [f"could not import {_source_file_name(candidate)}"]
