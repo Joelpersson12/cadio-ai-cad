@@ -49,8 +49,13 @@ const REQUEST_TIMEOUT_MS = 90_000;
 // fallback chain never corrects it. These calls therefore try HF first.
 const ACCOUNT_BASES = Array.from(new Set([HF_API_BASE, ...API_FALLBACKS]));
 
+function shortHost(base: string): string {
+  try { return new URL(base).host; } catch { return base; }
+}
+
 async function request<T>(path: string, options: RequestInit = {}, bases: string[] = API_FALLBACKS): Promise<T> {
   let lastError: unknown = null;
+  const attempts: string[] = [];
   const optionHeaders =
     options.headers instanceof Headers
       ? Object.fromEntries(options.headers.entries())
@@ -60,6 +65,7 @@ async function request<T>(path: string, options: RequestInit = {}, bases: string
   for (const base of bases) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const host = shortHost(base);
     try {
       const res = await fetch(`${base}${path}`, {
         ...options,
@@ -70,18 +76,23 @@ async function request<T>(path: string, options: RequestInit = {}, bases: string
       const contentType = res.headers.get("content-type") || "";
       const data = contentType.includes("application/json")
         ? await res.json()
-        : { status: "error", message: await res.text() || "Expected JSON API response" };
+        : { status: "error", message: await res.text() || "non-JSON response" };
       if (!res.ok || data.status === "error") {
-        lastError = new Error(data.message || "API request failed");
+        attempts.push(`${host}→${res.status}${data.message ? ` ${String(data.message).slice(0, 60)}` : ""}`);
+        lastError = new Error(data.message || `HTTP ${res.status} from ${host}`);
         continue;
       }
       return data as T;
     } catch (err) {
       clearTimeout(timer);
+      const reason = err instanceof DOMException && err.name === "AbortError" ? "timeout" : (err instanceof Error ? err.message : "network/CORS error");
+      attempts.push(`${host}→${reason}`);
       lastError = err;
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("API request failed");
+  // Surface which backends were tried and how each failed, so a stuck
+  // "API request failed" is actually diagnosable.
+  throw new Error(`Couldn't reach the backend. Tried: ${attempts.join(" · ") || "none"}`);
 }
 
 // ---------------------------------------------------------------------------
