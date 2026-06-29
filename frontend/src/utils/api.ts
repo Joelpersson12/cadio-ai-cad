@@ -43,11 +43,10 @@ const API_FALLBACKS = Array.from(
 
 const REQUEST_TIMEOUT_MS = 90_000;
 
-// Account / billing / auth data MUST come from the one canonical backend (the
-// maintained Hugging Face Space). If the app is pointed at a stale mirror, that
-// mirror can answer 200-OK with a *wrong* (e.g. Free) account, so a normal
-// fallback chain never corrects it. These calls therefore try HF first.
-const ACCOUNT_BASES = Array.from(new Set([HF_API_BASE, ...API_FALLBACKS]));
+// Account / billing / auth calls use the same base order as everything else.
+// (Forcing a specific backend here backfired when that backend was running old
+// code / not serving the API — it broke the account display entirely.)
+const ACCOUNT_BASES = API_FALLBACKS;
 
 function shortHost(base: string): string {
   try { return new URL(base).host; } catch { return base; }
