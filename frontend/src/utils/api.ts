@@ -184,10 +184,21 @@ export async function getAccountProfile(token: string): Promise<{
   status: string;
   account: AccountProfile;
 }> {
-  return request("/api/account/me", {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  // Retry on transient failure so a cold-starting backend doesn't leave the UI
+  // showing a stale (e.g. Free) plan when the account is actually paid.
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await request("/api/account/me", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (err) {
+      lastError = err;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Could not reach the server");
 }
 
 export async function refreshAccountPlan(token: string): Promise<{

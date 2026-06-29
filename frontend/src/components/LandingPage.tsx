@@ -4,6 +4,7 @@
  */
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Environment, Lightformer, RoundedBox } from "@react-three/drei";
 import { type ReactNode, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { loginCadioAccount, loginWithGoogle, sendPasswordReset, confirmPasswordReset, isCadioAuthenticated, getCadioAccount } from "../utils/auth";
@@ -627,11 +628,11 @@ function MilwaukeeMount() {
   const dark = useMemo(() => printMat("#1c1e21", { clearcoat: 0.18 }), []);
   return (
     <group ref={ref} scale={1.15} rotation={[0.12, 0, 0]}>
-      <mesh material={red} castShadow position={[0, 0, -0.18]}><boxGeometry args={[2.4, 2.0, 0.2]} /></mesh>
-      <mesh material={red} castShadow position={[0, 0.1, 0.18]}><boxGeometry args={[0.95, 1.7, 0.5]} /></mesh>
-      <mesh material={red} castShadow position={[-0.62, 0.1, 0.12]} rotation={[0, 0, 0.18]}><boxGeometry args={[0.16, 1.7, 0.42]} /></mesh>
-      <mesh material={red} castShadow position={[0.62, 0.1, 0.12]} rotation={[0, 0, -0.18]}><boxGeometry args={[0.16, 1.7, 0.42]} /></mesh>
-      <mesh material={dark} castShadow position={[0, 0.95, 0.2]}><boxGeometry args={[0.7, 0.18, 0.42]} /></mesh>
+      <RoundedBox material={red} castShadow position={[0, 0, -0.18]} args={[2.4, 2.0, 0.2]} radius={0.07} smoothness={4} />
+      <RoundedBox material={red} castShadow position={[0, 0.1, 0.18]} args={[0.95, 1.7, 0.5]} radius={0.08} smoothness={4} />
+      <RoundedBox material={red} castShadow position={[-0.62, 0.1, 0.12]} rotation={[0, 0, 0.18]} args={[0.16, 1.7, 0.42]} radius={0.04} smoothness={3} />
+      <RoundedBox material={red} castShadow position={[0.62, 0.1, 0.12]} rotation={[0, 0, -0.18]} args={[0.16, 1.7, 0.42]} radius={0.04} smoothness={3} />
+      <RoundedBox material={dark} castShadow position={[0, 0.95, 0.2]} args={[0.7, 0.18, 0.42]} radius={0.04} smoothness={3} />
       <mesh material={dark} position={[0, 0.72, -0.04]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.12, 0.12, 0.5, 20]} /></mesh>
       <mesh material={dark} position={[0, -0.72, -0.04]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.12, 0.12, 0.5, 20]} /></mesh>
     </group>
@@ -650,8 +651,8 @@ function SkadisBin() {
       <mesh material={white} castShadow position={[-w / 2, -h / 4, 0]}><boxGeometry args={[th, h / 2, d]} /></mesh>
       <mesh material={white} castShadow position={[w / 2, -h / 4, 0]}><boxGeometry args={[th, h / 2, d]} /></mesh>
       <mesh material={white} castShadow position={[0, h * 0.05, -d / 2]}><boxGeometry args={[w, h * 1.1, th]} /></mesh>
-      <mesh material={white} castShadow position={[-0.5, h * 0.55, -d / 2 - 0.12]}><boxGeometry args={[0.2, 0.2, 0.34]} /></mesh>
-      <mesh material={white} castShadow position={[0.5, h * 0.55, -d / 2 - 0.12]}><boxGeometry args={[0.2, 0.2, 0.34]} /></mesh>
+      <RoundedBox material={white} castShadow position={[-0.5, h * 0.55, -d / 2 - 0.12]} args={[0.2, 0.2, 0.34]} radius={0.05} smoothness={3} />
+      <RoundedBox material={white} castShadow position={[0.5, h * 0.55, -d / 2 - 0.12]} args={[0.2, 0.2, 0.34]} radius={0.05} smoothness={3} />
     </group>
   );
 }
@@ -665,8 +666,8 @@ function FilamentHolder() {
   useFrame(({ clock }) => { if (spoolRef.current) spoolRef.current.rotation.x = clock.elapsedTime * 0.8; });
   return (
     <group ref={ref} scale={1.0} rotation={[0.1, 0, 0]}>
-      <mesh material={gray} castShadow position={[-1.4, 0, 0]}><boxGeometry args={[0.3, 2.2, 1.0]} /></mesh>
-      <mesh material={gray} castShadow position={[-0.9, -0.7, 0]}><boxGeometry args={[1.2, 0.3, 0.5]} /></mesh>
+      <RoundedBox material={gray} castShadow position={[-1.4, 0, 0]} args={[0.3, 2.2, 1.0]} radius={0.06} smoothness={4} />
+      <RoundedBox material={gray} castShadow position={[-0.9, -0.7, 0]} args={[1.2, 0.3, 0.5]} radius={0.06} smoothness={3} />
       <mesh material={gray} castShadow position={[0.1, -0.2, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.1, 0.1, 2.4, 20]} /></mesh>
       <group ref={spoolRef} position={[0.1, -0.2, 0]}>
         <mesh material={gray} castShadow position={[-0.42, 0, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[1.0, 1.0, 0.12, 40]} /></mesh>
@@ -687,8 +688,8 @@ function BedScraper() {
     <group ref={ref} scale={1.1} rotation={[0.25, 0, 0]}>
       <mesh material={handle} castShadow position={[-0.7, 0, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.28, 0.28, 1.5, 28]} /></mesh>
       <mesh material={handle} castShadow position={[-1.45, 0, 0]}><sphereGeometry args={[0.28, 24, 24]} /></mesh>
-      <mesh material={steel} castShadow position={[0.15, 0, 0]}><boxGeometry args={[0.5, 0.18, 0.5]} /></mesh>
-      <mesh material={steel} castShadow position={[1.0, -0.18, 0]} rotation={[0, 0, -0.35]}><boxGeometry args={[1.3, 0.05, 0.95]} /></mesh>
+      <RoundedBox material={steel} castShadow position={[0.15, 0, 0]} args={[0.5, 0.18, 0.5]} radius={0.05} smoothness={3} />
+      <RoundedBox material={steel} castShadow position={[1.0, -0.18, 0]} rotation={[0, 0, -0.35]} args={[1.3, 0.05, 0.95]} radius={0.02} smoothness={2} />
     </group>
   );
 }
@@ -717,10 +718,10 @@ function PegboardHolder() {
   const xs = [-0.7, 0, 0.7];
   return (
     <group ref={ref} scale={1.0} rotation={[0.12, 0, 0]}>
-      <mesh material={mat} castShadow position={[0, 0.2, -0.4]}><boxGeometry args={[2.4, 1.7, 0.14]} /></mesh>
-      <mesh material={mat} castShadow position={[-0.5, 0.95, -0.55]}><boxGeometry args={[0.2, 0.2, 0.34]} /></mesh>
-      <mesh material={mat} castShadow position={[0.5, 0.95, -0.55]}><boxGeometry args={[0.2, 0.2, 0.34]} /></mesh>
-      <mesh material={mat} castShadow position={[0, -0.5, 0]}><boxGeometry args={[2.4, 0.5, 0.8]} /></mesh>
+      <RoundedBox material={mat} castShadow position={[0, 0.2, -0.4]} args={[2.4, 1.7, 0.14]} radius={0.05} smoothness={4} />
+      <RoundedBox material={mat} castShadow position={[-0.5, 0.95, -0.55]} args={[0.2, 0.2, 0.34]} radius={0.05} smoothness={3} />
+      <RoundedBox material={mat} castShadow position={[0.5, 0.95, -0.55]} args={[0.2, 0.2, 0.34]} radius={0.05} smoothness={3} />
+      <RoundedBox material={mat} castShadow position={[0, -0.5, 0]} args={[2.4, 0.5, 0.8]} radius={0.09} smoothness={4} />
       {xs.map((x, i) => (
         <group key={i} position={[x, -0.25, 0.1]}>
           <mesh material={hole}><cylinderGeometry args={[0.16, 0.16, 0.5, 20]} /></mesh>
@@ -773,6 +774,15 @@ function HeroScene({
         <color attach="background" args={[BG]} />
         <fog attach="fog" args={[BG, 14, 26]} />
 
+        {/* Soft in-scene studio so matte prints are lit from every side (no
+            pure-black back faces) while shiny models still get reflections.
+            Lightformers = no HDR fetch, works offline. */}
+        <Environment resolution={128} frames={1}>
+          <Lightformer intensity={1.4} rotation-x={Math.PI / 2} position={[0, 5, -8]} scale={[10, 10, 1]} color="#dceaf6" />
+          <Lightformer intensity={0.8} rotation-y={Math.PI / 2} position={[-6, 1, 0]} scale={[10, 4, 1]} color="#bcd2e6" />
+          <Lightformer intensity={0.8} rotation-y={-Math.PI / 2} position={[6, 1, 0]} scale={[10, 4, 1]} color="#ffffff" />
+        </Environment>
+
         {/* Key spotlight from top — hard cone, cinematic */}
         <spotLight
           position={[0, 8, 1]}
@@ -786,12 +796,12 @@ function HeroScene({
         />
         {/* Cyan underlight — the glow pool */}
         <pointLight position={[0, -2.8, 0]} intensity={4} color={ACCENT} />
-        {/* Rim from behind-left */}
-        <pointLight position={[-5, 2, -5]} intensity={2} color="#083848" />
-        {/* Subtle fill from front-right */}
-        <pointLight position={[4, 4, 3]} intensity={0.6} color="#0a1e28" />
-        {/* Very dim ambient — keep shadows dramatic */}
-        <ambientLight intensity={0.06} color="#060e14" />
+        {/* Front fill so the camera-facing side never goes black as it spins */}
+        <directionalLight position={[2, 3, 9]} intensity={1.1} color="#cfe0ee" />
+        {/* Fill from behind-left to separate the silhouette */}
+        <pointLight position={[-5, 2, -5]} intensity={2.4} color="#16455a" />
+        {/* Neutral ambient base — enough to read matte surfaces, still moody */}
+        <ambientLight intensity={0.32} color="#9fb1bf" />
 
         <GroundGrid />
 
