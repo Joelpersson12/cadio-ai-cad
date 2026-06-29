@@ -492,6 +492,17 @@ function DesktopModelVariantBar() {
   );
 }
 
+// Showcase models used by "See demo". Pre-generated and cached so navigating
+// between them with "Next model" is instant.
+const DEMO_PLAYLIST: Array<{ prompt: string; name: string }> = [
+  { prompt: "cable organizer", name: "Cable Organizer" },
+  { prompt: "headset stand", name: "Headset Stand" },
+  { prompt: "wall tool holder", name: "Wall Tool Holder" },
+  { prompt: "phone stand", name: "Phone Stand" },
+  { prompt: "desk pen holder", name: "Desk Pen Holder" },
+  { prompt: "pegboard hook", name: "Pegboard Hook" },
+];
+
 function isModelBusyStatus(status: string) {
   return /applying|loading|sketching|generating|importing/i.test(status || "");
 }
@@ -585,6 +596,8 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
     sourceFiles,
     selectSourceFile,
     importLocalFile,
+    showDemoModel,
+    prefetchDemoModels,
     notice,
     setNotice,
   } = useCadStore();
@@ -606,6 +619,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   const [demoLabel, setDemoLabel] = useState<string | null>(null);
+  const [demoIndex, setDemoIndex] = useState(0);
   const [dragActive, setDragActive] = useState(false);
 
   const handleMobileExampleSelect = async (example: ExampleObject) => {
@@ -626,17 +640,29 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
   // "See demo" from the landing page lands here with a prompt to auto-generate
   // so the visitor immediately sees a real model instead of a blank plate.
   // We tag it with a "Demo: <name>" badge, cleared as soon as the user makes
-  // their own model.
+  // their own model. The playlist is pre-generated/cached so "Next model"
+  // instantly shows the next showcase model.
   const demoRanRef = useRef(false);
   useEffect(() => {
     if (initialPrompt && !demoRanRef.current) {
       demoRanRef.current = true;
-      const label = initialPrompt.replace(/\b\w/g, (c) => c.toUpperCase());
-      setDemoLabel(label);
-      void runPrompt(initialPrompt);
+      const startIndex = Math.max(0, DEMO_PLAYLIST.findIndex((d) => d.prompt === initialPrompt));
+      const idx = startIndex === -1 ? 0 : startIndex;
+      setDemoIndex(idx);
+      setDemoLabel(DEMO_PLAYLIST[idx].name);
+      void showDemoModel(DEMO_PLAYLIST[idx].prompt);
+      // Warm the rest of the playlist in the background so Next is instant.
+      prefetchDemoModels(DEMO_PLAYLIST.filter((_, i) => i !== idx).map((d) => d.prompt));
       onInitialPromptConsumed?.();
     }
-  }, [initialPrompt, runPrompt, onInitialPromptConsumed]);
+  }, [initialPrompt, showDemoModel, prefetchDemoModels, onInitialPromptConsumed]);
+
+  const showNextDemoModel = () => {
+    const next = (demoIndex + 1) % DEMO_PLAYLIST.length;
+    setDemoIndex(next);
+    setDemoLabel(DEMO_PLAYLIST[next].name);
+    void showDemoModel(DEMO_PLAYLIST[next].prompt);
+  };
 
   // Drop the demo badge the moment the user generates something of their own.
   useEffect(() => {
@@ -911,14 +937,25 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
               <span className="text-sm font-medium text-cadio-text max-w-[140px] truncate">{projectTitle}</span>
             </button>
             {demoLabel && (
-              <span
-                className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold backdrop-blur-sm"
-                style={{ borderColor: "rgba(43,184,220,0.5)", background: "rgba(43,184,220,0.12)", color: "#7fe3f6" }}
-                title="This is a demo model — generate your own to replace it"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-cadio-accent" />
-                Demo: {demoLabel}
-              </span>
+              <div className="flex items-center gap-2">
+                <span
+                  className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold backdrop-blur-sm"
+                  style={{ borderColor: "rgba(43,184,220,0.5)", background: "rgba(43,184,220,0.12)", color: "#7fe3f6" }}
+                  title="This is a demo model — generate your own to replace it"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-cadio-accent" />
+                  Demo: {demoLabel}
+                </span>
+                <button
+                  onClick={showNextDemoModel}
+                  disabled={modelBusy}
+                  title="Show the next showcase model"
+                  className="flex items-center gap-1.5 rounded-xl border border-cadio-accent/40 bg-cadio-surface/80 px-3 py-2 text-xs font-bold text-cadio-text backdrop-blur-sm transition-all hover:border-cadio-accent hover:text-cadio-accent disabled:opacity-40"
+                >
+                  Next model
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </button>
+              </div>
             )}
             {sourceInfo.length > 0 && (
               <button

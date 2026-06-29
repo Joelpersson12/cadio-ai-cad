@@ -33,6 +33,10 @@ import {
 } from "../utils/api";
 
 const SESSION_KEY = "cadio_session_id";
+
+// Pre-generated demo models, keyed by prompt. Each lives in its own server
+// session so they can be cached and shown instantly without regenerating.
+const demoCache = new Map<string, ScenePayload>();
 const MIN_BUSY_MS = 650;
 
 async function waitForMinimumBusy(startedAt: number) {
@@ -110,6 +114,8 @@ interface CadState {
   switchSourceModel: (direction: "next" | "previous") => Promise<void>;
   selectSourceFile: (fileId: string, mode?: "swap" | "add") => Promise<void>;
   importLocalFile: (file: File) => Promise<void>;
+  prefetchDemoModels: (prompts: string[]) => void;
+  showDemoModel: (prompt: string) => Promise<void>;
   setNotice: (notice: string | null) => void;
   createPrimitive: (payload: {
     primitive: ExpertTool;
@@ -479,6 +485,46 @@ export const useCadStore = create<CadState>((set, get) => ({
     set({ status: mode === "add" ? "Adding part..." : "Loading file...", isBusy: true });
     try {
       const data = await apiSelectSourceFile({ session_id: sessionId, file_id: fileId, mode });
+      get().applyScenePayload(data);
+      await waitForMinimumBusy(startedAt);
+      set({ status: `Updated v${data.version}`, isBusy: false });
+    } catch (err) {
+      await waitForMinimumBusy(startedAt);
+      set({ status: err instanceof Error ? err.message : "Error", isBusy: false });
+    }
+  },
+
+  prefetchDemoModels: (prompts) => {
+    // Generate each demo model into its own server session ahead of time and
+    // cache the payload, so navigating between demos is instant. Sequential and
+    // fire-and-forget so it never blocks the UI or clobbers the visible model.
+    void (async () => {
+      const { printer } = get();
+      for (const prompt of prompts) {
+        if (demoCache.has(prompt)) continue;
+        try {
+          const data = await apiGenerate({ prompt, printer, fit: true });
+          demoCache.set(prompt, data);
+        } catch {
+          // ignore — showDemoModel will generate on demand if needed
+        }
+      }
+    })();
+  },
+
+  showDemoModel: async (prompt) => {
+    const cached = demoCache.get(prompt);
+    if (cached) {
+      get().applyScenePayload(cached);
+      set({ status: `Updated v${cached.version}`, isBusy: false });
+      return;
+    }
+    const { printer } = get();
+    const startedAt = Date.now();
+    set({ status: "Generating model...", isBusy: true });
+    try {
+      const data = await apiGenerate({ prompt, printer, fit: true });
+      demoCache.set(prompt, data);
       get().applyScenePayload(data);
       await waitForMinimumBusy(startedAt);
       set({ status: `Updated v${data.version}`, isBusy: false });
