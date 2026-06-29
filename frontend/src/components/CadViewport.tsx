@@ -182,12 +182,12 @@ function meshBounds(obj: CadObject) {
   return { min, max };
 }
 
-// Single shared display scale for the scene. Fits the union of every object's
-// RAW mesh bounds (ignoring each object's user transform) into the printer
-// volume. Crucially this does NOT depend on transform position/scale, so moving
-// or scaling a part with the gizmo doesn't recompute the factor and "snap" the
-// model to a refitted size on release. The user's own transform scale is then
-// applied on top of this factor.
+// Single shared display scale for the scene. Fits the union AABB of every
+// object — including its layout position/scale — into the printer volume, so a
+// spread-out multi-part assembly shrinks to sit fully on the plate rather than
+// hanging off the edges. This is recomputed only when the SET of objects (or
+// their meshes) changes, not on every transform edit (see the memo below), so
+// moving/scaling a part with the gizmo never re-fits and "snaps" the model.
 function computeSceneScale(objects: CadObject[], printerVolume: [number, number, number]): number {
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
@@ -196,9 +196,20 @@ function computeSceneScale(objects: CadObject[], printerVolume: [number, number,
     const b = meshBounds(obj);
     if (!b) continue;
     found = true;
-    minX = Math.min(minX, b.min.x); maxX = Math.max(maxX, b.max.x);
-    minY = Math.min(minY, b.min.y); maxY = Math.max(maxY, b.max.y);
-    minZ = Math.min(minZ, b.min.z); maxZ = Math.max(maxZ, b.max.z);
+    const t = obj.transform;
+    // transform scale/position are stored backend-space; swap to three-space.
+    const tsx = t?.scale?.[0] ?? 1;
+    const tsy = t?.scale?.[2] ?? 1;
+    const tsz = t?.scale?.[1] ?? 1;
+    const tpx = t?.position?.[0] ?? 0;
+    const tpy = t?.position?.[2] ?? 0;
+    const tpz = t?.position?.[1] ?? 0;
+    const xs = [b.min.x * tsx + tpx, b.max.x * tsx + tpx];
+    const ys = [b.min.y * tsy + tpy, b.max.y * tsy + tpy];
+    const zs = [b.min.z * tsz + tpz, b.max.z * tsz + tpz];
+    minX = Math.min(minX, ...xs); maxX = Math.max(maxX, ...xs);
+    minY = Math.min(minY, ...ys); maxY = Math.max(maxY, ...ys);
+    minZ = Math.min(minZ, ...zs); maxZ = Math.max(maxZ, ...zs);
   }
   if (!found) return 1;
   const sx = maxX - minX;
@@ -926,7 +937,13 @@ export default function CadViewport({
   } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
   
-  const sceneScale = useMemo(() => computeSceneScale(objects, printerVolume), [objects, printerVolume]);
+  // Recompute the fit only when the SET of objects (or their meshes/layout on
+  // load) changes — keyed by id + vertex count — NOT on every transform edit.
+  // This keeps assemblies fitted on import while preventing a gizmo move/scale
+  // from re-fitting and snapping the model.
+  const sceneSig = objects.map((o) => `${o.id}:${o.mesh?.positions.length ?? 0}`).join("|");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sceneScale = useMemo(() => computeSceneScale(objects, printerVolume), [sceneSig, printerVolume[0], printerVolume[1], printerVolume[2]]);
 
   // High-end graphics (AO + bloom) on capable desktops only; mobile keeps the
   // lighter forward pipeline so it stays smooth.
