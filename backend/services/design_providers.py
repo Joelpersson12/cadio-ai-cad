@@ -1864,7 +1864,17 @@ class ProviderRegistry:
                 return []
 
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
-        deadline = time.monotonic() + 4.0
+        # Cross-provider fan-out deadline. A too-tight budget silently drops all
+        # results on a cold container (first request after a deploy pays DNS+TLS
+        # setup to every provider), which makes generation fall back to a
+        # source-less procedural model — i.e. the "Source/Files are gone" bug.
+        # Generation overall allows ~45s, so we can afford a more forgiving
+        # search window. Override with SOURCE_SEARCH_DEADLINE if needed.
+        try:
+            search_deadline = float(os.environ.get("SOURCE_SEARCH_DEADLINE", "9.0"))
+        except ValueError:
+            search_deadline = 9.0
+        deadline = time.monotonic() + search_deadline
 
         with ThreadPoolExecutor(max_workers=16) as executor:
             futures = {executor.submit(_search_one, task) for task in tasks}
@@ -1924,7 +1934,30 @@ def get_provider_registry() -> ProviderRegistry:
     global _provider_registry
     if _provider_registry is None:
         _provider_registry = ProviderRegistry()
+        _warm_provider_registry(_provider_registry)
     return _provider_registry
+
+
+def _warm_provider_registry(registry: ProviderRegistry) -> None:
+    """Prime DNS/TLS connections and the search cache in the background.
+
+    The first real generation after a deploy would otherwise pay the full
+    cold-start cost to every provider at once and risk timing out the search
+    (dropping source attribution). A throwaway warm-up search makes the first
+    user request hit warm connections. Best-effort: never block or raise.
+    """
+    import threading
+
+    def _warm() -> None:
+        try:
+            registry.search_all("phone stand", limit=5)
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_warm, name="provider-warmup", daemon=True).start()
+    except Exception:
+        pass
 
 
 def _parse_date(value: Any) -> datetime | None:

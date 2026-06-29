@@ -39,6 +39,19 @@ app.add_middleware(
 app.include_router(router)
 
 
+@app.on_event("startup")
+def _warm_source_providers() -> None:
+    """Prime the design-provider connections/cache on boot so the first real
+    generation isn't cold (a cold search can time out and silently drop source
+    attribution). Best-effort — never block or fail startup."""
+    try:
+        from backend.services.design_providers import get_provider_registry
+
+        get_provider_registry()  # spawns a background warm-up thread
+    except Exception:
+        pass
+
+
 @app.get("/health")
 def root_health() -> dict[str, str]:
     """Railway healthcheck endpoint."""
