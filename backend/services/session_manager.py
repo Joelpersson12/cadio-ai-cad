@@ -1399,12 +1399,14 @@ def _build_source_file_options(
     return options
 
 
-def select_source_file(session: Session, file_id: str) -> list[str]:
-    """Add, remove, or swap source-model parts on the build plate.
+def select_source_file(session: Session, file_id: str, mode: str = "swap") -> list[str]:
+    """Place source-model parts on the build plate.
 
-    Clicking an unplaced file adds it next to the existing parts; clicking a
-    placed file removes it (so several parts can be built up). ``__all__``
-    replaces everything with the full multi-part assembly.
+    mode="swap" (default): the chosen file replaces whatever is on the plate, so
+    a multi-file design stays a single clean model the user switches between.
+    mode="add": the chosen file is placed beside the existing parts (and clicking
+    an already-placed file removes it), so several parts can be built up.
+    ``__all__`` replaces everything with the full multi-part assembly.
     """
     existing = _imported_source_objects(session)
     ref = existing[-1] if existing else _active_source_object(session)
@@ -1441,18 +1443,51 @@ def select_source_file(session: Session, file_id: str) -> list[str]:
     if candidate is None:
         return ["selected file is no longer available"]
 
-    # Already the only part on the plate → nothing to change.
-    already_only = (
-        len(existing) == 1
-        and str(((existing[0].get("source_model") or {}).get("selected_file") or {}).get("id")) == str(file_id)
+    placed_obj = next(
+        (
+            obj
+            for obj in existing
+            if str(((obj.get("source_model") or {}).get("selected_file") or {}).get("id")) == str(file_id)
+        ),
+        None,
     )
+
+    # ── Add mode ───────────────────────────────────────────────────────────
+    # Clicking a placed file removes it (keeping at least one part); clicking an
+    # unplaced file adds it beside the others so an assembly can be built up.
+    if mode == "add":
+        if placed_obj is not None and len(existing) > 1:
+            _remove_object_direct(session, placed_obj["id"])
+            remaining = _imported_source_objects(session)
+            if len(remaining) == 1:
+                center_object_on_plate(remaining[0])
+            session["selected_object_id"] = ""
+            session["source_files"] = _build_source_file_options(source_files, prompt, 0, session=session)
+            return [f"source-files: removed {_source_file_name(candidate)}"]
+        if placed_obj is not None:
+            return [f"source-files: {_source_file_name(candidate)} is already on the plate"]
+        shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
+        if shape is None:
+            return [f"could not import {_source_file_name(candidate)}"]
+        source_obj = _create_imported_source_object(prompt, shape, source_example, source_files, candidate)
+        if color:
+            source_obj["color"] = color
+        if existing:
+            mins, maxs = _world_extents_for_objects(existing)
+            obj_mins, _obj_maxs = _world_extents(source_obj)
+            gap = max(5.0, 0.12 * max(1.0, maxs[0] - mins[0]))
+            source_obj["transform"].position[0] += (maxs[0] + gap) - obj_mins[0]
+        add_object(session, source_obj)
+        session["selected_object_id"] = ""
+        if source_example:
+            session["source_info"] = [source_example]
+        session["source_files"] = _build_source_file_options(source_files, prompt, 0, session=session, active_id=candidate.get("id"))
+        return [f"source-files: added {_source_file_name(candidate)}"]
+
+    # ── Swap mode (default) ────────────────────────────────────────────────
+    already_only = len(existing) == 1 and placed_obj is not None
     if already_only:
         return [f"source-files: {_source_file_name(candidate)} is already on the plate"]
-
-    # Swap: clicking a file replaces whatever source parts are on the plate with
-    # just that one model. The plate stays a single, clean model and the user
-    # switches between files instead of piling several up. ("All parts" remains
-    # the explicit opt-in for the full multi-part assembly.)
     shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
     if shape is None:
         return [f"could not import {_source_file_name(candidate)}"]

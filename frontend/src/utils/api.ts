@@ -310,6 +310,7 @@ export async function switchSourceModel(payload: {
 export async function selectSourceFile(payload: {
   session_id: string;
   file_id: string;
+  mode?: "swap" | "add";
 }): Promise<ScenePayload> {
   return request<ScenePayload>("/api/source-model/select-file", {
     method: "POST",

@@ -164,6 +164,7 @@ class SourceModelSwitchRequest(BaseModel):
 class SourceFileSelectRequest(BaseModel):
     session_id: str
     file_id: str
+    mode: str = "swap"  # "swap" replaces the model, "add" places it beside
 
 
 class PrimitiveCreateRequest(BaseModel):
