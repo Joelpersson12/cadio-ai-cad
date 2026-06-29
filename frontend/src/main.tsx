@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { Analytics } from "@vercel/analytics/react";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./styles/index.css";
@@ -14,6 +15,7 @@ if (root) {
       <ErrorBoundary>
         <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID || ""}>
           <App />
+          <Analytics />
         </GoogleOAuthProvider>
       </ErrorBoundary>
     </React.StrictMode>,
