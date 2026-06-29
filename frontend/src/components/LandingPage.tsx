@@ -153,6 +153,18 @@ const CURRENCY: Record<Language, { pro: string; unlimited: string; period: strin
   pt: { pro: "9,99 €", unlimited: "24,99 €", period: "/mês", taxNote: "IVA incluído" },
 };
 
+// Reassurance microcopy under the hero CTAs — makes the free value explicit so
+// visitors don't assume Cadio is paywalled.
+const FREE_NOTE: Record<Language, string> = {
+  en: "Free to use — no credit card. Generate & edit unlimited; 3 free downloads to start.",
+  sv: "Gratis att använda — inget kort. Generera & redigera obegränsat; 3 gratis nedladdningar.",
+  es: "Gratis — sin tarjeta. Genera y edita sin límite; 3 descargas gratis para empezar.",
+  fr: "Gratuit — sans carte. Générez et modifiez sans limite ; 3 téléchargements offerts.",
+  it: "Gratis — senza carta. Genera e modifica senza limiti; 3 download gratuiti per iniziare.",
+  de: "Kostenlos — keine Karte. Unbegrenzt generieren & bearbeiten; 3 Gratis-Downloads zum Start.",
+  pt: "Grátis — sem cartão. Gere e edite sem limites; 3 downloads grátis para começar.",
+};
+
 // ─── ACCENT COLOR ───────────────────────────────────────────────────────────
 const ACCENT = "#2bb8dc";
 const ACCENT_DIM = "rgba(43,184,220,";
@@ -1660,6 +1672,14 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
                   {text.hero.secondary}
                 </button>
               </div>
+
+              {/* Free-value reassurance */}
+              <div className="anim-in-3 mt-5 flex items-center gap-2 text-[13px]" style={{ color: "rgba(232,237,242,0.45)" }}>
+                <svg className="h-4 w-4 shrink-0 text-cadio-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{FREE_NOTE[language]}</span>
+              </div>
             </div>
           </div>
 
@@ -1922,16 +1942,19 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
                   boxShadow: `0 0 60px ${ACCENT_DIM}0.08)`,
                 }}
               >
-                <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>Free</p>
+                <div className="mb-5 flex items-center gap-2">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>Free</p>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(52,211,153,0.14)", color: "#34d399" }}>No card needed</span>
+                </div>
                 <div className="mb-1 flex items-end gap-2">
                   <span className="text-5xl font-black text-white">$0</span>
-                  <span className="mb-1.5 text-sm text-white/30">{CURRENCY[language].period}</span>
+                  <span className="mb-1.5 text-sm text-white/30">forever</span>
                 </div>
-                <p className="mb-7 text-sm text-white/40">3 downloads to get started</p>
+                <p className="mb-7 text-sm text-white/40">Try everything, free</p>
                 <ul className="mb-7 space-y-2.5">
-                  {["AI model generation", "All export formats", "Manual CAD tools", "3 downloads total"].map((f) => (
+                  {["Unlimited AI generation", "Unlimited editing & CAD tools", "Search 3 print libraries", "3 free downloads to start", "All export formats (STL · 3MF · STEP)"].map((f) => (
                     <li key={f} className="flex items-center gap-2.5 text-sm" style={{ color: "rgba(232,237,242,0.72)" }}>
-                      <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: ACCENT }} />
+                      <svg className="h-3.5 w-3.5 flex-shrink-0 text-cadio-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M5 13l4 4L19 7" /></svg>
                       {f}
                     </li>
                   ))}
