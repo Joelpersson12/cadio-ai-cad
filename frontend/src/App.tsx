@@ -498,12 +498,46 @@ function isModelBusyStatus(status: string) {
 
 function ModelLoadingOverlay({ status }: { status: string }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 flex items-end justify-center pb-12 bg-cadio-bg/30 backdrop-blur-[2px]">
-      <div className="flex items-center gap-3 rounded-xl border border-cadio-border/50 bg-cadio-surface/90 px-5 py-3 shadow-2xl backdrop-blur-xl">
-        <svg className="h-4 w-4 animate-spin text-cadio-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-        <span className="text-sm font-medium text-white">{status || "Generating geometry…"}</span>
+    <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-cadio-bg/45 backdrop-blur-[3px]">
+      <style>{`
+        @keyframes cadio-ring   { to { transform: rotate(360deg) } }
+        @keyframes cadio-ring-2 { to { transform: rotate(-360deg) } }
+        @keyframes cadio-core   { 0%,100% { transform: scale(0.82); opacity:.85 } 50% { transform: scale(1.12); opacity:1 } }
+        @keyframes cadio-dots   { 0%,20% { opacity:.2 } 50% { opacity:1 } 80%,100% { opacity:.2 } }
+        @keyframes cadio-shimmer{ 0% { transform: translateX(-120%) } 100% { transform: translateX(220%) } }
+      `}</style>
+      <div className="flex flex-col items-center gap-6">
+        {/* Animated build ring + pulsing core */}
+        <div className="relative h-24 w-24">
+          <div
+            className="absolute inset-0 rounded-full border-2 border-cadio-accent/25"
+            style={{ borderTopColor: "#2bb8dc", borderRightColor: "#2bb8dc", animation: "cadio-ring 1.1s linear infinite" }}
+          />
+          <div
+            className="absolute inset-2 rounded-full border-2 border-cadio-accent/10"
+            style={{ borderBottomColor: "rgba(43,184,220,0.6)", animation: "cadio-ring-2 1.6s linear infinite" }}
+          />
+          <div className="absolute inset-0 grid place-items-center">
+            <svg className="h-8 w-8 text-cadio-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ animation: "cadio-core 1.3s ease-in-out infinite" }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12" />
+            </svg>
+          </div>
+        </div>
+        {/* Title + status */}
+        <div className="flex flex-col items-center gap-2 text-center">
+          <p className="text-base font-bold tracking-tight text-white">
+            Generating
+            <span style={{ animation: "cadio-dots 1.4s infinite", animationDelay: "0s" }}>.</span>
+            <span style={{ animation: "cadio-dots 1.4s infinite", animationDelay: "0.2s" }}>.</span>
+            <span style={{ animation: "cadio-dots 1.4s infinite", animationDelay: "0.4s" }}>.</span>
+          </p>
+          <p className="max-w-xs text-xs text-white/45">{status || "Building your model…"}</p>
+          {/* Shimmer bar */}
+          <div className="mt-1 h-1 w-44 overflow-hidden rounded-full bg-white/8">
+            <div className="h-full w-1/3 rounded-full" style={{ background: "linear-gradient(90deg, transparent, #2bb8dc, transparent)", animation: "cadio-shimmer 1.3s ease-in-out infinite" }} />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -862,7 +896,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
             files={sourceFiles}
             source={sourceInfo[0]}
             busy={isBusy}
-            onSelect={(fileId) => { if (fileId === "__all__") setShowSourceFiles(false); void selectSourceFile(fileId); }}
+            onSelect={(fileId, mode) => { if (fileId === "__all__") setShowSourceFiles(false); void selectSourceFile(fileId, mode); }}
             onClose={() => setShowSourceFiles(false)}
           />
         )}
@@ -1208,7 +1242,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
               files={sourceFiles}
               source={sourceInfo[0]}
               busy={isBusy}
-              onSelect={(fileId) => { if (fileId === "__all__") setShowSourceFiles(false); void selectSourceFile(fileId); }}
+              onSelect={(fileId, mode) => { if (fileId === "__all__") setShowSourceFiles(false); void selectSourceFile(fileId, mode); }}
               onClose={() => setShowSourceFiles(false)}
             />
           )}

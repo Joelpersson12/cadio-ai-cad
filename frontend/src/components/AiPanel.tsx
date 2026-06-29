@@ -153,7 +153,7 @@ export function SourceFilesModal({
 }: {
   files: import("../utils/types").SourceFileOption[];
   source?: SourceExample;
-  onSelect: (fileId: string) => void;
+  onSelect: (fileId: string, mode?: "swap" | "add") => void;
   onClose: () => void;
   busy?: boolean;
 }) {
@@ -212,17 +212,20 @@ export function SourceFilesModal({
           {files.map((f) => {
             const isAssembly = f.id === "__all__";
             return (
-              <button
+              <div
                 key={f.id}
-                disabled={busy}
-                onClick={() => onSelect(f.id)}
-                className={`group flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-colors disabled:opacity-50 ${
+                className={`group flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
                   f.active
                     ? "border border-cadio-accent/40 bg-cadio-accent/10"
                     : "border border-white/7 bg-white/[0.03] hover:border-cadio-accent/30 hover:bg-white/[0.06]"
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <button
+                  disabled={busy}
+                  onClick={() => onSelect(f.id, isAssembly ? "swap" : "swap")}
+                  className="flex items-center gap-3 min-w-0 flex-1 text-left disabled:opacity-50"
+                  title={isAssembly ? "Place the full assembly" : "Use this file (replaces the current model)"}
+                >
                   <span
                     className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${
                       f.active ? "border-cadio-accent/40" : "border-white/10"
@@ -245,23 +248,51 @@ export function SourceFilesModal({
                         : [f.file_type?.toUpperCase(), formatFileSize(f.file_size)].filter(Boolean).join(" · ")}
                     </p>
                   </div>
-                </div>
+                </button>
                 {isAssembly ? (
-                  <span className="shrink-0 text-[11px] font-semibold text-cadio-accent">Place all →</span>
+                  <button
+                    disabled={busy}
+                    onClick={() => onSelect(f.id, "swap")}
+                    className="shrink-0 rounded-lg bg-cadio-accent/15 px-3 py-1.5 text-[11px] font-bold text-cadio-accent transition-colors hover:bg-cadio-accent/25 disabled:opacity-50"
+                  >
+                    Place all →
+                  </button>
                 ) : f.active ? (
-                  <span className="shrink-0 rounded-full bg-cadio-accent/15 px-2 py-0.5 text-[10px] font-bold text-cadio-accent">
-                    On plate
-                  </span>
+                  <button
+                    disabled={busy}
+                    onClick={() => onSelect(f.id, "add")}
+                    title="Remove this part from the plate"
+                    className="group/rm shrink-0 rounded-full bg-cadio-accent/15 px-2.5 py-1 text-[10px] font-bold text-cadio-accent transition-colors hover:bg-[#ff6961]/15 hover:text-[#ff8a80] disabled:opacity-50"
+                  >
+                    On plate<span className="text-white/40 group-hover/rm:text-[#ff8a80]"> · remove</span>
+                  </button>
                 ) : (
-                  <span className="shrink-0 text-[11px] font-semibold text-cadio-accent opacity-0 transition-opacity group-hover:opacity-100">Use this →</span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      disabled={busy}
+                      onClick={() => onSelect(f.id, "add")}
+                      title="Add this part beside the others"
+                      className="rounded-lg border border-white/12 px-2.5 py-1.5 text-[11px] font-bold text-white/60 transition-colors hover:border-cadio-accent/40 hover:text-cadio-accent disabled:opacity-50"
+                    >
+                      + Add
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => onSelect(f.id, "swap")}
+                      title="Use this file (replaces the current model)"
+                      className="rounded-lg bg-cadio-accent/15 px-2.5 py-1.5 text-[11px] font-bold text-cadio-accent transition-colors hover:bg-cadio-accent/25 disabled:opacity-50"
+                    >
+                      Use this
+                    </button>
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-white/7 px-5 py-3" style={{ background: "#0d1318" }}>
           <span className="text-[11px] text-white/35">
-            Choosing a file replaces the current model. “All parts” builds the full assembly.
+            <b className="font-semibold text-white/50">Use this</b> swaps the model · <b className="font-semibold text-white/50">+ Add</b> places a part beside it.
           </span>
           <button
             onClick={onClose}

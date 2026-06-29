@@ -568,11 +568,11 @@ function ScaledMesh({
     >
       <meshPhysicalMaterial
         color={visibleBodyColor(obj, selected, hovered)}
-        roughness={selected ? 0.42 : 0.5}
-        metalness={0.04}
-        clearcoat={0.55}
-        clearcoatRoughness={0.4}
-        envMapIntensity={1.05}
+        roughness={selected ? 0.5 : 0.58}
+        metalness={0.03}
+        clearcoat={0.4}
+        clearcoatRoughness={0.5}
+        envMapIntensity={0.78}
         emissive={selected ? "#3a1800" : "#000000"}
         emissiveIntensity={selected ? 0.05 : 0}
         side={THREE.DoubleSide}
@@ -875,11 +875,11 @@ function PremiumEffects({ enabled, sceneRadius }: { enabled: boolean; sceneRadiu
         color="#05080d"
       />
       <Bloom
-        intensity={0.34}
-        luminanceThreshold={0.85}
-        luminanceSmoothing={0.2}
+        intensity={0.18}
+        luminanceThreshold={0.92}
+        luminanceSmoothing={0.18}
         mipmapBlur
-        radius={0.6}
+        radius={0.55}
       />
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
       <Vignette eskil={false} offset={0.28} darkness={0.46} />
@@ -1061,7 +1061,7 @@ export default function CadViewport({
           gl.outputColorSpace = THREE.SRGBColorSpace;
           // Filmic tonemapping for richer contrast and a premium, cinematic look.
           gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 1.05;
+          gl.toneMappingExposure = 0.92;
           // Subtle vertical gradient backdrop (lighter top, near-black bottom) for
           // a deeper, premium "OLED" sense of space instead of a flat fill.
           const grad = document.createElement("canvas");
@@ -1086,23 +1086,25 @@ export default function CadViewport({
       >
       {/* In-scene studio environment — gives the matte bodies soft realistic
           reflections without fetching an HDR (works offline). Computed once. */}
+      {/* Softer studio environment — lower intensities keep matte plastic
+          readable instead of blowing the top faces out to white. */}
       <Environment resolution={256} frames={1}>
-        <Lightformer intensity={2.2} rotation-x={Math.PI / 2} position={[0, 6, -9]} scale={[12, 12, 1]} color="#eaf3ff" />
-        <Lightformer intensity={1.1} rotation-y={Math.PI / 2} position={[-7, 2, 0]} scale={[14, 3, 1]} color="#cfe2f5" />
-        <Lightformer intensity={1.1} rotation-y={-Math.PI / 2} position={[7, 2, 0]} scale={[14, 3, 1]} color="#ffffff" />
-        <Lightformer intensity={1.6} rotation-x={-Math.PI / 2} position={[0, 8, 0]} scale={[12, 12, 1]} color="#dfeefc" />
+        <Lightformer intensity={1.4} rotation-x={Math.PI / 2} position={[0, 6, -9]} scale={[12, 12, 1]} color="#eaf3ff" />
+        <Lightformer intensity={0.8} rotation-y={Math.PI / 2} position={[-7, 2, 0]} scale={[14, 3, 1]} color="#cfe2f5" />
+        <Lightformer intensity={0.8} rotation-y={-Math.PI / 2} position={[7, 2, 0]} scale={[14, 3, 1]} color="#ffffff" />
+        <Lightformer intensity={1.0} rotation-x={-Math.PI / 2} position={[0, 8, 0]} scale={[12, 12, 1]} color="#dfeefc" />
       </Environment>
 
       {/* Key light — top-right-front, main shading source */}
-      <directionalLight position={[300, 500, 300]} intensity={1.7} color="#f5f8ff" />
+      <directionalLight position={[300, 500, 300]} intensity={1.05} color="#f5f8ff" />
       {/* Fill — soft left, reduces harsh shadows */}
-      <directionalLight position={[-350, 250, -150]} intensity={0.7} color="#c8dff0" />
+      <directionalLight position={[-350, 250, -150]} intensity={0.5} color="#c8dff0" />
       {/* Rim — back edge separation */}
-      <directionalLight position={[0, 150, -500]} intensity={0.4} color="#ffffff" />
+      <directionalLight position={[0, 150, -500]} intensity={0.32} color="#ffffff" />
       {/* Bottom fill — prevents underside faces from going black */}
-      <directionalLight position={[0, -300, 0]} intensity={0.45} color="#8ab4cc" />
+      <directionalLight position={[0, -300, 0]} intensity={0.35} color="#8ab4cc" />
       {/* Ambient hemisphere — warmer ground so floor-facing faces stay visible */}
-      <hemisphereLight intensity={0.3} color="#dde8f0" groundColor="#3a4a5a" />
+      <hemisphereLight intensity={0.28} color="#dde8f0" groundColor="#3a4a5a" />
 
       {/* Soft contact shadow grounds the model so it doesn't float. */}
       <ContactShadows

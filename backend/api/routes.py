@@ -1136,7 +1136,7 @@ async def select_source_model_file(data: SourceFileSelectRequest) -> ScenePayloa
             if session is None:
                 return _error(404, "Session not found")
             save_undo_snapshot(session)
-            actions = select_source_file(session, data.file_id)
+            actions = select_source_file(session, data.file_id, mode=data.mode)
             bump_version(session)
             add_history(session, "select-source-file", actions)
             payload = build_scene_payload(session, include_mesh=True, model_updated=True)

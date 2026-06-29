@@ -108,7 +108,7 @@ interface CadState {
   scaleAllToFit: (percent: number) => Promise<void>;
   snapSelectedObjects: (snap: "on_plate" | "center_on_plate") => Promise<void>;
   switchSourceModel: (direction: "next" | "previous") => Promise<void>;
-  selectSourceFile: (fileId: string) => Promise<void>;
+  selectSourceFile: (fileId: string, mode?: "swap" | "add") => Promise<void>;
   importLocalFile: (file: File) => Promise<void>;
   setNotice: (notice: string | null) => void;
   createPrimitive: (payload: {
@@ -472,13 +472,13 @@ export const useCadStore = create<CadState>((set, get) => ({
     }
   },
 
-  selectSourceFile: async (fileId) => {
+  selectSourceFile: async (fileId, mode = "swap") => {
     const { sessionId } = get();
     if (!sessionId) return;
     const startedAt = Date.now();
-    set({ status: "Loading file...", isBusy: true });
+    set({ status: mode === "add" ? "Adding part..." : "Loading file...", isBusy: true });
     try {
-      const data = await apiSelectSourceFile({ session_id: sessionId, file_id: fileId });
+      const data = await apiSelectSourceFile({ session_id: sessionId, file_id: fileId, mode });
       get().applyScenePayload(data);
       await waitForMinimumBusy(startedAt);
       set({ status: `Updated v${data.version}`, isBusy: false });
