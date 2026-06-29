@@ -43,7 +43,13 @@ const API_FALLBACKS = Array.from(
 
 const REQUEST_TIMEOUT_MS = 90_000;
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+// Account / billing / auth data MUST come from the one canonical backend (the
+// maintained Hugging Face Space). If the app is pointed at a stale mirror, that
+// mirror can answer 200-OK with a *wrong* (e.g. Free) account, so a normal
+// fallback chain never corrects it. These calls therefore try HF first.
+const ACCOUNT_BASES = Array.from(new Set([HF_API_BASE, ...API_FALLBACKS]));
+
+async function request<T>(path: string, options: RequestInit = {}, bases: string[] = API_FALLBACKS): Promise<T> {
   let lastError: unknown = null;
   const optionHeaders =
     options.headers instanceof Headers
@@ -51,7 +57,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       : Array.isArray(options.headers)
         ? Object.fromEntries(options.headers)
         : options.headers || {};
-  for (const base of API_FALLBACKS) {
+  for (const base of bases) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
@@ -122,7 +128,7 @@ export async function authLogin(payload: AuthPayload): Promise<{
   return request("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
-  });
+  }, ACCOUNT_BASES);
 }
 
 export async function authGoogleLogin(credential: string): Promise<{
@@ -133,14 +139,14 @@ export async function authGoogleLogin(credential: string): Promise<{
   return request("/api/auth/google", {
     method: "POST",
     body: JSON.stringify({ credential }),
-  });
+  }, ACCOUNT_BASES);
 }
 
 export async function requestPasswordReset(email: string): Promise<{ status: string; message: string }> {
   return request("/api/auth/forgot-password", {
     method: "POST",
     body: JSON.stringify({ email }),
-  });
+  }, ACCOUNT_BASES);
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<{
@@ -151,7 +157,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
   return request("/api/auth/reset-password", {
     method: "POST",
     body: JSON.stringify({ token, new_password: newPassword }),
-  });
+  }, ACCOUNT_BASES);
 }
 
 export async function uploadModelFile(sessionId: string, file: File): Promise<ScenePayload> {
@@ -197,7 +203,7 @@ export async function getAccountProfile(token: string): Promise<{
       return await request("/api/account/me", {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
-      });
+      }, ACCOUNT_BASES);
     } catch (err) {
       lastError = err;
       if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
@@ -220,7 +226,7 @@ export async function refreshAccountPlan(token: string): Promise<{
       return await request("/api/account/refresh-plan", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
-      });
+      }, ACCOUNT_BASES);
     } catch (err) {
       lastError = err;
       if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
@@ -233,7 +239,7 @@ export async function createBillingPortalSession(token: string): Promise<{ statu
   return request("/api/stripe/billing-portal", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
-  });
+  }, ACCOUNT_BASES);
 }
 
 export async function loadAccountSavedLibrary(token: string): Promise<{
@@ -244,7 +250,7 @@ export async function loadAccountSavedLibrary(token: string): Promise<{
   return request("/api/account/saved-models", {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
-  });
+  }, ACCOUNT_BASES);
 }
 
 export async function saveAccountSavedLibrary(
@@ -259,7 +265,7 @@ export async function saveAccountSavedLibrary(
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ library }),
-  });
+  }, ACCOUNT_BASES);
 }
 
 export async function updateParameters(payload: {
