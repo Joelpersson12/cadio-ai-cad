@@ -61,8 +61,14 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
     window.setTimeout(() => setCopied(false), 1600);
   };
 
+  const noPrinter = printer === "choose_printer" || !selectedPrinter;
+
   const handleDownload = async () => {
     if (!sessionId || downloadBusy) return;
+    if (noPrinter) {
+      setExportError("Choose a printer first — pick your 3D printer at the top so the file is sized and checked for your build plate.");
+      return;
+    }
     if (!isAuthed) {
       requestCadioAuth();
       onClose?.();
@@ -264,13 +270,19 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
         </p>
       )}
 
+      {noPrinter && (
+        <p className="rounded-lg border border-[#5a4410] bg-[#221a08] px-3 py-2 text-xs text-[#ffd27a]">
+          Choose your 3D printer at the top first — Cadio sizes and checks the model for your build plate before download.
+        </p>
+      )}
+
       <div className="grid grid-cols-[1fr_auto] gap-2">
         <button
           type="button"
           onClick={() => void handleDownload()}
-          disabled={!sessionId || downloadBusy}
+          disabled={!sessionId || downloadBusy || noPrinter}
           className={`flex h-12 items-center justify-center rounded-xl text-sm font-semibold ${
-            !sessionId || downloadBusy
+            !sessionId || downloadBusy || noPrinter
               ? "bg-[#333] text-[#777]"
               : !isAuthed || !canDownload
               ? "bg-[#2a2a2c] text-[#9a9a9d] hover:bg-[#333]"
@@ -279,6 +291,8 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
         >
           {downloadBusy
             ? "Preparing..."
+            : noPrinter
+            ? "Choose a printer first"
             : !isAuthed
             ? "Sign In to Download"
             : !canDownload
