@@ -4,6 +4,10 @@ import type { ScenePayload, PrinterProfile, MaterialProfile } from "./types";
 import type { SavedLibrary } from "./savedModels";
 
 const REMOTE_API_BASE = "https://cadio-ai-cad-production.up.railway.app";
+// The maintained backend (auto-deploys from main). Kept as an explicit fallback
+// so account/billing calls still reach a backend that has the latest code even
+// if the primary base or the Railway mirror is stale/asleep. CORS is open.
+const HF_API_BASE = "https://persson12-cadio-ai-cad.hf.space";
 
 function cleanBase(value: string) {
   return value.replace(/\/+$/, "");
@@ -31,6 +35,7 @@ const API_FALLBACKS = Array.from(
     [
       API_BASE,
       cleanBase(window.location.origin),
+      HF_API_BASE,
       REMOTE_API_BASE,
     ].filter(Boolean),
   ),

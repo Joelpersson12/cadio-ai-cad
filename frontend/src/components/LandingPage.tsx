@@ -4,7 +4,6 @@
  */
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Lightformer, RoundedBox } from "@react-three/drei";
 import { type ReactNode, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { loginCadioAccount, loginWithGoogle, sendPasswordReset, confirmPasswordReset, isCadioAuthenticated, getCadioAccount } from "../utils/auth";
@@ -613,151 +612,11 @@ function GroundGrid() {
   return <mesh ref={ref} geometry={geo} material={mat} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.6, 0]} />;
 }
 
-// ── Real, popular 3D-print showcase models ──────────────────────────────────
-// Procedural stand-ins for genuinely useful prints, recognizable in silhouette
-// and matching the dramatic studio-lit hero stage.
-function printMat(color: string, opts: Partial<THREE.MeshPhysicalMaterialParameters> = {}) {
-  return new THREE.MeshPhysicalMaterial({
-    color, roughness: 0.5, metalness: 0.0, clearcoat: 0.3, clearcoatRoughness: 0.45, ...opts,
-  });
-}
-
-function useSpin(speed = 0.3, baseY = 0, floatAmp = 0.08) {
-  const ref = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    if (!ref.current) return;
-    const t = clock.elapsedTime;
-    ref.current.rotation.y = t * speed;
-    ref.current.position.y = baseY + Math.sin(t * 0.5) * floatAmp;
-  });
-  return ref;
-}
-
-/** Milwaukee M18 battery wall mount — red plate with a dovetail rail. */
-function MilwaukeeMount() {
-  const ref = useSpin(0.32, 0);
-  const red = useMemo(() => printMat("#c1271d", { roughness: 0.42, clearcoat: 0.45 }), []);
-  const dark = useMemo(() => printMat("#1c1e21", { clearcoat: 0.18 }), []);
-  return (
-    <group ref={ref} scale={1.15} rotation={[0.12, 0, 0]}>
-      <RoundedBox material={red} castShadow position={[0, 0, -0.18]} args={[2.4, 2.0, 0.2]} radius={0.07} smoothness={4} />
-      <RoundedBox material={red} castShadow position={[0, 0.1, 0.18]} args={[0.95, 1.7, 0.5]} radius={0.08} smoothness={4} />
-      <RoundedBox material={red} castShadow position={[-0.62, 0.1, 0.12]} rotation={[0, 0, 0.18]} args={[0.16, 1.7, 0.42]} radius={0.04} smoothness={3} />
-      <RoundedBox material={red} castShadow position={[0.62, 0.1, 0.12]} rotation={[0, 0, -0.18]} args={[0.16, 1.7, 0.42]} radius={0.04} smoothness={3} />
-      <RoundedBox material={dark} castShadow position={[0, 0.95, 0.2]} args={[0.7, 0.18, 0.42]} radius={0.04} smoothness={3} />
-      <mesh material={dark} position={[0, 0.72, -0.04]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.12, 0.12, 0.5, 20]} /></mesh>
-      <mesh material={dark} position={[0, -0.72, -0.04]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.12, 0.12, 0.5, 20]} /></mesh>
-    </group>
-  );
-}
-
-/** IKEA Skådis bin — a popular pegboard storage cup with hooks. */
-function SkadisBin() {
-  const ref = useSpin(0.34, -0.1);
-  const white = useMemo(() => printMat("#e9edf2", { clearcoat: 0.22 }), []);
-  const w = 1.8, h = 1.1, d = 1.05, th = 0.1;
-  return (
-    <group ref={ref} scale={1.05} rotation={[0.12, 0, 0]}>
-      <mesh material={white} castShadow position={[0, -h / 2, 0]}><boxGeometry args={[w, th, d]} /></mesh>
-      <mesh material={white} castShadow position={[0, -h / 4, d / 2]}><boxGeometry args={[w, h / 2, th]} /></mesh>
-      <mesh material={white} castShadow position={[-w / 2, -h / 4, 0]}><boxGeometry args={[th, h / 2, d]} /></mesh>
-      <mesh material={white} castShadow position={[w / 2, -h / 4, 0]}><boxGeometry args={[th, h / 2, d]} /></mesh>
-      <mesh material={white} castShadow position={[0, h * 0.05, -d / 2]}><boxGeometry args={[w, h * 1.1, th]} /></mesh>
-      <RoundedBox material={white} castShadow position={[-0.5, h * 0.55, -d / 2 - 0.12]} args={[0.2, 0.2, 0.34]} radius={0.05} smoothness={3} />
-      <RoundedBox material={white} castShadow position={[0.5, h * 0.55, -d / 2 - 0.12]} args={[0.2, 0.2, 0.34]} radius={0.05} smoothness={3} />
-    </group>
-  );
-}
-
-/** Filament spool holder — a spool that spins on a wall bracket. */
-function FilamentHolder() {
-  const ref = useSpin(0.26, 0);
-  const spoolRef = useRef<THREE.Group>(null);
-  const gray = useMemo(() => printMat("#cfd4da"), []);
-  const cyanMat = useMemo(() => printMat(ACCENT, { roughness: 0.35, clearcoat: 0.5, emissive: ACCENT, emissiveIntensity: 0.08 }), []);
-  useFrame(({ clock }) => { if (spoolRef.current) spoolRef.current.rotation.x = clock.elapsedTime * 0.8; });
-  return (
-    <group ref={ref} scale={1.0} rotation={[0.1, 0, 0]}>
-      <RoundedBox material={gray} castShadow position={[-1.4, 0, 0]} args={[0.3, 2.2, 1.0]} radius={0.06} smoothness={4} />
-      <RoundedBox material={gray} castShadow position={[-0.9, -0.7, 0]} args={[1.2, 0.3, 0.5]} radius={0.06} smoothness={3} />
-      <mesh material={gray} castShadow position={[0.1, -0.2, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.1, 0.1, 2.4, 20]} /></mesh>
-      <group ref={spoolRef} position={[0.1, -0.2, 0]}>
-        <mesh material={gray} castShadow position={[-0.42, 0, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[1.0, 1.0, 0.12, 40]} /></mesh>
-        <mesh material={gray} castShadow position={[0.42, 0, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[1.0, 1.0, 0.12, 40]} /></mesh>
-        <mesh material={gray} castShadow rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.42, 0.42, 0.84, 28]} /></mesh>
-        <mesh material={cyanMat} castShadow rotation={[0, Math.PI / 2, 0]}><torusGeometry args={[0.72, 0.2, 16, 40]} /></mesh>
-      </group>
-    </group>
-  );
-}
-
-/** 3D-printer bed scraper — colored handle with a thin angled blade. */
-function BedScraper() {
-  const ref = useSpin(0.34, 0);
-  const handle = useMemo(() => printMat(ACCENT, { roughness: 0.4, clearcoat: 0.5 }), []);
-  const steel = useMemo(() => printMat("#c7ccd2", { metalness: 0.3, roughness: 0.3 }), []);
-  return (
-    <group ref={ref} scale={1.1} rotation={[0.25, 0, 0]}>
-      <mesh material={handle} castShadow position={[-0.7, 0, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.28, 0.28, 1.5, 28]} /></mesh>
-      <mesh material={handle} castShadow position={[-1.45, 0, 0]}><sphereGeometry args={[0.28, 24, 24]} /></mesh>
-      <RoundedBox material={steel} castShadow position={[0.15, 0, 0]} args={[0.5, 0.18, 0.5]} radius={0.05} smoothness={3} />
-      <RoundedBox material={steel} castShadow position={[1.0, -0.18, 0]} rotation={[0, 0, -0.35]} args={[1.3, 0.05, 0.95]} radius={0.02} smoothness={2} />
-    </group>
-  );
-}
-
-/** Headset stand — base, post and a curved yoke that cradles the headband. */
-function HeadsetStand() {
-  const ref = useSpin(0.32, -0.2);
-  const mat = useMemo(() => printMat("#d3d8de"), []);
-  const yokeGeo = useMemo(() => new THREE.TorusGeometry(0.55, 0.16, 20, 48, Math.PI), []);
-  return (
-    <group ref={ref} scale={1.0}>
-      <mesh material={mat} castShadow position={[0, -1.4, 0]}><cylinderGeometry args={[0.95, 1.05, 0.22, 48]} /></mesh>
-      <mesh material={mat} castShadow position={[0, -0.2, 0]}><cylinderGeometry args={[0.16, 0.18, 2.4, 28]} /></mesh>
-      <mesh material={mat} castShadow geometry={yokeGeo} position={[0, 1.05, 0]} />
-    </group>
-  );
-}
-
-/** Pegboard tool holder — a rack holding screwdrivers. */
-function PegboardHolder() {
-  const ref = useSpin(0.3, 0);
-  const mat = useMemo(() => printMat("#cdd2d8"), []);
-  const hole = useMemo(() => printMat("#15171a", { clearcoat: 0.1 }), []);
-  const toolMetal = useMemo(() => printMat("#9aa3ad", { metalness: 0.4, roughness: 0.3 }), []);
-  const grip = useMemo(() => printMat(ACCENT, { roughness: 0.4, clearcoat: 0.5 }), []);
-  const xs = [-0.7, 0, 0.7];
-  return (
-    <group ref={ref} scale={1.0} rotation={[0.12, 0, 0]}>
-      <RoundedBox material={mat} castShadow position={[0, 0.2, -0.4]} args={[2.4, 1.7, 0.14]} radius={0.05} smoothness={4} />
-      <RoundedBox material={mat} castShadow position={[-0.5, 0.95, -0.55]} args={[0.2, 0.2, 0.34]} radius={0.05} smoothness={3} />
-      <RoundedBox material={mat} castShadow position={[0.5, 0.95, -0.55]} args={[0.2, 0.2, 0.34]} radius={0.05} smoothness={3} />
-      <RoundedBox material={mat} castShadow position={[0, -0.5, 0]} args={[2.4, 0.5, 0.8]} radius={0.09} smoothness={4} />
-      {xs.map((x, i) => (
-        <group key={i} position={[x, -0.25, 0.1]}>
-          <mesh material={hole}><cylinderGeometry args={[0.16, 0.16, 0.5, 20]} /></mesh>
-          <mesh material={toolMetal} castShadow position={[0, 0.55, 0]}><cylinderGeometry args={[0.07, 0.07, 1.0, 16]} /></mesh>
-          <mesh material={grip} castShadow position={[0, 1.25, 0]}><cylinderGeometry args={[0.17, 0.13, 0.5, 20]} /></mesh>
-        </group>
-      ))}
-    </group>
-  );
-}
-
 function renderLandingModel(index: number) {
-  switch (index) {
-    case 0: return <MilwaukeeMount />;
-    case 1: return <SkadisBin />;
-    case 2: return <FilamentHolder />;
-    case 3: return <BedScraper />;
-    case 4: return <HeadsetStand />;
-    case 5: return <PegboardHolder />;
-    case 6: return <Gyroscope />;
-    case 7: return <Rocket />;
-    case 8: return <TwistedVase />;
-    default: return <FlexiCoil />;
-  }
+  if (index === 0) return <Gyroscope />;
+  if (index === 1) return <Rocket />;
+  if (index === 2) return <TwistedVase />;
+  return <FlexiCoil />;
 }
 
 /** The full Three.js hero scene — spotlight from top, spin-morph transitions */
@@ -786,15 +645,6 @@ function HeroScene({
         <color attach="background" args={[BG]} />
         <fog attach="fog" args={[BG, 14, 26]} />
 
-        {/* Soft in-scene studio so matte prints are lit from every side (no
-            pure-black back faces) while shiny models still get reflections.
-            Lightformers = no HDR fetch, works offline. */}
-        <Environment resolution={128} frames={1}>
-          <Lightformer intensity={1.4} rotation-x={Math.PI / 2} position={[0, 5, -8]} scale={[10, 10, 1]} color="#dceaf6" />
-          <Lightformer intensity={0.8} rotation-y={Math.PI / 2} position={[-6, 1, 0]} scale={[10, 4, 1]} color="#bcd2e6" />
-          <Lightformer intensity={0.8} rotation-y={-Math.PI / 2} position={[6, 1, 0]} scale={[10, 4, 1]} color="#ffffff" />
-        </Environment>
-
         {/* Key spotlight from top — hard cone, cinematic */}
         <spotLight
           position={[0, 8, 1]}
@@ -808,12 +658,12 @@ function HeroScene({
         />
         {/* Cyan underlight — the glow pool */}
         <pointLight position={[0, -2.8, 0]} intensity={4} color={ACCENT} />
-        {/* Front fill so the camera-facing side never goes black as it spins */}
-        <directionalLight position={[2, 3, 9]} intensity={1.1} color="#cfe0ee" />
-        {/* Fill from behind-left to separate the silhouette */}
-        <pointLight position={[-5, 2, -5]} intensity={2.4} color="#16455a" />
-        {/* Neutral ambient base — enough to read matte surfaces, still moody */}
-        <ambientLight intensity={0.32} color="#9fb1bf" />
+        {/* Rim from behind-left */}
+        <pointLight position={[-5, 2, -5]} intensity={2} color="#083848" />
+        {/* Subtle fill from front-right */}
+        <pointLight position={[4, 4, 3]} intensity={0.6} color="#0a1e28" />
+        {/* Very dim ambient — keep shadows dramatic */}
+        <ambientLight intensity={0.06} color="#060e14" />
 
         <GroundGrid />
 
@@ -1348,12 +1198,6 @@ function ResetPasswordDialog({
 // ─── MODEL SELECTOR LABELS ───────────────────────────────────────────────────
 
 const MODELS = [
-  { label: "Milwaukee M18 Holder", description: "Tool battery wall mount" },
-  { label: "IKEA Skådis Bin", description: "Pegboard storage cup" },
-  { label: "Filament Spool Holder", description: "Wall-mount spool roller" },
-  { label: "Bed Scraper", description: "3D-print removal tool" },
-  { label: "Headset Stand", description: "Desktop headphone stand" },
-  { label: "Pegboard Tool Holder", description: "Screwdriver rack" },
   { label: "Gyroscope", description: "Precision mechanical rings" },
   { label: "Rocket", description: "Classic maker print" },
   { label: "Twisted Vase", description: "#1 most printed decoration" },
