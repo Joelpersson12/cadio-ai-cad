@@ -241,7 +241,18 @@ def _ensure_column(
     column: str,
     definition: str,
 ) -> None:
-    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    # NOTE: libsql (Turso) cursors are NOT iterable — `for row in conn.execute(...)`
+    # raises "'builtins.Cursor' object is not iterable", which previously made
+    # _init() throw and silently dropped the whole app back to ephemeral local
+    # SQLite (every account/login lost on each rebuild). Always materialize with
+    # fetchall(), and read the column name by key OR position (col 1 of
+    # PRAGMA table_info) so it works whether rows are sqlite3.Row, dict, or tuple.
+    columns: set[str] = set()
+    for row in conn.execute(f"PRAGMA table_info({table})").fetchall():
+        try:
+            columns.add(row["name"])
+        except (TypeError, KeyError, IndexError):
+            columns.add(row[1])
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
