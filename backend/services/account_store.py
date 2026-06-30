@@ -69,20 +69,70 @@ def _connect():
 
 
 def db_backend_status() -> dict[str, Any]:
-    """Report which database backend is actually in use (for diagnostics)."""
+    """Report which database backend is ACTUALLY in use (for diagnostics).
+
+    This opens a live connection and runs a real query so it reflects the truth,
+    not merely whether the env vars are set. ``_connect()`` silently falls back
+    to ephemeral local SQLite when a configured Turso connection fails at
+    runtime, which otherwise hides the real reason accounts/logins keep resetting
+    on every Space rebuild.
+    """
     turso_url = os.environ.get("TURSO_DATABASE_URL", "")
+    turso_token = os.environ.get("TURSO_AUTH_TOKEN", "")
     if not turso_url:
-        return {"backend": "local-ephemeral", "turso_configured": False, "persistent": False}
+        return {
+            "backend": "local-ephemeral",
+            "turso_configured": False,
+            "persistent": False,
+            "hint": "Set TURSO_DATABASE_URL + TURSO_AUTH_TOKEN on the Space to persist accounts across rebuilds.",
+        }
+
     try:
-        import libsql_experimental as libsql  # type: ignore[import] # noqa: F401
-        return {"backend": "turso", "turso_configured": True, "persistent": True, "driver_installed": True}
+        import libsql_experimental as libsql  # type: ignore[import]
     except ImportError:
         return {
             "backend": "local-ephemeral",
             "turso_configured": True,
             "persistent": False,
             "driver_installed": False,
-            "warning": "libsql-experimental not installed; Turso vars ignored.",
+            "auth_token_set": bool(turso_token),
+            "warning": "TURSO_DATABASE_URL is set but 'libsql-experimental' is not installed — Turso vars are ignored and accounts are EPHEMERAL.",
+        }
+
+    # Vars set + driver present — but does the live connection actually work?
+    try:
+        conn = libsql.connect(database=turso_url, auth_token=turso_token)
+        accounts = 0
+        sessions = 0
+        try:
+            row = conn.execute("SELECT count(*) FROM accounts").fetchone()
+            accounts = int(row[0]) if row else 0
+            row = conn.execute("SELECT count(*) FROM sessions").fetchone()
+            sessions = int(row[0]) if row else 0
+        except Exception:
+            # Tables may not exist yet on a brand-new database — that's fine.
+            pass
+        return {
+            "backend": "turso",
+            "turso_configured": True,
+            "persistent": True,
+            "driver_installed": True,
+            "connection": "ok",
+            "auth_token_set": bool(turso_token),
+            "accounts": accounts,
+            "sessions": sessions,
+            "url_tail": turso_url[-32:],
+        }
+    except Exception as exc:  # noqa: BLE001 — diagnostics must never throw
+        return {
+            "backend": "local-ephemeral (TURSO CONNECTION FAILED)",
+            "turso_configured": True,
+            "persistent": False,
+            "driver_installed": True,
+            "connection": "failed",
+            "auth_token_set": bool(turso_token),
+            "error": str(exc)[:300],
+            "hint": "Turso vars are set but the live connection failed, so accounts silently use EPHEMERAL local SQLite and reset on every rebuild. Check the URL (libsql://… or the https URL Turso shows) and that TURSO_AUTH_TOKEN matches that database.",
         }
 
 
