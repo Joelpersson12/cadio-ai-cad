@@ -181,7 +181,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-30T-bg-source-prefetch"
+BUILD_MARKER = "2026-06-30T-promo-codes"
 
 
 @router.get("/api/debug/version")
@@ -1474,6 +1474,11 @@ def stripe_checkout(
                 ui_mode="embedded_page",
                 customer_email=account.get("email") or None,
                 line_items=[{"price": price_id, "quantity": 1}],
+                # Show the "Add promotion code" field in Checkout so customers
+                # can redeem the promotion codes generated in the Stripe
+                # Dashboard (each tied to a coupon). Stripe validates the code
+                # and applies the discount itself.
+                allow_promotion_codes=True,
                 metadata={"account_id": account["accountId"], "plan": plan},
                 return_url="https://cadio.net/?upgrade=success&session_id={CHECKOUT_SESSION_ID}",
             )
