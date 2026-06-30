@@ -26,6 +26,109 @@ def _get_groq_client() -> Any:
         )
     return _groq_client
 
+
+# ---------------------------------------------------------------------------
+# Claude (Anthropic) — preferred free-text fallback. When ANTHROPIC_API_KEY is
+# set, prompts that the deterministic rules + templates + source search don't
+# already handle are interpreted by Claude, so users can describe a model in
+# almost any words and still get sensible CAD parameters. This is purely a
+# fallback: it only runs when the deterministic path produced nothing, so it
+# never overrides or slows the already-working recognized prompts.
+# ---------------------------------------------------------------------------
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+_anthropic_client: Any = None
+
+
+def _get_anthropic_client() -> Any:
+    global _anthropic_client
+    if _anthropic_client is None:
+        import anthropic
+        _anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    return _anthropic_client
+
+
+# Strict schema so Claude returns exactly the parametric dimensions the CAD
+# engine understands — no free-form keys to sanitize.
+_CAD_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "width": {"type": "number"},
+                "depth": {"type": "number"},
+                "height": {"type": "number"},
+                "thickness": {"type": "number"},
+                "angle": {"type": "number"},
+                "fillet_radius": {"type": "number"},
+                "chamfer_size": {"type": "number"},
+                "hole_count": {"type": "number"},
+                "hole_diameter": {"type": "number"},
+                "wall_thickness": {"type": "number"},
+            },
+            "additionalProperties": False,
+        },
+        "actions": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["parameters", "actions"],
+    "additionalProperties": False,
+}
+
+
+def _parse_with_claude(
+    prompt: str,
+    current_params: dict,
+    current_transform: dict,
+    current_features: list | None = None,
+) -> dict:
+    """Interpret a free-text prompt into CAD parameters using Claude Opus 4.8."""
+    try:
+        client = _get_anthropic_client()
+
+        user_message = (
+            f"Current parameters: {json.dumps(current_params)}"
+            f"\nCurrent transform: {json.dumps(current_transform)}"
+            f"\nUser instruction: {prompt}"
+            "\n\nReturn realistic millimeter dimensions for this object as JSON "
+            "matching the schema. Keep proportions printable and sensible."
+        )
+
+        response = client.messages.create(
+            model="claude-opus-4-8",
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+            output_config={"format": {"type": "json_schema", "schema": _CAD_OUTPUT_SCHEMA}},
+        )
+        # output_config.format guarantees the first text block is valid JSON.
+        text = next((b.text for b in response.content if b.type == "text"), "{}")
+        return json.loads(text)
+    except Exception as e:  # noqa: BLE001 — never let the LLM break generation
+        print(f"[cadio] Claude error: {e}")
+        return {"parameters": current_params, "features": [], "transform": {}, "actions": [f"ai-error: {e}"]}
+
+
+def _parse_with_llm(
+    prompt: str,
+    current_params: dict,
+    current_transform: dict,
+    current_features: list | None = None,
+) -> dict:
+    """Provider-agnostic free-text fallback: prefer Claude, then Groq, else no-op.
+
+    Whichever is configured runs only AFTER the deterministic rules, templates,
+    research brief, and source search have had their chance — so configuring a
+    key strictly expands what users can phrase, without changing any prompt that
+    already works.
+    """
+    if ANTHROPIC_API_KEY:
+        return _parse_with_claude(prompt, current_params, current_transform, current_features)
+    if GROQ_API_KEY:
+        return _parse_with_groq(prompt, current_params, current_transform, current_features)
+    # No LLM configured — signal a no-op so callers fall back to neutral geometry.
+    return {"parameters": current_params, "features": [], "transform": {}, "actions": ["no-op"]}
+
 CREATE_PATTERNS = (
     r"\b(create|generate|build|design)\b",
     r"\bmake\s+(a|an|one)\b",
@@ -708,7 +811,7 @@ def parse_ai_command(
     if quick_actions or inference_actions or brief_actions:
         actions = brief_actions + quick_actions + inference_actions
     elif not template or "modify" in _prompt_match_text(prompt) or "change" in _prompt_match_text(prompt):
-        result = _parse_with_groq(prompt, params, current_transform, features)
+        result = _parse_with_llm(prompt, params, current_transform, features)
         
         # Apply parameter changes
         new_params = result.get("parameters", {})

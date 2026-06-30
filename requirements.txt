@@ -4,6 +4,7 @@ uvicorn[standard]
 pydantic
 websockets
 openai
+anthropic
 cadquery==2.7.0
 google-auth
 stripe

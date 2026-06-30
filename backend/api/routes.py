@@ -181,7 +181,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-30T-natural-language-edits"
+BUILD_MARKER = "2026-06-30T-claude-llm-fallback"
 
 
 @router.get("/api/debug/version")
@@ -193,10 +193,18 @@ def debug_version() -> dict[str, Any]:
         db = db_backend_status()
     except Exception as exc:
         db = {"error": str(exc)}
+    llm = {
+        "claude_configured": bool(os.environ.get("ANTHROPIC_API_KEY", "")),
+        "groq_configured": bool(os.environ.get("GROQ_API_KEY", "")),
+    }
+    llm["active_provider"] = (
+        "claude" if llm["claude_configured"] else "groq" if llm["groq_configured"] else "none (deterministic only)"
+    )
     return {
         "build": BUILD_MARKER,
         "server_time": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
         "database": db,
+        "llm": llm,
     }
 
 
