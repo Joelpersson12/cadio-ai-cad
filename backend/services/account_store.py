@@ -39,19 +39,36 @@ def _db_path() -> Path:
     return path
 
 
+# Records what _connect() ACTUALLY used on its last call, so diagnostics reflect
+# the real data path rather than a separate probe. Critically: the app can
+# connect to Turso but then fall back to ephemeral local SQLite if a later setup
+# step (row_factory / _init) throws — these globals capture that.
+_ACTIVE_BACKEND: str = "unknown"
+_TURSO_ERROR: str = ""
+
+
 def _connect():
+    global _ACTIVE_BACKEND, _TURSO_ERROR
     turso_url = os.environ.get("TURSO_DATABASE_URL", "")
     turso_token = os.environ.get("TURSO_AUTH_TOKEN", "")
     if turso_url:
         try:
             import libsql_experimental as libsql  # type: ignore[import]
             conn = libsql.connect(database=turso_url, auth_token=turso_token)
-            conn.row_factory = sqlite3.Row
+            # libsql's connection may not accept a sqlite3.Row row_factory; don't
+            # let that abandon Turso and silently lose every write to ephemeral.
+            try:
+                conn.row_factory = sqlite3.Row
+            except Exception:  # noqa: BLE001
+                pass
             _init(conn)
+            _ACTIVE_BACKEND = "turso"
+            _TURSO_ERROR = ""
             return conn
         except ImportError:
             # Driver missing — the persistent DB silently degrades to ephemeral
             # local storage. Loud warning so this is caught instead of losing data.
+            _TURSO_ERROR = "libsql-experimental not installed"
             print(
                 "[account_store] WARNING: TURSO_DATABASE_URL is set but "
                 "'libsql-experimental' is not installed — falling back to "
@@ -59,12 +76,14 @@ def _connect():
                 "Add 'libsql-experimental' to requirements.txt."
             )
         except Exception as exc:  # noqa: BLE001 — never let DB setup crash the app
+            _TURSO_ERROR = repr(exc)
             print(f"[account_store] WARNING: Turso connection failed ({exc!r}); falling back to local SQLite.")
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     _init(conn)
+    _ACTIVE_BACKEND = "local-ephemeral"
     return conn
 
 
@@ -99,9 +118,12 @@ def db_backend_status() -> dict[str, Any]:
             "warning": "TURSO_DATABASE_URL is set but 'libsql-experimental' is not installed — Turso vars are ignored and accounts are EPHEMERAL.",
         }
 
-    # Vars set + driver present — but does the live connection actually work?
+    # Vars set + driver present — exercise the APP's real _connect() path so we
+    # report the backend it actually lands on. _connect() can connect to Turso
+    # and then fall back to ephemeral if a setup step throws, which a separate
+    # probe would miss.
     try:
-        conn = libsql.connect(database=turso_url, auth_token=turso_token)
+        conn = _connect()
         accounts = 0
         sessions = 0
         try:
@@ -110,29 +132,38 @@ def db_backend_status() -> dict[str, Any]:
             row = conn.execute("SELECT count(*) FROM sessions").fetchone()
             sessions = int(row[0]) if row else 0
         except Exception:
-            # Tables may not exist yet on a brand-new database — that's fine.
             pass
+        if _ACTIVE_BACKEND == "turso":
+            return {
+                "backend": "turso",
+                "turso_configured": True,
+                "persistent": True,
+                "driver_installed": True,
+                "connection": "ok",
+                "auth_token_set": bool(turso_token),
+                "accounts": accounts,
+                "sessions": sessions,
+                "url_tail": turso_url[-32:],
+            }
         return {
-            "backend": "turso",
-            "turso_configured": True,
-            "persistent": True,
-            "driver_installed": True,
-            "connection": "ok",
-            "auth_token_set": bool(turso_token),
-            "accounts": accounts,
-            "sessions": sessions,
-            "url_tail": turso_url[-32:],
-        }
-    except Exception as exc:  # noqa: BLE001 — diagnostics must never throw
-        return {
-            "backend": "local-ephemeral (TURSO CONNECTION FAILED)",
+            "backend": "local-ephemeral (TURSO FELL BACK)",
             "turso_configured": True,
             "persistent": False,
             "driver_installed": True,
-            "connection": "failed",
+            "connection": "fell_back",
+            "auth_token_set": bool(turso_token),
+            "turso_error": _TURSO_ERROR[:300],
+            "accounts_in_ephemeral": accounts,
+            "hint": "The app connected but fell back to EPHEMERAL local SQLite (writes lost on rebuild). See turso_error for why.",
+        }
+    except Exception as exc:  # noqa: BLE001 — diagnostics must never throw
+        return {
+            "backend": "unknown (probe failed)",
+            "turso_configured": True,
+            "persistent": False,
+            "driver_installed": True,
             "auth_token_set": bool(turso_token),
             "error": str(exc)[:300],
-            "hint": "Turso vars are set but the live connection failed, so accounts silently use EPHEMERAL local SQLite and reset on every rebuild. Check the URL (libsql://… or the https URL Turso shows) and that TURSO_AUTH_TOKEN matches that database.",
         }
 
 
