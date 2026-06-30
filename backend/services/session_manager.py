@@ -4277,6 +4277,38 @@ def _plane_clip_trimesh(
     return result
 
 
+def _subtract_box_column(mesh: TriMesh, x0: float, x1: float, y0: float, y1: float) -> TriMesh:
+    """Remove the vertical rectangular column x∈[x0,x1], y∈[y0,y1] (all Z) from a
+    mesh — a real geometric Cut slot that works on coarse meshes too.
+
+    Unlike a centroid test (which removes nothing when no triangle centroid
+    happens to fall inside the slot), this clips the mesh against the four slot
+    boundary planes and keeps only the material OUTSIDE the column: the left
+    slab (x≤x0), the right slab (x≥x1), and the front/back slabs within the slot
+    width (y≤y0 / y≥y1). Uses the same plane clipper as Split, so it lands in the
+    exact frame the user drew in.
+    """
+    if not mesh.verts or x1 <= x0 or y1 <= y0:
+        return mesh
+
+    left = _plane_clip_trimesh(mesh, 1.0, 0.0, 0.0, -x0, keep_sign=-1)   # x ≤ x0
+    right = _plane_clip_trimesh(mesh, 1.0, 0.0, 0.0, -x1, keep_sign=1)   # x ≥ x1
+    mid = _plane_clip_trimesh(mesh, 1.0, 0.0, 0.0, -x0, keep_sign=1)     # x ≥ x0
+    mid = _plane_clip_trimesh(mid, 1.0, 0.0, 0.0, -x1, keep_sign=-1)     # x ≤ x1
+    front = _plane_clip_trimesh(mid, 0.0, 1.0, 0.0, -y0, keep_sign=-1)   # y ≤ y0
+    back = _plane_clip_trimesh(mid, 0.0, 1.0, 0.0, -y1, keep_sign=1)     # y ≥ y1
+
+    result = TriMesh()
+    for part in (left, right, front, back):
+        if not part.verts:
+            continue
+        base = len(result.verts)
+        result.verts.extend(part.verts)
+        for (a, b, c) in part.tris:
+            result.tris.append((a + base, b + base, c + base))
+    return result if result.verts else mesh
+
+
 def cut_object_by_line(
     session: Session,
     obj: CadObject,
@@ -4286,9 +4318,9 @@ def cut_object_by_line(
     """Cut a rectangular slot of material out of the selected object.
 
     The "Cut slot" tool removes the dragged area entirely (a through-pocket),
-    rather than splitting the body into two parts. For parametric bodies the cut
-    is stored as a custom cutout so it survives later resizes; raw meshes are cut
-    in place.
+    rather than splitting the body into two parts. For parametric primitives the
+    cut is stored as a custom cutout so it survives later resizes; mesh bodies
+    (imported, split parts, raw/template) are cut geometrically in place.
     """
     width = abs(float(size_xy[0])) if len(size_xy) > 0 else 0.0
     depth = abs(float(size_xy[1])) if len(size_xy) > 1 else 0.0
@@ -4308,20 +4340,33 @@ def cut_object_by_line(
     local_d = depth / sy
 
     params = obj["parameters"]
-    index = max(0, int(params.get("custom_cutout_count", 0.0)))
-    params[f"custom_cutout_{index}_x"] = local_x
-    params[f"custom_cutout_{index}_y"] = local_y
-    params[f"custom_cutout_{index}_width"] = local_w
-    params[f"custom_cutout_{index}_depth"] = local_d
-    params["custom_cutout_count"] = float(index + 1)
+    is_mesh_body = (
+        obj.get("imported_source_mesh")
+        or obj.get("primitive") in ("imported_source_mesh", "manual", None, "")
+        or not obj.get("manual")
+    )
 
-    if obj.get("manual"):
-        rebuild_manual_object(obj)
-    elif obj.get("primitive") == "imported_source_mesh" or obj.get("imported_source_mesh"):
-        rebuild_manual_object(obj)
+    if is_mesh_body:
+        # Imported / split / raw mesh — geometrically remove the slot column from
+        # the current mesh so it lands exactly where the user drew it, then bake
+        # the result so a later rebuild (resize) keeps the cut instead of
+        # re-growing a solid body.
+        x0, x1 = local_x - local_w / 2.0, local_x + local_w / 2.0
+        y0, y1 = local_y - local_d / 2.0, local_y + local_d / 2.0
+        cut_shape = _subtract_box_column(shape, x0, x1, y0, y1)
+        obj["shape"] = shift_mesh_to_buildplate(cut_shape)
+        if obj.get("imported_source_mesh") or obj.get("primitive") == "imported_source_mesh":
+            obj["source_original_shape"] = deepcopy(obj["shape"])
     else:
-        # Raw/template mesh body — cut the current mesh directly.
-        obj["shape"] = shift_mesh_to_buildplate(_apply_mesh_rect_cutouts(shape, params))
+        # Parametric primitive — store the cutout so rebuild re-applies it and it
+        # survives later dimension changes.
+        index = max(0, int(params.get("custom_cutout_count", 0.0)))
+        params[f"custom_cutout_{index}_x"] = local_x
+        params[f"custom_cutout_{index}_y"] = local_y
+        params[f"custom_cutout_{index}_width"] = local_w
+        params[f"custom_cutout_{index}_depth"] = local_d
+        params["custom_cutout_count"] = float(index + 1)
+        rebuild_manual_object(obj)
 
     obj.setdefault("operation_history", []).append(
         {"operation": "cut_slot", "x": local_x, "y": local_y, "width": local_w, "depth": local_d}
