@@ -3169,7 +3169,11 @@ def rebuild_manual_object(obj: CadObject) -> None:
     elif primitive == "source_battery_holder":
         obj["shape"] = _make_source_battery_holder_mesh(params)
     elif primitive == "imported_source_mesh":
-        obj["shape"] = _apply_mesh_hole_cuts(_stable_source_shape(obj), params)
+        # Rebuild from the pristine source mesh and re-apply BOTH hole cuts and
+        # rectangular slot cutouts (Cut slot). Without the rect cutouts the
+        # "Cut slot" tool silently did nothing on imported/raw meshes.
+        shape = _apply_mesh_hole_cuts(_stable_source_shape(obj), params)
+        obj["shape"] = _apply_mesh_rect_cutouts(shape, params)
     elif primitive == "text_label":
         label = _sanitize_label_text(str(obj.get("text_label", "TEXT")))
         obj["shape"] = _make_block_text_mesh(
@@ -4124,6 +4128,26 @@ def _split_mesh_by_line(session: Session, obj: CadObject, center: list[float], d
     transform_obj: Transform = obj["transform"]
     for idx, half in enumerate([half1, half2], start=1):
         part = create_manual_object(f"{obj_name}_part_{idx}", half)
+        # Treat each half as a raw-mesh body (like an imported mesh) so later
+        # Cut slot / Make hole / resize edit the actual mesh instead of
+        # rebuild_manual_object regenerating a box from the default parameters.
+        part["primitive"] = "imported_source_mesh"
+        part["imported_source_mesh"] = True
+        part["source_original_shape"] = deepcopy(half)
+        dims = _mesh_dimensions(half)
+        part["parameters"].update({
+            "width": max(1.0, dims["width"]),
+            "depth": max(1.0, dims["depth"]),
+            "height": max(0.5, dims["height"]),
+        })
+        part["source_dimensions"] = {
+            "width": max(1.0, dims["width"]),
+            "depth": max(1.0, dims["depth"]),
+            "height": max(0.5, dims["height"]),
+        }
+        # Carry over source attribution so split parts still show Source/license.
+        if isinstance(obj.get("source_model"), dict):
+            part["source_model"] = deepcopy(obj["source_model"])
         part["transform"] = Transform(
             position=list(transform_obj.position),
             rotation=list(transform_obj.rotation),

@@ -181,7 +181,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-29T-source-survives-import-failure"
+BUILD_MARKER = "2026-06-30T-cutslot-mesh-and-attribution"
 
 
 @router.get("/api/debug/version")

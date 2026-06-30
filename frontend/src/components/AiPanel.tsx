@@ -21,7 +21,20 @@ export function sourceLicense(src: SourceExample | undefined) {
   return { lic, name, editable, verified };
 }
 
-function PermissionBadge({ ok, label }: { ok: boolean; label: string }) {
+function PermissionBadge({ ok, label, requirement }: { ok: boolean; label: string; requirement?: boolean }) {
+  // `requirement` renders an amber "you must do this" pill for obligations
+  // (e.g. attribution) instead of the green/red allow-deny style. An obligation
+  // isn't a denied permission, so a red ✖ would read backwards.
+  if (requirement) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+        style={{ background: "rgba(255,159,10,0.13)", color: "#ff9f0a" }}
+      >
+        ⚠ {label}
+      </span>
+    );
+  }
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
@@ -87,9 +100,16 @@ export function SourceInfoModal({ sources, onClose }: { sources: SourceExample[]
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    <PermissionBadge ok={!(lic?.requires_attribution ?? true)} label="No attribution needed" />
+                    {(lic?.requires_attribution ?? true) ? (
+                      <PermissionBadge ok={false} requirement label="Attribution required" />
+                    ) : (
+                      <PermissionBadge ok label="No attribution needed" />
+                    )}
                     <PermissionBadge ok={lic?.allow_commercial ?? false} label="Commercial use" />
                     <PermissionBadge ok={editable} label="Editing / remix" />
+                    {(lic?.share_alike ?? false) && (
+                      <PermissionBadge ok={false} requirement label="Share-alike" />
+                    )}
                   </div>
                   {!editable && (
                     <p className="text-[11px] leading-relaxed text-[#ff9f0a]">
@@ -98,7 +118,8 @@ export function SourceInfoModal({ sources, onClose }: { sources: SourceExample[]
                   )}
                   {(lic?.requires_attribution ?? true) && (
                     <p className="text-[10px] leading-relaxed text-white/40">
-                      You must credit the original creator{src.author ? ` (${src.author})` : ""} and link back to the source when sharing.
+                      You must credit the original creator{src.author ? ` (${src.author})` : ""} and include a link to the original source whenever you share or redistribute this model.
+                      {(lic?.share_alike ?? false) && " Because this license is share-alike, anything you share based on it must be released under the same license."}
                     </p>
                   )}
                   {!verified && (
