@@ -583,6 +583,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
     applyExpertOperation,
     selectAllObjects,
     onDeleteObject,
+    deleteSelectedObjects,
     snapSelectedObjects,
     setPrinter,
     runPrompt,
@@ -860,6 +861,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
           onSetOperationAmount={setOperationAmount}
           onApplyExpertOperation={(op, amount, objectId, target) => void applyExpertOperation(op, amount, objectId, target)}
           onCreatePrimitive={(payload) => void createPrimitive(payload)}
+          onDeleteSelected={() => void deleteSelectedObjects()}
           showMeasurements={showMeasurements}
         />
         </ErrorBoundary>

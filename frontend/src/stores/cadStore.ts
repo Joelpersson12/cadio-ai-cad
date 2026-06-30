@@ -100,6 +100,7 @@ interface CadState {
   onSelectObject: (objectId: string) => Promise<void>;
   selectAllObjects: () => void;
   onDeleteObject: () => Promise<void>;
+  deleteSelectedObjects: () => Promise<void>;
   onTransformCommit: (
     objectId: string,
     transform: {
@@ -369,6 +370,26 @@ export const useCadStore = create<CadState>((set, get) => ({
       });
       get().applyScenePayload(data);
       set({ status: "Object deleted" });
+    } catch (err) {
+      set({ status: err instanceof Error ? err.message : "Error" });
+    }
+  },
+
+  deleteSelectedObjects: async () => {
+    const { sessionId, selectedObjectIds, selectedObjectId } = get();
+    const ids = selectedObjectIds.length > 0 ? selectedObjectIds : selectedObjectId ? [selectedObjectId] : [];
+    if (!sessionId || ids.length === 0) return;
+    try {
+      let data: ScenePayload | undefined;
+      for (const id of ids) {
+        data = await apiDeleteObject({ session_id: sessionId, object_id: id });
+      }
+      if (data) get().applyScenePayload(data);
+      set({
+        selectedObjectIds: [],
+        selectedObjectId: "",
+        status: `Deleted ${ids.length} part${ids.length > 1 ? "s" : ""}`,
+      });
     } catch (err) {
       set({ status: err instanceof Error ? err.message : "Error" });
     }
