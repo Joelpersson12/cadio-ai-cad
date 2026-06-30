@@ -13,7 +13,7 @@ import math
 import re
 from copy import deepcopy
 from datetime import datetime, timezone
-from threading import RLock
+from threading import RLock, Thread
 from typing import Any
 
 from backend.models.schema import Feature, Transform
@@ -328,8 +328,11 @@ def prepare_generation_target(session: Session, name: str = "part_1") -> CadObje
         _remove_object_direct(session, oid)
 
     # A fresh generation starts a new model — drop any source-file picker state
-    # so a stale file list from a previous import doesn't linger.
+    # so a stale file list from a previous import doesn't linger, and clear the
+    # background-prefetched mesh cache so meshes from the previous model can't
+    # leak into the new one.
     session["source_files"] = []
+    session["_source_mesh_cache"] = {}
 
     obj = create_object(name)
     obj["generated_seed"] = True
@@ -1245,7 +1248,7 @@ def _try_replace_with_imported_source_model(
     # plate. Users choose additional parts (or "All parts") from the picker.
     ranked_candidates.sort(key=lambda item: item[0], reverse=True)
     for _score, source_example_obj, source_files, candidate in ranked_candidates:
-        imported_shape = _try_import_source_stl(candidate, prefer_flat=prefer_flat)
+        imported_shape = _import_source_stl_cached(session, candidate, prefer_flat)
         if imported_shape is None:
             continue
 
@@ -1263,6 +1266,13 @@ def _try_replace_with_imported_source_model(
         session["source_info"] = [source_example]
         session["source_files"] = _build_source_file_options(
             source_files, prompt, preferred_slots, session=session, active_id=candidate.get("id")
+        )
+        # The best-matching file is now on the plate, so the user sees the model
+        # immediately. Quietly download + parse this model's other files in the
+        # background so switching between them is instant — without making the
+        # user wait for the initial generation.
+        _spawn_source_file_prefetch(
+            session.get("session_id", ""), source_files, prompt, candidate.get("id")
         )
         selected_file_name = candidate.get("name")
         options_n = len([o for o in session["source_files"] if o.get("id") != "__all__"])
@@ -1424,6 +1434,66 @@ def _build_source_file_options(
     return options
 
 
+def _import_source_stl_cached(session: Session, candidate: dict[str, Any], prefer_flat: bool) -> TriMesh | None:
+    """Import a source file's STL, reusing a background-prefetched mesh if one is
+    ready. The prefetch downloads + parses the model's other files right after the
+    first one is shown, so switching between files is instant. Returns a deepcopy
+    so the cached mesh is never mutated by downstream edits."""
+    fid = str(candidate.get("id") or "")
+    cache = session.get("_source_mesh_cache")
+    if fid and isinstance(cache, dict) and fid in cache:
+        return deepcopy(cache[fid])
+    shape = _try_import_source_stl(candidate, prefer_flat=prefer_flat)
+    if shape is not None and fid:
+        session.setdefault("_source_mesh_cache", {})[fid] = deepcopy(shape)
+    return shape
+
+
+def _spawn_source_file_prefetch(
+    session_id: str,
+    source_files: list[dict[str, Any]],
+    prompt: str,
+    skip_file_id: Any,
+) -> None:
+    """Background-download + parse the model's remaining importable files into the
+    session mesh cache, so the user sees the first model immediately and the other
+    files load silently (and switch instantly). Best-effort; never blocks."""
+    prefer_flat = _prefer_flat_for_prompt(prompt)
+    pending = [
+        item
+        for item in source_files
+        if _source_file_is_importable(item) and str(item.get("id")) != str(skip_file_id)
+    ][:6]
+    if not session_id or not pending:
+        return
+
+    def _work() -> None:
+        for cand in pending:
+            fid = str(cand.get("id") or "")
+            if not fid:
+                continue
+            with _lock:
+                sess = _sessions.get(session_id)
+                if sess is None:
+                    return
+                cache = sess.get("_source_mesh_cache")
+                if isinstance(cache, dict) and fid in cache:
+                    continue
+            try:
+                shape = _try_import_source_stl(cand, prefer_flat=prefer_flat)
+            except Exception:  # noqa: BLE001 — prefetch must never raise
+                continue
+            if shape is None:
+                continue
+            with _lock:
+                sess = _sessions.get(session_id)
+                if sess is None:
+                    return
+                sess.setdefault("_source_mesh_cache", {})[fid] = shape
+
+    Thread(target=_work, name="cadio-source-prefetch", daemon=True).start()
+
+
 def select_source_file(session: Session, file_id: str, mode: str = "swap") -> list[str]:
     """Place source-model parts on the build plate.
 
@@ -1494,7 +1564,7 @@ def select_source_file(session: Session, file_id: str, mode: str = "swap") -> li
     # Always places another copy beside the existing parts — so you can have two
     # (or more) of the same file. Removal is the separate "remove" action.
     if mode == "add":
-        shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
+        shape = _import_source_stl_cached(session, candidate, _prefer_flat_for_prompt(prompt))
         if shape is None:
             return [f"could not import {_source_file_name(candidate)}"]
         source_obj = _create_imported_source_object(prompt, shape, source_example, source_files, candidate)
@@ -1516,7 +1586,7 @@ def select_source_file(session: Session, file_id: str, mode: str = "swap") -> li
     already_only = len(existing) == 1 and placed_obj is not None
     if already_only:
         return [f"source-files: {_source_file_name(candidate)} is already on the plate"]
-    shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
+    shape = _import_source_stl_cached(session, candidate, _prefer_flat_for_prompt(prompt))
     if shape is None:
         return [f"could not import {_source_file_name(candidate)}"]
     source_obj = _create_imported_source_object(prompt, shape, source_example, source_files, candidate)
@@ -1657,7 +1727,7 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
             if candidate.get("id") not in {item.get("id") for item in candidates}:
                 candidates.append(candidate)
         for candidate in candidates:
-            shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
+            shape = _import_source_stl_cached(session, candidate, _prefer_flat_for_prompt(prompt))
             if shape is None:
                 continue
             source_obj = _create_imported_source_object(
