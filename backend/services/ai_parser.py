@@ -37,8 +37,18 @@ CREATE_PATTERNS = (
 EDIT_PATTERNS = (
     r"\b(add|remove|delete|change|modify|edit|increase|decrease|resize|scale|rotate|move|write|engrave|emboss)\b",
     r"\b(make it|taller|wider|thicker|thinner|rounded|fillet|chamfer|extrude|shell|mirror|holes?|text|logo|label|engraved|raised|cutout|notch|slot|boss|standoff|clip|hook|rib|stronger)\b",
+    # Natural-language size/shape edits so users don't need exact keywords.
+    r"\b(bigger|larger|smaller|grow|shrink|enlarge|reduce|expand|downsize|upsize|"
+    r"shorter|lower|higher|narrower|broader|slimmer|deeper|longer|shallower|flatter|"
+    r"double|triple|halve|smooth|smoother|soften|bevel|beveled|hollow|round|rounder|wider)\b",
+    r"\bhalf\s+(?:the\s+)?size\b",
+    r"\bmake (it|the model|this|them)\b",
     r"\b(lagg till|ta bort|andra|redigera|flytta|rotera|skala|hal|rund|fasa|tjockare|bredare|hogre|skriv|ingravera|ingraverat|gravyr|logga|upphojd|upphojt|praglad|utskarning|bossar|distanser|klamma|krok|ribba|ribbor|starkare)\b",
     r"\b(lägg till|ta bort|ändra|redigera|flytta|rotera|skala|hål|rund|fasa|tjockare|bredare|högre)\b",
+    # Swedish natural-language size/shape edits.
+    r"\b(större|storre|mindre|krymp|förstora|forstora|förminska|forminska|"
+    r"kortare|lägre|lagre|smalare|djupare|längre|langre|plattare|"
+    r"dubbelt|dubbla|hälften|halften|halva|jämna|jamna|len|ihålig|ihalig|tunnare)\b",
     r"\bgor\s+(den|det)\b",
     r"\bgör\s+(den|det)\b",
 )
@@ -329,24 +339,88 @@ def _apply_deterministic_edit(
     if explicit_changes:
         actions.append("set " + ", ".join(explicit_changes))
 
-    if any(phrase in text for phrase in ("make it taller", "taller", "increase height", "hogre")):
+    # ------------------------------------------------------------------
+    # Natural-language OVERALL resize — "make it bigger", "a bit smaller",
+    # "20% larger", "double it", "half the size". Lets users phrase a resize
+    # however they like instead of naming an axis. Skipped when an explicit
+    # dimension was already given.
+    # ------------------------------------------------------------------
+    if not explicit_changes:
+        factor: float | None = None
+        pct = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent|procent)", text)
+        grow_words = ("bigger", "larger", "enlarge", "grow", "scale up", "scale it up",
+                      "increase the size", "upsize", "make it big", "större", "storre",
+                      "förstora", "forstora")
+        shrink_words = ("smaller", "shrink", "scale down", "scale it down",
+                        "reduce the size", "downsize", "make it small", "mindre", "krymp",
+                        "förminska", "forminska")
+        if re.search(r"\b(double|twice|2x|two times|dubbelt|dubbla)\b", text):
+            factor = 2.0
+        elif re.search(r"\b(triple|3x|three times)\b", text):
+            factor = 3.0
+        elif re.search(r"\b(halve|half size|half the size|hälften|halften|halva)\b", text):
+            factor = 0.5
+        elif pct:
+            value = float(pct.group(1))
+            if any(w in text for w in grow_words):
+                factor = 1.0 + value / 100.0
+            elif any(w in text for w in shrink_words):
+                factor = max(0.05, 1.0 - value / 100.0)
+            elif re.search(r"\b(scale|size|to|of)\b", text):
+                factor = max(0.05, value / 100.0)
+        elif any(w in text for w in grow_words):
+            factor = 1.25
+        elif any(w in text for w in shrink_words):
+            factor = 0.8
+        if factor is not None:
+            for _axis in ("width", "depth", "height"):
+                scale_param(_axis, factor, 1.0, 1000.0)
+            actions.append(f"scaled model to {factor * 100:.0f}% of its size")
+
+    if any(phrase in text for phrase in ("make it taller", "taller", "higher", "increase height", "hogre", "högre", "höj", "hoj")):
         scale_param("height", 1.25, 20.0)
         actions.append("increased height")
 
-    if any(phrase in text for phrase in ("make it wider", "wider", "increase width", "bredare")):
+    if any(phrase in text for phrase in ("shorter", "make it shorter", "lower", "less tall", "reduce height", "kortare", "lägre", "lagre")):
+        scale_param("height", 0.8, 5.0)
+        actions.append("reduced height")
+
+    if any(phrase in text for phrase in ("make it wider", "wider", "broader", "increase width", "bredare")):
         scale_param("width", 1.25, 10.0)
         actions.append("increased width")
 
-    if any(phrase in text for phrase in ("make it thicker", "thicker", "stronger", "heavy duty", "heavy-duty", "tjockare")):
+    if any(phrase in text for phrase in ("narrower", "slimmer", "less wide", "smalare")):
+        scale_param("width", 0.8, 5.0)
+        actions.append("reduced width")
+
+    if any(phrase in text for phrase in ("deeper", "longer", "djupare", "längre", "langre")):
+        scale_param("depth", 1.25, 5.0)
+        actions.append("increased depth")
+
+    if any(phrase in text for phrase in ("shallower", "less deep", "flatter", "plattare", "grundare")):
+        scale_param("depth", 0.8, 5.0)
+        actions.append("reduced depth")
+
+    if any(phrase in text for phrase in ("make it thicker", "thicker", "stronger", "heavy duty", "heavy-duty", "tjockare", "sturdier")):
         scale_param("thickness", 1.25, 2.0, 30.0)
         params["wall_thickness"] = max(float(params.get("wall_thickness", 3.0)), 4.0)
         actions.append("increased thickness")
 
-    if any(phrase in text for phrase in ("rounded", "round corners", "fillet", "runda")):
+    if any(phrase in text for phrase in ("thinner", "tunnare", "less thick")):
+        scale_param("thickness", 0.8, 1.0, 30.0)
+        actions.append("reduced thickness")
+
+    if any(phrase in text for phrase in ("rounded", "round corners", "round the", "rounder", "fillet", "smooth", "smoother", "soften", "soft edges", "runda", "rundade", "jämna", "jamna", "len")):
         params["fillet_radius"] = max(float(params.get("fillet_radius", 2.0)), 4.0)
         _ensure_feature(features, "fillet_edges", True)
         _ensure_feature(features, "chamfer_edges", False)
         actions.append("enabled rounded corners")
+
+    if any(phrase in text for phrase in ("bevel", "beveled", "bevelled", "chamfer", "chamfered", "fasa", "fasad", "fasade")):
+        params["chamfer_size"] = max(float(params.get("chamfer_size", 0.0)), 2.0)
+        _ensure_feature(features, "chamfer_edges", True)
+        _ensure_feature(features, "fillet_edges", False)
+        actions.append("enabled beveled edges")
 
     if any(phrase in text for phrase in ("mounting holes", "add holes", "holes", "screw holes")):
         params["hole_count"] = max(float(params.get("hole_count", 0.0)), 2.0)
