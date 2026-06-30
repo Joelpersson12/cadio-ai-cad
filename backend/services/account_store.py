@@ -47,6 +47,98 @@ _ACTIVE_BACKEND: str = "unknown"
 _TURSO_ERROR: str = ""
 
 
+# ---------------------------------------------------------------------------
+# libsql (Turso) compatibility shims.
+#
+# libsql_experimental's Rust-backed objects only partially mimic sqlite3:
+#   * its Cursor is not iterable (handled in _ensure_column),
+#   * its Connection does NOT support the `with conn:` context manager, and
+#   * its rows are plain tuples (no row["column"] access).
+# This module relies on all three sqlite3 behaviours, so a libsql connection is
+# wrapped to provide them. Local sqlite3 connections are returned unwrapped.
+# ---------------------------------------------------------------------------
+
+
+class _LibsqlRow:
+    """A row supporting both name access (row["col"]) and index access (row[0]),
+    plus .keys()/in/.get(), matching the sqlite3.Row API this module uses."""
+
+    __slots__ = ("_values", "_map")
+
+    def __init__(self, columns: list[str], values: Any) -> None:
+        self._values = values
+        self._map = {col: values[idx] for idx, col in enumerate(columns)}
+
+    def __getitem__(self, key: Any) -> Any:
+        if isinstance(key, int):
+            return self._values[key]
+        return self._map[key]
+
+    def keys(self) -> Any:
+        return list(self._map.keys())
+
+    def __contains__(self, key: Any) -> bool:
+        return key in self._map
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._map.get(key, default)
+
+
+class _LibsqlCursor:
+    def __init__(self, cursor: Any) -> None:
+        self._cursor = cursor
+
+    def _columns(self) -> list[str]:
+        return [d[0] for d in (self._cursor.description or [])]
+
+    def fetchone(self) -> Any:
+        row = self._cursor.fetchone()
+        return None if row is None else _LibsqlRow(self._columns(), row)
+
+    def fetchall(self) -> list[Any]:
+        columns = self._columns()
+        return [_LibsqlRow(columns, row) for row in self._cursor.fetchall()]
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._cursor, name)
+
+
+class _LibsqlConn:
+    """Adapter so a libsql connection works with `with conn:` and returns rows
+    that support name and index access — the sqlite3 behaviours this code uses."""
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    def execute(self, *args: Any, **kwargs: Any) -> _LibsqlCursor:
+        return _LibsqlCursor(self._conn.execute(*args, **kwargs))
+
+    def __enter__(self) -> "_LibsqlConn":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        try:
+            if exc_type is None:
+                self._conn.commit()
+            else:
+                try:
+                    self._conn.rollback()
+                except Exception:  # noqa: BLE001
+                    pass
+        finally:
+            try:
+                self._conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return False
+
+    def commit(self) -> Any:
+        return self._conn.commit()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+
 def _connect():
     global _ACTIVE_BACKEND, _TURSO_ERROR
     turso_url = os.environ.get("TURSO_DATABASE_URL", "")
@@ -54,13 +146,9 @@ def _connect():
     if turso_url:
         try:
             import libsql_experimental as libsql  # type: ignore[import]
-            conn = libsql.connect(database=turso_url, auth_token=turso_token)
-            # libsql's connection may not accept a sqlite3.Row row_factory; don't
-            # let that abandon Turso and silently lose every write to ephemeral.
-            try:
-                conn.row_factory = sqlite3.Row
-            except Exception:  # noqa: BLE001
-                pass
+            raw = libsql.connect(database=turso_url, auth_token=turso_token)
+            # Wrap so `with conn:` and row["col"]/row[0] access work like sqlite3.
+            conn = _LibsqlConn(raw)
             _init(conn)
             _ACTIVE_BACKEND = "turso"
             _TURSO_ERROR = ""
