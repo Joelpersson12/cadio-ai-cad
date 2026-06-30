@@ -54,9 +54,31 @@ def is_new_model_prompt(prompt: str) -> bool:
     return any(re.search(pattern, text) for pattern in CREATE_PATTERNS)
 
 
+# An explicit dimension reference — "120mm high", "make it 250 tall", "width
+# 100", "120x80x250". Used so a resize request on the CURRENT model is treated
+# as an edit instead of a fresh generation (which previously searched sources
+# and, ironically, returned a literal 120mm fan for "make it 120mm high").
+_DIMENSION_HINT = re.compile(
+    r"\b\d+(?:\.\d+)?\s*(?:mm|cm|millimeters?|millimetres?)?\s*"
+    r"(?:tall|taller|high|height|wide|wider|width|deep|depth|thick|thickness|long|length|"
+    r"h[oö]g|h[oö]gt|h[oö]jd|bred|brett|bredd|djup|djupt|tjock|tjockt|tjocklek|l[aå]ng|l[aå]ngt|l[aä]ngd)\b"
+    r"|\b(?:tall|high|height|wide|width|deep|depth|thick|thickness|long|length|"
+    r"h[oö]gd?|h[oö]jd|bred|bredd|djup|tjock|tjocklek|l[aå]ng|l[aä]ngd)\b"
+    r"\s*(?:of|to|at|is|=|:|av|till|p[aå])?\s*\d+(?:\.\d+)?"
+    r"|\b\d+(?:\.\d+)?\s*[x×*]\s*\d+(?:\.\d+)?(?:\s*[x×*]\s*\d+(?:\.\d+)?)?\s*(?:mm|cm)?\b"
+)
+
+
+def _mentions_explicit_dimension(text: str) -> bool:
+    return bool(_DIMENSION_HINT.search(text))
+
+
 def is_edit_only_prompt(prompt: str) -> bool:
     text = _prompt_match_text(prompt)
-    has_edit = any(re.search(pattern, text) for pattern in EDIT_PATTERNS)
+    has_edit = (
+        any(re.search(pattern, text) for pattern in EDIT_PATTERNS)
+        or _mentions_explicit_dimension(text)
+    )
     return has_edit and not is_new_model_prompt(text)
 
 
