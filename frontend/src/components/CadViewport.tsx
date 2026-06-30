@@ -745,6 +745,7 @@ interface CadViewportProps {
     objectIdOverride?: string,
     targetOverride?: string,
   ) => void;
+  onDeleteSelected?: () => void;
   mobileMode?: boolean;
   showMeasurements?: boolean;
 }
@@ -924,6 +925,7 @@ export default function CadViewport({
   onSetSketchHeight,
   onSetOperationAmount,
   onApplyExpertOperation,
+  onDeleteSelected,
   mobileMode = false,
   showMeasurements = false,
 }: CadViewportProps) {
@@ -1089,6 +1091,15 @@ export default function CadViewport({
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            disabled={!expertMode || (!selectedObjectId && selectedObjectIds.length === 0)}
+            title="Delete the selected part(s) from the build plate"
+            onClick={() => onDeleteSelected?.()}
+            className="mt-1 w-full rounded-lg border border-red-500/25 py-2 text-[11px] font-bold tracking-wide text-red-400/80 transition-all hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30"
+          >
+            Delete selected part{selectedObjectIds.length > 1 ? "s" : ""}
+          </button>
         </div>
       </div>
 

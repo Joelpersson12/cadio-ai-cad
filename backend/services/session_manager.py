@@ -7,6 +7,7 @@ this module so locking is centralized.
 
 from __future__ import annotations
 
+import os
 import uuid
 import math
 import re
@@ -1185,7 +1186,16 @@ def _try_replace_with_imported_source_model(
 
     ranked_assemblies: list[tuple[float, Any, list[dict[str, Any]], list[dict[str, Any]]]] = []
     ranked_candidates: list[tuple[float, Any, list[dict[str, Any]], dict[str, Any]]] = []
-    for example_index, source_example_obj in enumerate(examples[:8]):
+    # File resolution + STL fetch is a network round-trip per candidate, run
+    # sequentially — the dominant cost of a generation. Cap how many top-ranked
+    # results we resolve so a search that returns many hits doesn't stall. The
+    # examples are already relevance-ranked, so the best match is virtually
+    # always within the first few. Tunable via SOURCE_IMPORT_MAX_CANDIDATES.
+    try:
+        _max_candidates = max(1, int(os.environ.get("SOURCE_IMPORT_MAX_CANDIDATES", "4")))
+    except (TypeError, ValueError):
+        _max_candidates = 4
+    for example_index, source_example_obj in enumerate(examples[:_max_candidates]):
         source_files_obj = _rank_source_files(
             resolve_source_model_files(source_example_obj.url, source_example_obj.source, limit=24),
             prompt,
