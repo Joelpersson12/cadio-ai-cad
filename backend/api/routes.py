@@ -181,7 +181,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-30T-resize-routes-to-edit"
+BUILD_MARKER = "2026-06-30T-libsql-conn-adapter"
 
 
 @router.get("/api/debug/version")
