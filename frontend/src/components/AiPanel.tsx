@@ -347,6 +347,17 @@ const QUICK_COMMANDS = [
   "Optimize for FDM",
 ];
 
+// One-click refinements shown above the prompt once a model is on the plate.
+// They teach the core interaction (edit by typing) by example — each chip is
+// just a prompt, so users see exactly what they could have typed themselves.
+const QUICK_EDIT_CHIPS: Array<{ label: string; prompt: string }> = [
+  { label: "◐ Bigger", prompt: "Make it 20 percent bigger" },
+  { label: "◑ Smaller", prompt: "Make it 20 percent smaller" },
+  { label: "▢ Round edges", prompt: "Round all edges" },
+  { label: "◎ Mount holes", prompt: "Add 4 mounting holes" },
+  { label: "▦ Stronger", prompt: "Make it thicker and stronger" },
+];
+
 const FILTER_CHIPS = [
   "wall mount", "desk mount", "no supports", "flat print",
   "Gridfinity", "Pegboard", "counterbore", "strong",
@@ -372,6 +383,13 @@ export default function AiPanel({ floating = false }: { floating?: boolean }) {
       ? actions.map(String).filter((a) => !isTechnicalAction(a)).slice(0, 3)
       : [];
   }, [editHistory]);
+
+  // Pressing "/" anywhere (outside an input) jumps to the prompt box.
+  useEffect(() => {
+    const focusPrompt = () => textareaRef.current?.focus();
+    window.addEventListener("cadio-focus-prompt", focusPrompt);
+    return () => window.removeEventListener("cadio-focus-prompt", focusPrompt);
+  }, []);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -427,6 +445,22 @@ export default function AiPanel({ floating = false }: { floating?: boolean }) {
   if (floating) {
     return (
       <div className="flex flex-col">
+        {/* One-click refinements — visible as soon as a model exists */}
+        {objects.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto border-t border-cadio-border/30 px-3 pt-2.5 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {QUICK_EDIT_CHIPS.map((chip) => (
+              <button
+                key={chip.label}
+                onClick={() => void run(chip.prompt, false)}
+                disabled={isLoading}
+                title={`Runs: “${chip.prompt}” — you can type edits like this too`}
+                className="shrink-0 rounded-full border border-cadio-border/50 bg-cadio-bg/60 px-3 py-1 text-[11px] text-cadio-muted transition-all hover:border-cadio-accent/40 hover:text-cadio-accent disabled:opacity-30"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        )}
         {/* Filters toggle */}
         <div className="border-t border-cadio-border/30 px-4 py-2">
           <button
