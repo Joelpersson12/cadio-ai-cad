@@ -617,6 +617,8 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
     prefetchDemoModels,
     notice,
     setNotice,
+    undo,
+    redo,
   } = useCadStore();
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
@@ -710,14 +712,36 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      // Ctrl/Cmd+Z → undo, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y → redo (the CAD
+      // muscle-memory shortcuts; every edit is recoverable).
+      if ((e.ctrlKey || e.metaKey) && !typing) {
+        const k = e.key.toLowerCase();
+        if (k === "z") {
+          e.preventDefault();
+          void (e.shiftKey ? redo() : undo());
+          return;
+        }
+        if (k === "y") {
+          e.preventDefault();
+          void redo();
+          return;
+        }
+      }
+      // "/" jumps to the prompt box, like search on YouTube/GitHub.
+      if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("cadio-focus-prompt"));
+        return;
+      }
       if (e.key !== "Delete" && e.key !== "Backspace") return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (typing) return;
       if (!selectedObjectId) return;
       void onDeleteObject();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [selectedObjectId, onDeleteObject]);
+  }, [selectedObjectId, onDeleteObject, undo, redo]);
 
   useEffect(() => {
     const shared = readProjectShareFromHash();
