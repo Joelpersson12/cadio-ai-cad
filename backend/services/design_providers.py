@@ -647,16 +647,41 @@ def resolve_makerworld_model_files(model_url: str, limit: int = 20) -> list[Sour
     return list(result)
 
 
+_RESOLVE_CACHE: dict[str, tuple[float, list[SourceModelFile]]] = {}
+_RESOLVE_CACHE_TTL = 600.0  # seconds; file lists on these platforms rarely change
+
+
 def resolve_source_model_files(model_url: str, source: str, limit: int = 20) -> list[SourceModelFile]:
-    """Resolve a model's importable files, dispatching by source platform."""
+    """Resolve a model's importable files, dispatching by source platform.
+
+    Results are cached for a few minutes so regenerating the same prompt or
+    cycling model variants doesn't re-pay the network round-trip per model.
+    Only non-empty results are cached, so a transient provider failure is
+    retried on the next call.
+    """
     src = (source or "").strip().lower()
+    cache_key = f"{src}|{model_url}"
+    now = time.monotonic()
+    cached = _RESOLVE_CACHE.get(cache_key)
+    if cached is not None:
+        ts, files = cached
+        if now - ts < _RESOLVE_CACHE_TTL:
+            return files[:limit]
+        _RESOLVE_CACHE.pop(cache_key, None)
+
     if src == "printables":
-        return resolve_printables_model_files(model_url, limit)
-    if src == "thingiverse":
-        return resolve_thingiverse_model_files(model_url, limit)
-    if src == "makerworld":
-        return resolve_makerworld_model_files(model_url, limit)
-    return []
+        files = resolve_printables_model_files(model_url, limit)
+    elif src == "thingiverse":
+        files = resolve_thingiverse_model_files(model_url, limit)
+    elif src == "makerworld":
+        files = resolve_makerworld_model_files(model_url, limit)
+    else:
+        return []
+    if files:
+        if len(_RESOLVE_CACHE) > 256:
+            _RESOLVE_CACHE.clear()
+        _RESOLVE_CACHE[cache_key] = (now, files)
+    return files
 
 
 _SOURCE_WEIGHTS = {
