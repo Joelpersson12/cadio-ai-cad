@@ -501,7 +501,29 @@ function isModelBusyStatus(status: string) {
   return /applying|loading|sketching|generating|importing/i.test(status || "");
 }
 
+// Staged progress messages shown while a generation runs. The backend does one
+// long request, so we advance these on a timer — telling the user what Cadio is
+// actually doing makes the same wait feel much shorter than a static label.
+const GENERATION_STAGES: Array<[number, string]> = [
+  [0, "Searching Printables, Thingiverse & MakerWorld…"],
+  [5, "Ranking the best matches for your prompt…"],
+  [10, "Downloading the model files…"],
+  [18, "Importing real geometry onto your plate…"],
+  [28, "Refining mesh and dimensions…"],
+  [40, "Almost there — finalizing your model…"],
+];
+
 function ModelLoadingOverlay({ status }: { status: string }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed((Date.now() - started) / 1000), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const isGeneration = /generating/i.test(status || "");
+  const staged = isGeneration
+    ? GENERATION_STAGES.reduce((msg, [at, text]) => (elapsed >= at ? text : msg), GENERATION_STAGES[0][1])
+    : status || "Building your model…";
   return (
     <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-cadio-bg/45 backdrop-blur-[3px]">
       <style>{`
@@ -537,7 +559,7 @@ function ModelLoadingOverlay({ status }: { status: string }) {
             <span style={{ animation: "cadio-dots 1.4s infinite", animationDelay: "0.2s" }}>.</span>
             <span style={{ animation: "cadio-dots 1.4s infinite", animationDelay: "0.4s" }}>.</span>
           </p>
-          <p className="max-w-xs text-xs text-white/45">{status || "Building your model…"}</p>
+          <p className="max-w-xs text-xs text-white/45">{staged}</p>
           {/* Shimmer bar */}
           <div className="mt-1 h-1 w-44 overflow-hidden rounded-full bg-white/8">
             <div className="h-full w-1/3 rounded-full" style={{ background: "linear-gradient(90deg, transparent, #2bb8dc, transparent)", animation: "cadio-shimmer 1.3s ease-in-out infinite" }} />

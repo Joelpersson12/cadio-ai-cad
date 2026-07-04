@@ -1189,18 +1189,35 @@ def _try_replace_with_imported_source_model(
 
     ranked_assemblies: list[tuple[float, Any, list[dict[str, Any]], list[dict[str, Any]]]] = []
     ranked_candidates: list[tuple[float, Any, list[dict[str, Any]], dict[str, Any]]] = []
-    # File resolution + STL fetch is a network round-trip per candidate, run
-    # sequentially — the dominant cost of a generation. Cap how many top-ranked
-    # results we resolve so a search that returns many hits doesn't stall. The
-    # examples are already relevance-ranked, so the best match is virtually
-    # always within the first few. Tunable via SOURCE_IMPORT_MAX_CANDIDATES.
+    # File resolution is a network round-trip per candidate — the dominant cost
+    # of a generation. Cap how many top-ranked results we resolve (the examples
+    # are already relevance-ranked, so the best match is virtually always within
+    # the first few) and resolve them all IN PARALLEL, so the wait is the
+    # slowest single provider rather than the sum of all of them.
+    # Tunable via SOURCE_IMPORT_MAX_CANDIDATES.
     try:
         _max_candidates = max(1, int(os.environ.get("SOURCE_IMPORT_MAX_CANDIDATES", "4")))
     except (TypeError, ValueError):
         _max_candidates = 4
-    for example_index, source_example_obj in enumerate(examples[:_max_candidates]):
+    top_examples = examples[:_max_candidates]
+    resolved_files: dict[int, list[Any]] = {}
+    if top_examples:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _resolve_one(idx_example: tuple[int, Any]) -> tuple[int, list[Any]]:
+            idx, ex = idx_example
+            try:
+                return idx, resolve_source_model_files(ex.url, ex.source, limit=24)
+            except Exception:  # noqa: BLE001 — one slow/broken provider must not sink the rest
+                return idx, []
+
+        with ThreadPoolExecutor(max_workers=len(top_examples)) as _pool:
+            for idx, files in _pool.map(_resolve_one, enumerate(top_examples)):
+                resolved_files[idx] = files
+
+    for example_index, source_example_obj in enumerate(top_examples):
         source_files_obj = _rank_source_files(
-            resolve_source_model_files(source_example_obj.url, source_example_obj.source, limit=24),
+            resolved_files.get(example_index, []),
             prompt,
             preferred_slots,
         )
