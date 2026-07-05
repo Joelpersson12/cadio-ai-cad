@@ -26,9 +26,10 @@ jobs:
           from huggingface_hub import HfApi
 
           api = HfApi(token=os.environ["HF_TOKEN"])
+          repo_id = "Persson12/Cadio-ai-cad"
           api.upload_folder(
               folder_path=".",
-              repo_id="Persson12/Cadio-ai-cad",
+              repo_id=repo_id,
               repo_type="space",
               ignore_patterns=[
                   ".git",
@@ -41,4 +42,16 @@ jobs:
               ],
           )
           print("Upload complete!")
+
+          # Uploading changed files automatically triggers an incremental HF
+          # rebuild. The Dockerfile copies backend/ and main.py in *late* layers
+          # (after the heavy `pip install`), so any backend change invalidates
+          # those COPY layers and the new code lands in the image — while the
+          # expensive CadQuery/OpenCascade pip layer stays cached.
+          #
+          # We deliberately do NOT force `factory_reboot=True` here: a full
+          # no-cache rebuild re-downloads the large cadquery-ocp wheel every push
+          # and can exceed HF's build limits/timeouts, failing the build and
+          # leaving the previous (stale) container running. The incremental
+          # rebuild is both faster and far more reliable.
           EOF

@@ -7,12 +7,13 @@ this module so locking is centralized.
 
 from __future__ import annotations
 
+import os
 import uuid
 import math
 import re
 from copy import deepcopy
 from datetime import datetime, timezone
-from threading import RLock
+from threading import RLock, Thread
 from typing import Any
 
 from backend.models.schema import Feature, Transform
@@ -327,8 +328,11 @@ def prepare_generation_target(session: Session, name: str = "part_1") -> CadObje
         _remove_object_direct(session, oid)
 
     # A fresh generation starts a new model — drop any source-file picker state
-    # so a stale file list from a previous import doesn't linger.
+    # so a stale file list from a previous import doesn't linger, and clear the
+    # background-prefetched mesh cache so meshes from the previous model can't
+    # leak into the new one.
     session["source_files"] = []
+    session["_source_mesh_cache"] = {}
 
     obj = create_object(name)
     obj["generated_seed"] = True
@@ -1185,9 +1189,35 @@ def _try_replace_with_imported_source_model(
 
     ranked_assemblies: list[tuple[float, Any, list[dict[str, Any]], list[dict[str, Any]]]] = []
     ranked_candidates: list[tuple[float, Any, list[dict[str, Any]], dict[str, Any]]] = []
-    for example_index, source_example_obj in enumerate(examples[:8]):
+    # File resolution is a network round-trip per candidate — the dominant cost
+    # of a generation. Cap how many top-ranked results we resolve (the examples
+    # are already relevance-ranked, so the best match is virtually always within
+    # the first few) and resolve them all IN PARALLEL, so the wait is the
+    # slowest single provider rather than the sum of all of them.
+    # Tunable via SOURCE_IMPORT_MAX_CANDIDATES.
+    try:
+        _max_candidates = max(1, int(os.environ.get("SOURCE_IMPORT_MAX_CANDIDATES", "4")))
+    except (TypeError, ValueError):
+        _max_candidates = 4
+    top_examples = examples[:_max_candidates]
+    resolved_files: dict[int, list[Any]] = {}
+    if top_examples:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _resolve_one(idx_example: tuple[int, Any]) -> tuple[int, list[Any]]:
+            idx, ex = idx_example
+            try:
+                return idx, resolve_source_model_files(ex.url, ex.source, limit=24)
+            except Exception:  # noqa: BLE001 — one slow/broken provider must not sink the rest
+                return idx, []
+
+        with ThreadPoolExecutor(max_workers=len(top_examples)) as _pool:
+            for idx, files in _pool.map(_resolve_one, enumerate(top_examples)):
+                resolved_files[idx] = files
+
+    for example_index, source_example_obj in enumerate(top_examples):
         source_files_obj = _rank_source_files(
-            resolve_source_model_files(source_example_obj.url, source_example_obj.source, limit=24),
+            resolved_files.get(example_index, []),
             prompt,
             preferred_slots,
         )
@@ -1235,7 +1265,7 @@ def _try_replace_with_imported_source_model(
     # plate. Users choose additional parts (or "All parts") from the picker.
     ranked_candidates.sort(key=lambda item: item[0], reverse=True)
     for _score, source_example_obj, source_files, candidate in ranked_candidates:
-        imported_shape = _try_import_source_stl(candidate, prefer_flat=prefer_flat)
+        imported_shape = _import_source_stl_cached(session, candidate, prefer_flat)
         if imported_shape is None:
             continue
 
@@ -1253,6 +1283,13 @@ def _try_replace_with_imported_source_model(
         session["source_info"] = [source_example]
         session["source_files"] = _build_source_file_options(
             source_files, prompt, preferred_slots, session=session, active_id=candidate.get("id")
+        )
+        # The best-matching file is now on the plate, so the user sees the model
+        # immediately. Quietly download + parse this model's other files in the
+        # background so switching between them is instant — without making the
+        # user wait for the initial generation.
+        _spawn_source_file_prefetch(
+            session.get("session_id", ""), source_files, prompt, candidate.get("id")
         )
         selected_file_name = candidate.get("name")
         options_n = len([o for o in session["source_files"] if o.get("id") != "__all__"])
@@ -1298,6 +1335,21 @@ def _try_replace_with_imported_source_model(
             f"source-parts: {file_names}",
             f"imported real multi-part {_source_label(source_example_obj.source)} assembly as editable parts",
         ], source_objects[0]
+
+    # No STL imported as scene geometry (parse/fetch/signed-link failures are the
+    # most fragile step), but if the search DID find matching models with real
+    # downloadable files, still surface attribution + the file picker as a *side
+    # effect* on the session. We deliberately return EMPTY actions so the caller
+    # falls through to normal AI generation (the seed becomes a real model), while
+    # the Source button + "Change model" picker now appear and the user can pick /
+    # retry a source file. Without this the buttons silently vanish whenever the
+    # live import step fails even though we found the source.
+    if ranked_candidates:
+        _score, source_example_obj, source_files, _candidate = ranked_candidates[0]
+        session["source_info"] = [source_example_obj.to_dict()]
+        session["source_files"] = _build_source_file_options(
+            source_files, prompt, preferred_slots, session=session, active_id=None
+        )
 
     return [], None
 
@@ -1399,6 +1451,66 @@ def _build_source_file_options(
     return options
 
 
+def _import_source_stl_cached(session: Session, candidate: dict[str, Any], prefer_flat: bool) -> TriMesh | None:
+    """Import a source file's STL, reusing a background-prefetched mesh if one is
+    ready. The prefetch downloads + parses the model's other files right after the
+    first one is shown, so switching between files is instant. Returns a deepcopy
+    so the cached mesh is never mutated by downstream edits."""
+    fid = str(candidate.get("id") or "")
+    cache = session.get("_source_mesh_cache")
+    if fid and isinstance(cache, dict) and fid in cache:
+        return deepcopy(cache[fid])
+    shape = _try_import_source_stl(candidate, prefer_flat=prefer_flat)
+    if shape is not None and fid:
+        session.setdefault("_source_mesh_cache", {})[fid] = deepcopy(shape)
+    return shape
+
+
+def _spawn_source_file_prefetch(
+    session_id: str,
+    source_files: list[dict[str, Any]],
+    prompt: str,
+    skip_file_id: Any,
+) -> None:
+    """Background-download + parse the model's remaining importable files into the
+    session mesh cache, so the user sees the first model immediately and the other
+    files load silently (and switch instantly). Best-effort; never blocks."""
+    prefer_flat = _prefer_flat_for_prompt(prompt)
+    pending = [
+        item
+        for item in source_files
+        if _source_file_is_importable(item) and str(item.get("id")) != str(skip_file_id)
+    ][:6]
+    if not session_id or not pending:
+        return
+
+    def _work() -> None:
+        for cand in pending:
+            fid = str(cand.get("id") or "")
+            if not fid:
+                continue
+            with _lock:
+                sess = _sessions.get(session_id)
+                if sess is None:
+                    return
+                cache = sess.get("_source_mesh_cache")
+                if isinstance(cache, dict) and fid in cache:
+                    continue
+            try:
+                shape = _try_import_source_stl(cand, prefer_flat=prefer_flat)
+            except Exception:  # noqa: BLE001 — prefetch must never raise
+                continue
+            if shape is None:
+                continue
+            with _lock:
+                sess = _sessions.get(session_id)
+                if sess is None:
+                    return
+                sess.setdefault("_source_mesh_cache", {})[fid] = shape
+
+    Thread(target=_work, name="cadio-source-prefetch", daemon=True).start()
+
+
 def select_source_file(session: Session, file_id: str, mode: str = "swap") -> list[str]:
     """Place source-model parts on the build plate.
 
@@ -1469,7 +1581,7 @@ def select_source_file(session: Session, file_id: str, mode: str = "swap") -> li
     # Always places another copy beside the existing parts — so you can have two
     # (or more) of the same file. Removal is the separate "remove" action.
     if mode == "add":
-        shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
+        shape = _import_source_stl_cached(session, candidate, _prefer_flat_for_prompt(prompt))
         if shape is None:
             return [f"could not import {_source_file_name(candidate)}"]
         source_obj = _create_imported_source_object(prompt, shape, source_example, source_files, candidate)
@@ -1491,7 +1603,7 @@ def select_source_file(session: Session, file_id: str, mode: str = "swap") -> li
     already_only = len(existing) == 1 and placed_obj is not None
     if already_only:
         return [f"source-files: {_source_file_name(candidate)} is already on the plate"]
-    shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
+    shape = _import_source_stl_cached(session, candidate, _prefer_flat_for_prompt(prompt))
     if shape is None:
         return [f"could not import {_source_file_name(candidate)}"]
     source_obj = _create_imported_source_object(prompt, shape, source_example, source_files, candidate)
@@ -1632,7 +1744,7 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
             if candidate.get("id") not in {item.get("id") for item in candidates}:
                 candidates.append(candidate)
         for candidate in candidates:
-            shape = _try_import_source_stl(candidate, prefer_flat=_prefer_flat_for_prompt(prompt))
+            shape = _import_source_stl_cached(session, candidate, _prefer_flat_for_prompt(prompt))
             if shape is None:
                 continue
             source_obj = _create_imported_source_object(
@@ -3154,7 +3266,11 @@ def rebuild_manual_object(obj: CadObject) -> None:
     elif primitive == "source_battery_holder":
         obj["shape"] = _make_source_battery_holder_mesh(params)
     elif primitive == "imported_source_mesh":
-        obj["shape"] = _apply_mesh_hole_cuts(_stable_source_shape(obj), params)
+        # Rebuild from the pristine source mesh and re-apply BOTH hole cuts and
+        # rectangular slot cutouts (Cut slot). Without the rect cutouts the
+        # "Cut slot" tool silently did nothing on imported/raw meshes.
+        shape = _apply_mesh_hole_cuts(_stable_source_shape(obj), params)
+        obj["shape"] = _apply_mesh_rect_cutouts(shape, params)
     elif primitive == "text_label":
         label = _sanitize_label_text(str(obj.get("text_label", "TEXT")))
         obj["shape"] = _make_block_text_mesh(
@@ -4070,10 +4186,91 @@ def add_hole_to_object(obj: CadObject, center: list[float], diameter: float) -> 
     return [f"cut hole diameter {diameter}mm"]
 
 
+def _split_mesh_by_line(session: Session, obj: CadObject, center: list[float], delta: list[float]) -> list[str]:
+    """Clip any TriMesh object along a line into two new bodies."""
+    shape = obj.get("shape")
+    if not isinstance(shape, TriMesh) or not shape.verts:
+        return ["split skipped: no mesh available"]
+    if len(center) < 2 or len(delta) < 2:
+        return ["split skipped: missing line"]
+
+    # Backend mesh coords: mesh X = world X (scale[0]), mesh Y = world Z (scale[1]).
+    # This mirrors the same transform used by cut_object_by_line for _apply_mesh_rect_cutouts.
+    transform: Transform = obj["transform"]
+    sx = max(0.001, float(transform.scale[0]))
+    sy = max(0.001, float(transform.scale[1]))
+
+    local_cx = (float(center[0]) - float(transform.position[0])) / sx
+    local_cy = (float(center[1]) - float(transform.position[1])) / sy
+
+    ldx = float(delta[0]) / sx
+    ldy = float(delta[1]) / sy
+    local_len = math.sqrt(ldx * ldx + ldy * ldy)
+    if local_len < 0.001:
+        return ["split skipped: line too short in local space"]
+
+    # Normal perpendicular to the line direction in local XY plane (vertical cut).
+    nx = -ldy / local_len  # mesh v[0] component
+    ny = ldx / local_len   # mesh v[1] component
+    nz = 0.0               # mesh v[2] (height) — no tilt
+    d = -(nx * local_cx + ny * local_cy)
+
+    half1 = _plane_clip_trimesh(shape, nx, ny, nz, d, keep_sign=1)
+    half2 = _plane_clip_trimesh(shape, nx, ny, nz, d, keep_sign=-1)
+
+    if not half1.verts or not half2.verts:
+        return ["split skipped: line didn't cross the object"]
+
+    obj_name = obj.get("name", "part")
+    transform_obj: Transform = obj["transform"]
+    for idx, half in enumerate([half1, half2], start=1):
+        part = create_manual_object(f"{obj_name}_part_{idx}", half)
+        # Treat each half as a raw-mesh body (like an imported mesh) so later
+        # Cut slot / Make hole / resize edit the actual mesh instead of
+        # rebuild_manual_object regenerating a box from the default parameters.
+        part["primitive"] = "imported_source_mesh"
+        part["imported_source_mesh"] = True
+        part["source_original_shape"] = deepcopy(half)
+        dims = _mesh_dimensions(half)
+        part["parameters"].update({
+            "width": max(1.0, dims["width"]),
+            "depth": max(1.0, dims["depth"]),
+            "height": max(0.5, dims["height"]),
+        })
+        part["source_dimensions"] = {
+            "width": max(1.0, dims["width"]),
+            "depth": max(1.0, dims["depth"]),
+            "height": max(0.5, dims["height"]),
+        }
+        # Carry over source attribution so split parts still show Source/license.
+        if isinstance(obj.get("source_model"), dict):
+            part["source_model"] = deepcopy(obj["source_model"])
+        part["transform"] = Transform(
+            position=list(transform_obj.position),
+            rotation=list(transform_obj.rotation),
+            scale=list(transform_obj.scale),
+        )
+        part["material"] = obj.get("material", "PLA")
+        part["color"] = obj.get("color", "#b8babd")
+        add_object(session, part)
+
+    object_id = obj["id"]
+    del session["objects"][object_id]
+    session["object_order"] = [oid for oid in session["object_order"] if oid != object_id]
+    session["selected_object_id"] = session["object_order"][-1] if session["object_order"] else ""
+    return [f"split '{obj_name}' into 2 bodies"]
+
+
 def split_object_by_line(session: Session, obj: CadObject, center: list[float], delta: list[float]) -> list[str]:
-    """Split a manual rectangular primitive into two movable bodies."""
+    """Split a CAD object into two bodies along a drawn line.
+
+    For parametric rectangle sketches, the split is done analytically so
+    both halves remain resizable. For any other object (AI-generated STL,
+    imported mesh, cylinder, etc.) the existing TriMesh is clipped along a
+    vertical plane aligned with the drawn line.
+    """
     if not obj.get("manual") or obj.get("primitive") != "rectangle":
-        return ["split skipped: selected object is not a sketched rectangle"]
+        return _split_mesh_by_line(session, obj, center, delta)
     if len(center) < 2 or len(delta) < 2:
         return ["split skipped: missing line"]
 
@@ -4177,6 +4374,38 @@ def _plane_clip_trimesh(
     return result
 
 
+def _subtract_box_column(mesh: TriMesh, x0: float, x1: float, y0: float, y1: float) -> TriMesh:
+    """Remove the vertical rectangular column x∈[x0,x1], y∈[y0,y1] (all Z) from a
+    mesh — a real geometric Cut slot that works on coarse meshes too.
+
+    Unlike a centroid test (which removes nothing when no triangle centroid
+    happens to fall inside the slot), this clips the mesh against the four slot
+    boundary planes and keeps only the material OUTSIDE the column: the left
+    slab (x≤x0), the right slab (x≥x1), and the front/back slabs within the slot
+    width (y≤y0 / y≥y1). Uses the same plane clipper as Split, so it lands in the
+    exact frame the user drew in.
+    """
+    if not mesh.verts or x1 <= x0 or y1 <= y0:
+        return mesh
+
+    left = _plane_clip_trimesh(mesh, 1.0, 0.0, 0.0, -x0, keep_sign=-1)   # x ≤ x0
+    right = _plane_clip_trimesh(mesh, 1.0, 0.0, 0.0, -x1, keep_sign=1)   # x ≥ x1
+    mid = _plane_clip_trimesh(mesh, 1.0, 0.0, 0.0, -x0, keep_sign=1)     # x ≥ x0
+    mid = _plane_clip_trimesh(mid, 1.0, 0.0, 0.0, -x1, keep_sign=-1)     # x ≤ x1
+    front = _plane_clip_trimesh(mid, 0.0, 1.0, 0.0, -y0, keep_sign=-1)   # y ≤ y0
+    back = _plane_clip_trimesh(mid, 0.0, 1.0, 0.0, -y1, keep_sign=1)     # y ≥ y1
+
+    result = TriMesh()
+    for part in (left, right, front, back):
+        if not part.verts:
+            continue
+        base = len(result.verts)
+        result.verts.extend(part.verts)
+        for (a, b, c) in part.tris:
+            result.tris.append((a + base, b + base, c + base))
+    return result if result.verts else mesh
+
+
 def cut_object_by_line(
     session: Session,
     obj: CadObject,
@@ -4186,9 +4415,9 @@ def cut_object_by_line(
     """Cut a rectangular slot of material out of the selected object.
 
     The "Cut slot" tool removes the dragged area entirely (a through-pocket),
-    rather than splitting the body into two parts. For parametric bodies the cut
-    is stored as a custom cutout so it survives later resizes; raw meshes are cut
-    in place.
+    rather than splitting the body into two parts. For parametric primitives the
+    cut is stored as a custom cutout so it survives later resizes; mesh bodies
+    (imported, split parts, raw/template) are cut geometrically in place.
     """
     width = abs(float(size_xy[0])) if len(size_xy) > 0 else 0.0
     depth = abs(float(size_xy[1])) if len(size_xy) > 1 else 0.0
@@ -4208,20 +4437,33 @@ def cut_object_by_line(
     local_d = depth / sy
 
     params = obj["parameters"]
-    index = max(0, int(params.get("custom_cutout_count", 0.0)))
-    params[f"custom_cutout_{index}_x"] = local_x
-    params[f"custom_cutout_{index}_y"] = local_y
-    params[f"custom_cutout_{index}_width"] = local_w
-    params[f"custom_cutout_{index}_depth"] = local_d
-    params["custom_cutout_count"] = float(index + 1)
+    is_mesh_body = (
+        obj.get("imported_source_mesh")
+        or obj.get("primitive") in ("imported_source_mesh", "manual", None, "")
+        or not obj.get("manual")
+    )
 
-    if obj.get("manual"):
-        rebuild_manual_object(obj)
-    elif obj.get("primitive") == "imported_source_mesh" or obj.get("imported_source_mesh"):
-        rebuild_manual_object(obj)
+    if is_mesh_body:
+        # Imported / split / raw mesh — geometrically remove the slot column from
+        # the current mesh so it lands exactly where the user drew it, then bake
+        # the result so a later rebuild (resize) keeps the cut instead of
+        # re-growing a solid body.
+        x0, x1 = local_x - local_w / 2.0, local_x + local_w / 2.0
+        y0, y1 = local_y - local_d / 2.0, local_y + local_d / 2.0
+        cut_shape = _subtract_box_column(shape, x0, x1, y0, y1)
+        obj["shape"] = shift_mesh_to_buildplate(cut_shape)
+        if obj.get("imported_source_mesh") or obj.get("primitive") == "imported_source_mesh":
+            obj["source_original_shape"] = deepcopy(obj["shape"])
     else:
-        # Raw/template mesh body — cut the current mesh directly.
-        obj["shape"] = shift_mesh_to_buildplate(_apply_mesh_rect_cutouts(shape, params))
+        # Parametric primitive — store the cutout so rebuild re-applies it and it
+        # survives later dimension changes.
+        index = max(0, int(params.get("custom_cutout_count", 0.0)))
+        params[f"custom_cutout_{index}_x"] = local_x
+        params[f"custom_cutout_{index}_y"] = local_y
+        params[f"custom_cutout_{index}_width"] = local_w
+        params[f"custom_cutout_{index}_depth"] = local_d
+        params["custom_cutout_count"] = float(index + 1)
+        rebuild_manual_object(obj)
 
     obj.setdefault("operation_history", []).append(
         {"operation": "cut_slot", "x": local_x, "y": local_y, "width": local_w, "depth": local_d}

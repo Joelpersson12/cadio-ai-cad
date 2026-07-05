@@ -152,6 +152,18 @@ const CURRENCY: Record<Language, { pro: string; unlimited: string; period: strin
   pt: { pro: "9,99 €", unlimited: "24,99 €", period: "/mês", taxNote: "IVA incluído" },
 };
 
+// Reassurance microcopy under the hero CTAs — makes the free value explicit so
+// visitors don't assume Cadio is paywalled.
+const FREE_NOTE: Record<Language, string> = {
+  en: "Free to use — no credit card. Generate & edit unlimited; 3 free downloads to start.",
+  sv: "Gratis att använda — inget kort. Generera & redigera obegränsat; 3 gratis nedladdningar.",
+  es: "Gratis — sin tarjeta. Genera y edita sin límite; 3 descargas gratis para empezar.",
+  fr: "Gratuit — sans carte. Générez et modifiez sans limite ; 3 téléchargements offerts.",
+  it: "Gratis — senza carta. Genera e modifica senza limiti; 3 download gratuiti per iniziare.",
+  de: "Kostenlos — keine Karte. Unbegrenzt generieren & bearbeiten; 3 Gratis-Downloads zum Start.",
+  pt: "Grátis — sem cartão. Gere e edite sem limites; 3 downloads grátis para começar.",
+};
+
 // ─── ACCENT COLOR ───────────────────────────────────────────────────────────
 const ACCENT = "#2bb8dc";
 const ACCENT_DIM = "rgba(43,184,220,";
@@ -600,151 +612,11 @@ function GroundGrid() {
   return <mesh ref={ref} geometry={geo} material={mat} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.6, 0]} />;
 }
 
-// ── Real, popular 3D-print showcase models ──────────────────────────────────
-// Procedural stand-ins for genuinely useful prints, recognizable in silhouette
-// and matching the dramatic studio-lit hero stage.
-function printMat(color: string, opts: Partial<THREE.MeshPhysicalMaterialParameters> = {}) {
-  return new THREE.MeshPhysicalMaterial({
-    color, roughness: 0.5, metalness: 0.0, clearcoat: 0.3, clearcoatRoughness: 0.45, ...opts,
-  });
-}
-
-function useSpin(speed = 0.3, baseY = 0, floatAmp = 0.08) {
-  const ref = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    if (!ref.current) return;
-    const t = clock.elapsedTime;
-    ref.current.rotation.y = t * speed;
-    ref.current.position.y = baseY + Math.sin(t * 0.5) * floatAmp;
-  });
-  return ref;
-}
-
-/** Milwaukee M18 battery wall mount — red plate with a dovetail rail. */
-function MilwaukeeMount() {
-  const ref = useSpin(0.32, 0);
-  const red = useMemo(() => printMat("#c1271d", { roughness: 0.42, clearcoat: 0.45 }), []);
-  const dark = useMemo(() => printMat("#1c1e21", { clearcoat: 0.18 }), []);
-  return (
-    <group ref={ref} scale={1.15} rotation={[0.12, 0, 0]}>
-      <mesh material={red} castShadow position={[0, 0, -0.18]}><boxGeometry args={[2.4, 2.0, 0.2]} /></mesh>
-      <mesh material={red} castShadow position={[0, 0.1, 0.18]}><boxGeometry args={[0.95, 1.7, 0.5]} /></mesh>
-      <mesh material={red} castShadow position={[-0.62, 0.1, 0.12]} rotation={[0, 0, 0.18]}><boxGeometry args={[0.16, 1.7, 0.42]} /></mesh>
-      <mesh material={red} castShadow position={[0.62, 0.1, 0.12]} rotation={[0, 0, -0.18]}><boxGeometry args={[0.16, 1.7, 0.42]} /></mesh>
-      <mesh material={dark} castShadow position={[0, 0.95, 0.2]}><boxGeometry args={[0.7, 0.18, 0.42]} /></mesh>
-      <mesh material={dark} position={[0, 0.72, -0.04]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.12, 0.12, 0.5, 20]} /></mesh>
-      <mesh material={dark} position={[0, -0.72, -0.04]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.12, 0.12, 0.5, 20]} /></mesh>
-    </group>
-  );
-}
-
-/** IKEA Skådis bin — a popular pegboard storage cup with hooks. */
-function SkadisBin() {
-  const ref = useSpin(0.34, -0.1);
-  const white = useMemo(() => printMat("#e9edf2", { clearcoat: 0.22 }), []);
-  const w = 1.8, h = 1.1, d = 1.05, th = 0.1;
-  return (
-    <group ref={ref} scale={1.05} rotation={[0.12, 0, 0]}>
-      <mesh material={white} castShadow position={[0, -h / 2, 0]}><boxGeometry args={[w, th, d]} /></mesh>
-      <mesh material={white} castShadow position={[0, -h / 4, d / 2]}><boxGeometry args={[w, h / 2, th]} /></mesh>
-      <mesh material={white} castShadow position={[-w / 2, -h / 4, 0]}><boxGeometry args={[th, h / 2, d]} /></mesh>
-      <mesh material={white} castShadow position={[w / 2, -h / 4, 0]}><boxGeometry args={[th, h / 2, d]} /></mesh>
-      <mesh material={white} castShadow position={[0, h * 0.05, -d / 2]}><boxGeometry args={[w, h * 1.1, th]} /></mesh>
-      <mesh material={white} castShadow position={[-0.5, h * 0.55, -d / 2 - 0.12]}><boxGeometry args={[0.2, 0.2, 0.34]} /></mesh>
-      <mesh material={white} castShadow position={[0.5, h * 0.55, -d / 2 - 0.12]}><boxGeometry args={[0.2, 0.2, 0.34]} /></mesh>
-    </group>
-  );
-}
-
-/** Filament spool holder — a spool that spins on a wall bracket. */
-function FilamentHolder() {
-  const ref = useSpin(0.26, 0);
-  const spoolRef = useRef<THREE.Group>(null);
-  const gray = useMemo(() => printMat("#cfd4da"), []);
-  const cyanMat = useMemo(() => printMat(ACCENT, { roughness: 0.35, clearcoat: 0.5, emissive: ACCENT, emissiveIntensity: 0.08 }), []);
-  useFrame(({ clock }) => { if (spoolRef.current) spoolRef.current.rotation.x = clock.elapsedTime * 0.8; });
-  return (
-    <group ref={ref} scale={1.0} rotation={[0.1, 0, 0]}>
-      <mesh material={gray} castShadow position={[-1.4, 0, 0]}><boxGeometry args={[0.3, 2.2, 1.0]} /></mesh>
-      <mesh material={gray} castShadow position={[-0.9, -0.7, 0]}><boxGeometry args={[1.2, 0.3, 0.5]} /></mesh>
-      <mesh material={gray} castShadow position={[0.1, -0.2, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.1, 0.1, 2.4, 20]} /></mesh>
-      <group ref={spoolRef} position={[0.1, -0.2, 0]}>
-        <mesh material={gray} castShadow position={[-0.42, 0, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[1.0, 1.0, 0.12, 40]} /></mesh>
-        <mesh material={gray} castShadow position={[0.42, 0, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[1.0, 1.0, 0.12, 40]} /></mesh>
-        <mesh material={gray} castShadow rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.42, 0.42, 0.84, 28]} /></mesh>
-        <mesh material={cyanMat} castShadow rotation={[0, Math.PI / 2, 0]}><torusGeometry args={[0.72, 0.2, 16, 40]} /></mesh>
-      </group>
-    </group>
-  );
-}
-
-/** 3D-printer bed scraper — colored handle with a thin angled blade. */
-function BedScraper() {
-  const ref = useSpin(0.34, 0);
-  const handle = useMemo(() => printMat(ACCENT, { roughness: 0.4, clearcoat: 0.5 }), []);
-  const steel = useMemo(() => printMat("#c7ccd2", { metalness: 0.3, roughness: 0.3 }), []);
-  return (
-    <group ref={ref} scale={1.1} rotation={[0.25, 0, 0]}>
-      <mesh material={handle} castShadow position={[-0.7, 0, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.28, 0.28, 1.5, 28]} /></mesh>
-      <mesh material={handle} castShadow position={[-1.45, 0, 0]}><sphereGeometry args={[0.28, 24, 24]} /></mesh>
-      <mesh material={steel} castShadow position={[0.15, 0, 0]}><boxGeometry args={[0.5, 0.18, 0.5]} /></mesh>
-      <mesh material={steel} castShadow position={[1.0, -0.18, 0]} rotation={[0, 0, -0.35]}><boxGeometry args={[1.3, 0.05, 0.95]} /></mesh>
-    </group>
-  );
-}
-
-/** Headset stand — base, post and a curved yoke that cradles the headband. */
-function HeadsetStand() {
-  const ref = useSpin(0.32, -0.2);
-  const mat = useMemo(() => printMat("#d3d8de"), []);
-  const yokeGeo = useMemo(() => new THREE.TorusGeometry(0.55, 0.16, 20, 48, Math.PI), []);
-  return (
-    <group ref={ref} scale={1.0}>
-      <mesh material={mat} castShadow position={[0, -1.4, 0]}><cylinderGeometry args={[0.95, 1.05, 0.22, 48]} /></mesh>
-      <mesh material={mat} castShadow position={[0, -0.2, 0]}><cylinderGeometry args={[0.16, 0.18, 2.4, 28]} /></mesh>
-      <mesh material={mat} castShadow geometry={yokeGeo} position={[0, 1.05, 0]} />
-    </group>
-  );
-}
-
-/** Pegboard tool holder — a rack holding screwdrivers. */
-function PegboardHolder() {
-  const ref = useSpin(0.3, 0);
-  const mat = useMemo(() => printMat("#cdd2d8"), []);
-  const hole = useMemo(() => printMat("#15171a", { clearcoat: 0.1 }), []);
-  const toolMetal = useMemo(() => printMat("#9aa3ad", { metalness: 0.4, roughness: 0.3 }), []);
-  const grip = useMemo(() => printMat(ACCENT, { roughness: 0.4, clearcoat: 0.5 }), []);
-  const xs = [-0.7, 0, 0.7];
-  return (
-    <group ref={ref} scale={1.0} rotation={[0.12, 0, 0]}>
-      <mesh material={mat} castShadow position={[0, 0.2, -0.4]}><boxGeometry args={[2.4, 1.7, 0.14]} /></mesh>
-      <mesh material={mat} castShadow position={[-0.5, 0.95, -0.55]}><boxGeometry args={[0.2, 0.2, 0.34]} /></mesh>
-      <mesh material={mat} castShadow position={[0.5, 0.95, -0.55]}><boxGeometry args={[0.2, 0.2, 0.34]} /></mesh>
-      <mesh material={mat} castShadow position={[0, -0.5, 0]}><boxGeometry args={[2.4, 0.5, 0.8]} /></mesh>
-      {xs.map((x, i) => (
-        <group key={i} position={[x, -0.25, 0.1]}>
-          <mesh material={hole}><cylinderGeometry args={[0.16, 0.16, 0.5, 20]} /></mesh>
-          <mesh material={toolMetal} castShadow position={[0, 0.55, 0]}><cylinderGeometry args={[0.07, 0.07, 1.0, 16]} /></mesh>
-          <mesh material={grip} castShadow position={[0, 1.25, 0]}><cylinderGeometry args={[0.17, 0.13, 0.5, 20]} /></mesh>
-        </group>
-      ))}
-    </group>
-  );
-}
-
 function renderLandingModel(index: number) {
-  switch (index) {
-    case 0: return <MilwaukeeMount />;
-    case 1: return <SkadisBin />;
-    case 2: return <FilamentHolder />;
-    case 3: return <BedScraper />;
-    case 4: return <HeadsetStand />;
-    case 5: return <PegboardHolder />;
-    case 6: return <Gyroscope />;
-    case 7: return <Rocket />;
-    case 8: return <TwistedVase />;
-    default: return <FlexiCoil />;
-  }
+  if (index === 0) return <Gyroscope />;
+  if (index === 1) return <Rocket />;
+  if (index === 2) return <TwistedVase />;
+  return <FlexiCoil />;
 }
 
 /** The full Three.js hero scene — spotlight from top, spin-morph transitions */
@@ -781,7 +653,7 @@ function HeroScene({
           intensity={16}
           color="#ffffff"
           castShadow
-          shadow-mapSize={[2048, 2048]}
+          shadow-mapSize={[1024, 1024]}
           shadow-bias={-0.0004}
         />
         {/* Cyan underlight — the glow pool */}
@@ -885,7 +757,13 @@ function useScrollMotion(strength = 48) {
     const scroller = document.getElementById("landing-scroll");
     const el = ref.current;
     if (!scroller || !el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setOffset(0); return; }
+    // Skip the per-scroll work on touch devices (and when reduced-motion is set)
+    // — getBoundingClientRect on every scroll frame is a needless jank source on
+    // mobile, where the parallax adds little.
+    if (
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      window.matchMedia("(pointer: coarse)").matches
+    ) { setOffset(0); return; }
     let raf = 0;
     const update = () => {
       raf = 0;
@@ -1326,12 +1204,6 @@ function ResetPasswordDialog({
 // ─── MODEL SELECTOR LABELS ───────────────────────────────────────────────────
 
 const MODELS = [
-  { label: "Milwaukee M18 Holder", description: "Tool battery wall mount" },
-  { label: "IKEA Skådis Bin", description: "Pegboard storage cup" },
-  { label: "Filament Spool Holder", description: "Wall-mount spool roller" },
-  { label: "Bed Scraper", description: "3D-print removal tool" },
-  { label: "Headset Stand", description: "Desktop headphone stand" },
-  { label: "Pegboard Tool Holder", description: "Screwdriver rack" },
   { label: "Gyroscope", description: "Precision mechanical rings" },
   { label: "Rocket", description: "Classic maker print" },
   { label: "Twisted Vase", description: "#1 most printed decoration" },
@@ -1478,18 +1350,22 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
         {/* Ambient gradient glow — sits above the base background but behind all
             content (isolate + negative z). Gives the page the deep, lit-from-
             within feel without touching the hero's own 3D stage. */}
+        {/* The softness comes from the radial gradients themselves — NOT a CSS
+            blur() filter. Animating a blurred element re-rasterizes the blur
+            every frame, which tanks scroll performance on mobile. Pure gradients
+            animate on the GPU for free. */}
         <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
           <div
-            className="absolute -left-[10%] top-[20%] h-[55vh] w-[55vh] rounded-full opacity-50"
-            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.22), transparent 70%)", filter: "blur(70px)", animation: "orb-a 18s ease-in-out infinite" }}
+            className="absolute -left-[15%] top-[14%] h-[70vh] w-[70vh] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.16) 0%, transparent 62%)", animation: "orb-a 18s ease-in-out infinite", willChange: "transform" }}
           />
           <div
-            className="absolute right-[-8%] top-[55%] h-[60vh] w-[60vh] rounded-full opacity-40"
-            style={{ background: "radial-gradient(circle, rgba(122,90,248,0.18), transparent 70%)", filter: "blur(80px)", animation: "orb-b 22s ease-in-out infinite" }}
+            className="absolute right-[-12%] top-[50%] h-[72vh] w-[72vh] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(122,90,248,0.13) 0%, transparent 62%)", animation: "orb-b 22s ease-in-out infinite", willChange: "transform" }}
           />
           <div
-            className="absolute left-[35%] bottom-[2%] h-[50vh] w-[50vh] rounded-full opacity-35"
-            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.16), transparent 70%)", filter: "blur(75px)", animation: "orb-c 26s ease-in-out infinite" }}
+            className="absolute left-[30%] bottom-[-6%] h-[62vh] w-[62vh] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.12) 0%, transparent 62%)", animation: "orb-c 26s ease-in-out infinite", willChange: "transform" }}
           />
         </div>
 
@@ -1498,8 +1374,8 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
           <div
             className="flex h-14 w-full max-w-5xl items-center justify-between rounded-2xl px-4 pl-5 transition-all duration-500 lg:px-5"
             style={{
-              background: scrolled ? "rgba(13,19,24,0.8)" : "rgba(13,19,24,0.45)",
-              backdropFilter: "blur(20px)",
+              background: scrolled ? "rgba(13,19,24,0.92)" : "rgba(13,19,24,0.6)",
+              backdropFilter: "blur(12px)",
               border: "1px solid rgba(255,255,255,0.08)",
               boxShadow: scrolled
                 ? "0 12px 40px -16px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)"
@@ -1649,6 +1525,14 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
                 >
                   {text.hero.secondary}
                 </button>
+              </div>
+
+              {/* Free-value reassurance */}
+              <div className="anim-in-3 mt-5 flex items-center gap-2 text-[13px]" style={{ color: "rgba(232,237,242,0.45)" }}>
+                <svg className="h-4 w-4 shrink-0 text-cadio-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{FREE_NOTE[language]}</span>
               </div>
             </div>
           </div>
@@ -1912,16 +1796,19 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
                   boxShadow: `0 0 60px ${ACCENT_DIM}0.08)`,
                 }}
               >
-                <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>Free</p>
+                <div className="mb-5 flex items-center gap-2">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>Free</p>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(52,211,153,0.14)", color: "#34d399" }}>No card needed</span>
+                </div>
                 <div className="mb-1 flex items-end gap-2">
                   <span className="text-5xl font-black text-white">$0</span>
-                  <span className="mb-1.5 text-sm text-white/30">{CURRENCY[language].period}</span>
+                  <span className="mb-1.5 text-sm text-white/30">forever</span>
                 </div>
-                <p className="mb-7 text-sm text-white/40">3 downloads to get started</p>
+                <p className="mb-7 text-sm text-white/40">Try everything, free</p>
                 <ul className="mb-7 space-y-2.5">
-                  {["AI model generation", "All export formats", "Manual CAD tools", "3 downloads total"].map((f) => (
+                  {["Unlimited AI generation", "Unlimited editing & CAD tools", "Search 3 print libraries", "3 free downloads to start", "All export formats (STL · 3MF · STEP)"].map((f) => (
                     <li key={f} className="flex items-center gap-2.5 text-sm" style={{ color: "rgba(232,237,242,0.72)" }}>
-                      <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: ACCENT }} />
+                      <svg className="h-3.5 w-3.5 flex-shrink-0 text-cadio-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M5 13l4 4L19 7" /></svg>
                       {f}
                     </li>
                   ))}

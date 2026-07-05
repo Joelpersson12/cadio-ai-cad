@@ -32,6 +32,7 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
   const [copied, setCopied] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [exported, setExported] = useState(false);
   const account = getCadioAccount();
   const isAuthed = isCadioAuthenticated();
   const canDownload = account?.canDownload ?? false;
@@ -92,6 +93,7 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
           canDownload: downloadsRemaining != null ? downloadsRemaining > 1 : true,
         });
       }
+      setExported(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Download failed.";
       if (msg.toLowerCase().includes("login") || msg.toLowerCase().includes("401")) {
@@ -108,6 +110,45 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
       setDownloadBusy(false);
     }
   };
+
+  // Success view: confirm the download landed and hand the user their next
+  // step, instead of leaving the dialog silently open.
+  if (exported) {
+    const remainingAfter = downloadsRemaining != null ? Math.max(0, downloadsRemaining - 1) : null;
+    return (
+      <div className="flex flex-col items-center gap-4 py-4 text-center text-white">
+        <div className="grid h-14 w-14 place-items-center rounded-full bg-emerald-500/15 text-emerald-400">
+          <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">Your {format.toUpperCase()} is downloading</h2>
+          <p className="mt-1.5 max-w-xs text-xs leading-5 text-[#9a9a9d]">
+            Sized and checked for {selectedPrinter?.name ?? "your printer"}. Drop it in your slicer and print — happy printing! 🎉
+          </p>
+          {plan === "free" && remainingAfter != null && (
+            <p className="mt-2 text-[11px] text-[#7a7a7d]">{remainingAfter} free download{remainingAfter === 1 ? "" : "s"} left</p>
+          )}
+        </div>
+        <div className="mt-1 flex w-full max-w-xs flex-col gap-2">
+          <button
+            onClick={() => {
+              onClose?.();
+              window.dispatchEvent(new CustomEvent("cadio-focus-prompt"));
+            }}
+            className="w-full rounded-xl bg-cadio-accent py-2.5 text-sm font-bold text-cadio-bg transition-all hover:bg-cadio-accent-hover"
+          >
+            Make another model
+          </button>
+          <button
+            onClick={() => onClose?.()}
+            className="w-full rounded-xl border border-[#3a3a3d] py-2.5 text-sm font-medium text-[#bdbdbd] transition-colors hover:text-white"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5 text-white">

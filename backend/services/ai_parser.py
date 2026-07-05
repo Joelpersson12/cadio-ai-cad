@@ -26,6 +26,109 @@ def _get_groq_client() -> Any:
         )
     return _groq_client
 
+
+# ---------------------------------------------------------------------------
+# Claude (Anthropic) — preferred free-text fallback. When ANTHROPIC_API_KEY is
+# set, prompts that the deterministic rules + templates + source search don't
+# already handle are interpreted by Claude, so users can describe a model in
+# almost any words and still get sensible CAD parameters. This is purely a
+# fallback: it only runs when the deterministic path produced nothing, so it
+# never overrides or slows the already-working recognized prompts.
+# ---------------------------------------------------------------------------
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+_anthropic_client: Any = None
+
+
+def _get_anthropic_client() -> Any:
+    global _anthropic_client
+    if _anthropic_client is None:
+        import anthropic
+        _anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    return _anthropic_client
+
+
+# Strict schema so Claude returns exactly the parametric dimensions the CAD
+# engine understands — no free-form keys to sanitize.
+_CAD_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "width": {"type": "number"},
+                "depth": {"type": "number"},
+                "height": {"type": "number"},
+                "thickness": {"type": "number"},
+                "angle": {"type": "number"},
+                "fillet_radius": {"type": "number"},
+                "chamfer_size": {"type": "number"},
+                "hole_count": {"type": "number"},
+                "hole_diameter": {"type": "number"},
+                "wall_thickness": {"type": "number"},
+            },
+            "additionalProperties": False,
+        },
+        "actions": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["parameters", "actions"],
+    "additionalProperties": False,
+}
+
+
+def _parse_with_claude(
+    prompt: str,
+    current_params: dict,
+    current_transform: dict,
+    current_features: list | None = None,
+) -> dict:
+    """Interpret a free-text prompt into CAD parameters using Claude Opus 4.8."""
+    try:
+        client = _get_anthropic_client()
+
+        user_message = (
+            f"Current parameters: {json.dumps(current_params)}"
+            f"\nCurrent transform: {json.dumps(current_transform)}"
+            f"\nUser instruction: {prompt}"
+            "\n\nReturn realistic millimeter dimensions for this object as JSON "
+            "matching the schema. Keep proportions printable and sensible."
+        )
+
+        response = client.messages.create(
+            model="claude-opus-4-8",
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+            output_config={"format": {"type": "json_schema", "schema": _CAD_OUTPUT_SCHEMA}},
+        )
+        # output_config.format guarantees the first text block is valid JSON.
+        text = next((b.text for b in response.content if b.type == "text"), "{}")
+        return json.loads(text)
+    except Exception as e:  # noqa: BLE001 — never let the LLM break generation
+        print(f"[cadio] Claude error: {e}")
+        return {"parameters": current_params, "features": [], "transform": {}, "actions": [f"ai-error: {e}"]}
+
+
+def _parse_with_llm(
+    prompt: str,
+    current_params: dict,
+    current_transform: dict,
+    current_features: list | None = None,
+) -> dict:
+    """Provider-agnostic free-text fallback: prefer Claude, then Groq, else no-op.
+
+    Whichever is configured runs only AFTER the deterministic rules, templates,
+    research brief, and source search have had their chance — so configuring a
+    key strictly expands what users can phrase, without changing any prompt that
+    already works.
+    """
+    if ANTHROPIC_API_KEY:
+        return _parse_with_claude(prompt, current_params, current_transform, current_features)
+    if GROQ_API_KEY:
+        return _parse_with_groq(prompt, current_params, current_transform, current_features)
+    # No LLM configured — signal a no-op so callers fall back to neutral geometry.
+    return {"parameters": current_params, "features": [], "transform": {}, "actions": ["no-op"]}
+
 CREATE_PATTERNS = (
     r"\b(create|generate|build|design)\b",
     r"\bmake\s+(a|an|one)\b",
@@ -37,8 +140,18 @@ CREATE_PATTERNS = (
 EDIT_PATTERNS = (
     r"\b(add|remove|delete|change|modify|edit|increase|decrease|resize|scale|rotate|move|write|engrave|emboss)\b",
     r"\b(make it|taller|wider|thicker|thinner|rounded|fillet|chamfer|extrude|shell|mirror|holes?|text|logo|label|engraved|raised|cutout|notch|slot|boss|standoff|clip|hook|rib|stronger)\b",
+    # Natural-language size/shape edits so users don't need exact keywords.
+    r"\b(bigger|larger|smaller|grow|shrink|enlarge|reduce|expand|downsize|upsize|"
+    r"shorter|lower|higher|narrower|broader|slimmer|deeper|longer|shallower|flatter|"
+    r"double|triple|halve|smooth|smoother|soften|bevel|beveled|hollow|round|rounder|wider)\b",
+    r"\bhalf\s+(?:the\s+)?size\b",
+    r"\bmake (it|the model|this|them)\b",
     r"\b(lagg till|ta bort|andra|redigera|flytta|rotera|skala|hal|rund|fasa|tjockare|bredare|hogre|skriv|ingravera|ingraverat|gravyr|logga|upphojd|upphojt|praglad|utskarning|bossar|distanser|klamma|krok|ribba|ribbor|starkare)\b",
     r"\b(lägg till|ta bort|ändra|redigera|flytta|rotera|skala|hål|rund|fasa|tjockare|bredare|högre)\b",
+    # Swedish natural-language size/shape edits.
+    r"\b(större|storre|mindre|krymp|förstora|forstora|förminska|forminska|"
+    r"kortare|lägre|lagre|smalare|djupare|längre|langre|plattare|"
+    r"dubbelt|dubbla|hälften|halften|halva|jämna|jamna|len|ihålig|ihalig|tunnare)\b",
     r"\bgor\s+(den|det)\b",
     r"\bgör\s+(den|det)\b",
 )
@@ -54,9 +167,31 @@ def is_new_model_prompt(prompt: str) -> bool:
     return any(re.search(pattern, text) for pattern in CREATE_PATTERNS)
 
 
+# An explicit dimension reference — "120mm high", "make it 250 tall", "width
+# 100", "120x80x250". Used so a resize request on the CURRENT model is treated
+# as an edit instead of a fresh generation (which previously searched sources
+# and, ironically, returned a literal 120mm fan for "make it 120mm high").
+_DIMENSION_HINT = re.compile(
+    r"\b\d+(?:\.\d+)?\s*(?:mm|cm|millimeters?|millimetres?)?\s*"
+    r"(?:tall|taller|high|height|wide|wider|width|deep|depth|thick|thickness|long|length|"
+    r"h[oö]g|h[oö]gt|h[oö]jd|bred|brett|bredd|djup|djupt|tjock|tjockt|tjocklek|l[aå]ng|l[aå]ngt|l[aä]ngd)\b"
+    r"|\b(?:tall|high|height|wide|width|deep|depth|thick|thickness|long|length|"
+    r"h[oö]gd?|h[oö]jd|bred|bredd|djup|tjock|tjocklek|l[aå]ng|l[aä]ngd)\b"
+    r"\s*(?:of|to|at|is|=|:|av|till|p[aå])?\s*\d+(?:\.\d+)?"
+    r"|\b\d+(?:\.\d+)?\s*[x×*]\s*\d+(?:\.\d+)?(?:\s*[x×*]\s*\d+(?:\.\d+)?)?\s*(?:mm|cm)?\b"
+)
+
+
+def _mentions_explicit_dimension(text: str) -> bool:
+    return bool(_DIMENSION_HINT.search(text))
+
+
 def is_edit_only_prompt(prompt: str) -> bool:
     text = _prompt_match_text(prompt)
-    has_edit = any(re.search(pattern, text) for pattern in EDIT_PATTERNS)
+    has_edit = (
+        any(re.search(pattern, text) for pattern in EDIT_PATTERNS)
+        or _mentions_explicit_dimension(text)
+    )
     return has_edit and not is_new_model_prompt(text)
 
 
@@ -257,24 +392,138 @@ def _apply_deterministic_edit(
     def scale_param(key: str, factor: float, minimum: float = 0.0, maximum: float = 500.0) -> None:
         params[key] = max(minimum, min(maximum, float(params.get(key, 0.0)) * factor))
 
-    if any(phrase in text for phrase in ("make it taller", "taller", "increase height", "hogre")):
+    # ------------------------------------------------------------------
+    # Explicit numeric dimensions — e.g. "make it 250mm tall", "width 100",
+    # "100 x 60 x 250 mm", "5mm thick". This MUST run deterministically: the
+    # external LLM is often unavailable on the live server, and without this a
+    # "resize to <N>mm" prompt silently does nothing (the #1 user complaint).
+    # Explicit values win over the relative taller/wider scaling below.
+    # ------------------------------------------------------------------
+    def _set_dim(key: str, value: float, lo: float, hi: float) -> None:
+        params[key] = max(lo, min(hi, value))
+
+    # axis -> (keyword alternation, min, max)
+    _dim_axes = {
+        "height": (r"tall|taller|high|height|hoog|hog|hogt|hojd|hög|högt|höjd", 5.0, 1000.0),
+        "width": (r"wide|wider|width|bred|bredd|brett", 5.0, 1000.0),
+        "depth": (r"deep|depth|long|length|djup|djupt|lang|langd|lång|långt|längd", 5.0, 1000.0),
+        "thickness": (r"thick|thickness|tjock|tjockt|tjocklek|vaggtjocklek|väggtjocklek", 1.0, 60.0),
+    }
+    explicit_changes: list[str] = []
+    for _key, (_kw, _lo, _hi) in _dim_axes.items():
+        _val: float | None = None
+        # "<number> mm <keyword>"  (e.g. "250mm tall")
+        _m = re.search(rf"(\d+(?:\.\d+)?)\s*(?:mm|millimeters?|millimetres?|cm)?\s*(?:{_kw})\b", text)
+        if _m:
+            _val = float(_m.group(1))
+        else:
+            # "<keyword> [of/to/=] <number>"  (e.g. "height of 250", "width 100")
+            _m = re.search(rf"\b(?:{_kw})\b\s*(?:of|to|at|is|=|:|av|till|på|pa)?\s*(\d+(?:\.\d+)?)\s*(?:mm|cm)?", text)
+            if _m:
+                _val = float(_m.group(1))
+        if _val is not None:
+            _set_dim(_key, _val, _lo, _hi)
+            explicit_changes.append(f"{_key} {params[_key]:.0f}mm")
+
+    # "WxDxH" shorthand, e.g. "100x60x250" or "100 x 60 x 250 mm"
+    _wdh = re.search(
+        r"\b(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\b",
+        text,
+    )
+    if _wdh:
+        _set_dim("width", float(_wdh.group(1)), 5.0, 1000.0)
+        _set_dim("depth", float(_wdh.group(2)), 5.0, 1000.0)
+        _set_dim("height", float(_wdh.group(3)), 5.0, 1000.0)
+        explicit_changes = [
+            f"width {params['width']:.0f}mm",
+            f"depth {params['depth']:.0f}mm",
+            f"height {params['height']:.0f}mm",
+        ]
+    if explicit_changes:
+        actions.append("set " + ", ".join(explicit_changes))
+
+    # ------------------------------------------------------------------
+    # Natural-language OVERALL resize — "make it bigger", "a bit smaller",
+    # "20% larger", "double it", "half the size". Lets users phrase a resize
+    # however they like instead of naming an axis. Skipped when an explicit
+    # dimension was already given.
+    # ------------------------------------------------------------------
+    if not explicit_changes:
+        factor: float | None = None
+        pct = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent|procent)", text)
+        grow_words = ("bigger", "larger", "enlarge", "grow", "scale up", "scale it up",
+                      "increase the size", "upsize", "make it big", "större", "storre",
+                      "förstora", "forstora")
+        shrink_words = ("smaller", "shrink", "scale down", "scale it down",
+                        "reduce the size", "downsize", "make it small", "mindre", "krymp",
+                        "förminska", "forminska")
+        if re.search(r"\b(double|twice|2x|two times|dubbelt|dubbla)\b", text):
+            factor = 2.0
+        elif re.search(r"\b(triple|3x|three times)\b", text):
+            factor = 3.0
+        elif re.search(r"\b(halve|half size|half the size|hälften|halften|halva)\b", text):
+            factor = 0.5
+        elif pct:
+            value = float(pct.group(1))
+            if any(w in text for w in grow_words):
+                factor = 1.0 + value / 100.0
+            elif any(w in text for w in shrink_words):
+                factor = max(0.05, 1.0 - value / 100.0)
+            elif re.search(r"\b(scale|size|to|of)\b", text):
+                factor = max(0.05, value / 100.0)
+        elif any(w in text for w in grow_words):
+            factor = 1.25
+        elif any(w in text for w in shrink_words):
+            factor = 0.8
+        if factor is not None:
+            for _axis in ("width", "depth", "height"):
+                scale_param(_axis, factor, 1.0, 1000.0)
+            actions.append(f"scaled model to {factor * 100:.0f}% of its size")
+
+    if any(phrase in text for phrase in ("make it taller", "taller", "higher", "increase height", "hogre", "högre", "höj", "hoj")):
         scale_param("height", 1.25, 20.0)
         actions.append("increased height")
 
-    if any(phrase in text for phrase in ("make it wider", "wider", "increase width", "bredare")):
+    if any(phrase in text for phrase in ("shorter", "make it shorter", "lower", "less tall", "reduce height", "kortare", "lägre", "lagre")):
+        scale_param("height", 0.8, 5.0)
+        actions.append("reduced height")
+
+    if any(phrase in text for phrase in ("make it wider", "wider", "broader", "increase width", "bredare")):
         scale_param("width", 1.25, 10.0)
         actions.append("increased width")
 
-    if any(phrase in text for phrase in ("make it thicker", "thicker", "stronger", "heavy duty", "heavy-duty", "tjockare")):
+    if any(phrase in text for phrase in ("narrower", "slimmer", "less wide", "smalare")):
+        scale_param("width", 0.8, 5.0)
+        actions.append("reduced width")
+
+    if any(phrase in text for phrase in ("deeper", "longer", "djupare", "längre", "langre")):
+        scale_param("depth", 1.25, 5.0)
+        actions.append("increased depth")
+
+    if any(phrase in text for phrase in ("shallower", "less deep", "flatter", "plattare", "grundare")):
+        scale_param("depth", 0.8, 5.0)
+        actions.append("reduced depth")
+
+    if any(phrase in text for phrase in ("make it thicker", "thicker", "stronger", "heavy duty", "heavy-duty", "tjockare", "sturdier")):
         scale_param("thickness", 1.25, 2.0, 30.0)
         params["wall_thickness"] = max(float(params.get("wall_thickness", 3.0)), 4.0)
         actions.append("increased thickness")
 
-    if any(phrase in text for phrase in ("rounded", "round corners", "fillet", "runda")):
+    if any(phrase in text for phrase in ("thinner", "tunnare", "less thick")):
+        scale_param("thickness", 0.8, 1.0, 30.0)
+        actions.append("reduced thickness")
+
+    if any(phrase in text for phrase in ("rounded", "round corners", "round the", "rounder", "fillet", "smooth", "smoother", "soften", "soft edges", "runda", "rundade", "jämna", "jamna", "len")):
         params["fillet_radius"] = max(float(params.get("fillet_radius", 2.0)), 4.0)
         _ensure_feature(features, "fillet_edges", True)
         _ensure_feature(features, "chamfer_edges", False)
         actions.append("enabled rounded corners")
+
+    if any(phrase in text for phrase in ("bevel", "beveled", "bevelled", "chamfer", "chamfered", "fasa", "fasad", "fasade")):
+        params["chamfer_size"] = max(float(params.get("chamfer_size", 0.0)), 2.0)
+        _ensure_feature(features, "chamfer_edges", True)
+        _ensure_feature(features, "fillet_edges", False)
+        actions.append("enabled beveled edges")
 
     if any(phrase in text for phrase in ("mounting holes", "add holes", "holes", "screw holes")):
         params["hole_count"] = max(float(params.get("hole_count", 0.0)), 2.0)
@@ -349,7 +598,11 @@ def _apply_prompt_shape_inference(
     text = _prompt_match_text(prompt)
     actions: list[str] = []
 
-    if any(word in text for word in ("holder", "mount", "bracket", "clip", "retainer", "rack", "organizer")):
+    if any(word in text for word in (
+        "holder", "mount", "bracket", "clip", "retainer", "rack", "organizer",
+        "guide", "hose guide", "cable guide", "wire guide", "channel",
+        "hook", "hanger", "support", "rest", "cradle", "saddle",
+    )):
         params["width"] = max(float(params.get("width", 70.0)), 86.0)
         params["depth"] = max(float(params.get("depth", 55.0)), 64.0)
         params["height"] = max(float(params.get("height", 24.0)), 34.0)
@@ -371,7 +624,12 @@ def _apply_prompt_shape_inference(
         _ensure_feature(features, "back_support", False)
         actions.append("inferred enclosure-style geometry from prompt")
 
-    if any(word in text for word in ("spacer", "shim", "washer", "plate", "adapter")):
+    flat_hardware = any(word in text for word in ("spacer", "shim", "washer", "plate", "adapter"))
+    # "pressure washer" / "power washer" is a tool, not the flat round hardware —
+    # don't flatten a "pressure washer hose guide" into a plate.
+    if "pressure washer" in text or "power washer" in text:
+        flat_hardware = False
+    if flat_hardware:
         params["width"] = max(float(params.get("width", 50.0)), 60.0)
         params["depth"] = max(float(params.get("depth", 40.0)), 45.0)
         params["height"] = min(max(float(params.get("height", 8.0)), 6.0), 18.0)
@@ -381,6 +639,29 @@ def _apply_prompt_shape_inference(
         actions.append("inferred flat adapter/plate geometry from prompt")
 
     return actions
+
+
+def _apply_neutral_fallback_geometry(
+    params: dict[str, float],
+    features: list[Feature],
+) -> list[str]:
+    """Last-resort geometry for an unrecognized prompt when no template, brief,
+    deterministic edit, specific inference, or LLM produced anything.
+
+    The default parameters are an angled phone-stand wedge (angle=70 +
+    back_support), which reads as a meaningless slab/"rectangle" for unrelated
+    prompts. Give unknown objects a neutral, intentional upright box with a base
+    and rounded edges instead.
+    """
+    params["width"] = max(20.0, float(params.get("width", 80.0)))
+    params["depth"] = max(20.0, float(params.get("depth", 70.0)))
+    params["height"] = max(20.0, float(params.get("height", 60.0)))
+    params["angle"] = 90.0
+    params["fillet_radius"] = max(float(params.get("fillet_radius", 0.0)), 2.0)
+    _ensure_feature(features, "base_extrude", True)
+    _ensure_feature(features, "back_support", False)
+    _ensure_feature(features, "fillet_edges", True)
+    return ["inferred neutral upright body from prompt"]
 
 
 def _feature_tree_for_template(default_features: list[str]) -> list[Feature]:
@@ -530,7 +811,7 @@ def parse_ai_command(
     if quick_actions or inference_actions or brief_actions:
         actions = brief_actions + quick_actions + inference_actions
     elif not template or "modify" in _prompt_match_text(prompt) or "change" in _prompt_match_text(prompt):
-        result = _parse_with_groq(prompt, params, current_transform, features)
+        result = _parse_with_llm(prompt, params, current_transform, features)
         
         # Apply parameter changes
         new_params = result.get("parameters", {})
@@ -556,6 +837,16 @@ def parse_ai_command(
             transform.scale = [max(0.001, float(v)) for v in t["scale"]]
         
         actions = result.get("actions", ["no-op"])
+
+        # If the LLM was unavailable or unhelpful on a fresh create (no params
+        # returned, or an error/no-op), don't leave the default phone-stand wedge
+        # standing in — it reads as a meaningless "rectangle" for unrelated
+        # prompts (e.g. "pressure washer hose guide"). Apply neutral geometry.
+        groq_failed = (not new_params) or any(
+            str(a).startswith("ai-error") or str(a) == "no-op" for a in actions
+        )
+        if not edit_only and groq_failed:
+            actions = _apply_neutral_fallback_geometry(params, features)
     else:
         # Use template directly
         actions = [f"Created {template.name}: {template.description}"]

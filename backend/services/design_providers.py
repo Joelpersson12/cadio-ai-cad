@@ -647,16 +647,41 @@ def resolve_makerworld_model_files(model_url: str, limit: int = 20) -> list[Sour
     return list(result)
 
 
+_RESOLVE_CACHE: dict[str, tuple[float, list[SourceModelFile]]] = {}
+_RESOLVE_CACHE_TTL = 600.0  # seconds; file lists on these platforms rarely change
+
+
 def resolve_source_model_files(model_url: str, source: str, limit: int = 20) -> list[SourceModelFile]:
-    """Resolve a model's importable files, dispatching by source platform."""
+    """Resolve a model's importable files, dispatching by source platform.
+
+    Results are cached for a few minutes so regenerating the same prompt or
+    cycling model variants doesn't re-pay the network round-trip per model.
+    Only non-empty results are cached, so a transient provider failure is
+    retried on the next call.
+    """
     src = (source or "").strip().lower()
+    cache_key = f"{src}|{model_url}"
+    now = time.monotonic()
+    cached = _RESOLVE_CACHE.get(cache_key)
+    if cached is not None:
+        ts, files = cached
+        if now - ts < _RESOLVE_CACHE_TTL:
+            return files[:limit]
+        _RESOLVE_CACHE.pop(cache_key, None)
+
     if src == "printables":
-        return resolve_printables_model_files(model_url, limit)
-    if src == "thingiverse":
-        return resolve_thingiverse_model_files(model_url, limit)
-    if src == "makerworld":
-        return resolve_makerworld_model_files(model_url, limit)
-    return []
+        files = resolve_printables_model_files(model_url, limit)
+    elif src == "thingiverse":
+        files = resolve_thingiverse_model_files(model_url, limit)
+    elif src == "makerworld":
+        files = resolve_makerworld_model_files(model_url, limit)
+    else:
+        return []
+    if files:
+        if len(_RESOLVE_CACHE) > 256:
+            _RESOLVE_CACHE.clear()
+        _RESOLVE_CACHE[cache_key] = (now, files)
+    return files
 
 
 _SOURCE_WEIGHTS = {
@@ -1864,7 +1889,17 @@ class ProviderRegistry:
                 return []
 
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
-        deadline = time.monotonic() + 4.0
+        # Cross-provider fan-out deadline. A too-tight budget silently drops all
+        # results on a cold container (first request after a deploy pays DNS+TLS
+        # setup to every provider), which makes generation fall back to a
+        # source-less procedural model — i.e. the "Source/Files are gone" bug.
+        # Generation overall allows ~45s, so we can afford a more forgiving
+        # search window. Override with SOURCE_SEARCH_DEADLINE if needed.
+        try:
+            search_deadline = float(os.environ.get("SOURCE_SEARCH_DEADLINE", "9.0"))
+        except ValueError:
+            search_deadline = 9.0
+        deadline = time.monotonic() + search_deadline
 
         with ThreadPoolExecutor(max_workers=16) as executor:
             futures = {executor.submit(_search_one, task) for task in tasks}
@@ -1924,7 +1959,30 @@ def get_provider_registry() -> ProviderRegistry:
     global _provider_registry
     if _provider_registry is None:
         _provider_registry = ProviderRegistry()
+        _warm_provider_registry(_provider_registry)
     return _provider_registry
+
+
+def _warm_provider_registry(registry: ProviderRegistry) -> None:
+    """Prime DNS/TLS connections and the search cache in the background.
+
+    The first real generation after a deploy would otherwise pay the full
+    cold-start cost to every provider at once and risk timing out the search
+    (dropping source attribution). A throwaway warm-up search makes the first
+    user request hit warm connections. Best-effort: never block or raise.
+    """
+    import threading
+
+    def _warm() -> None:
+        try:
+            registry.search_all("phone stand", limit=5)
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_warm, name="provider-warmup", daemon=True).start()
+    except Exception:
+        pass
 
 
 def _parse_date(value: Any) -> datetime | None:

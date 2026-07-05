@@ -181,7 +181,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-06-28T-stripe-listobject-get-fix"
+BUILD_MARKER = "2026-07-04T-parallel-resolve-faster-gen"
 
 
 @router.get("/api/debug/version")
@@ -193,10 +193,18 @@ def debug_version() -> dict[str, Any]:
         db = db_backend_status()
     except Exception as exc:
         db = {"error": str(exc)}
+    llm = {
+        "claude_configured": bool(os.environ.get("ANTHROPIC_API_KEY", "")),
+        "groq_configured": bool(os.environ.get("GROQ_API_KEY", "")),
+    }
+    llm["active_provider"] = (
+        "claude" if llm["claude_configured"] else "groq" if llm["groq_configured"] else "none (deterministic only)"
+    )
     return {
         "build": BUILD_MARKER,
         "server_time": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
         "database": db,
+        "llm": llm,
     }
 
 
@@ -818,7 +826,10 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
                 research_brief = parsed.get("research_brief")
                 if research_brief and not edit_only:
                     examples = research_brief.get("source_examples", [])
-                    if examples:
+                    # Don't clobber attribution already set by the source-import
+                    # path (which pairs source_info with a resolved source_files
+                    # list). Only fill in from the research brief when empty.
+                    if examples and not session.get("source_info"):
                         session["source_info"] = examples[:3]
 
                 research_actions = []
@@ -1041,6 +1052,11 @@ async def create_primitive(data: PrimitiveCreateRequest) -> ScenePayload | JSONR
                 session["objects"] = {}
                 session["object_order"] = []
                 session["selected_object_id"] = ""
+            # Auto-select the last object when none is selected (cleared after AI generation).
+            # Without this, hole/split/cut all fall through to create_primitive_object.
+            if not session.get("selected_object_id") and session.get("object_order"):
+                session["selected_object_id"] = session["object_order"][-1]
+
             if data.primitive.strip().lower() == "hole" and session.get("selected_object_id") and session["object_order"]:
                 obj = get_selected_object(session)
                 diameter = max(0.5, float(data.radius or max(data.size or [5.0]) / 2.0) * 2.0)
@@ -1458,6 +1474,11 @@ def stripe_checkout(
                 ui_mode="embedded_page",
                 customer_email=account.get("email") or None,
                 line_items=[{"price": price_id, "quantity": 1}],
+                # Show the "Add promotion code" field in Checkout so customers
+                # can redeem the promotion codes generated in the Stripe
+                # Dashboard (each tied to a coupon). Stripe validates the code
+                # and applies the discount itself.
+                allow_promotion_codes=True,
                 metadata={"account_id": account["accountId"], "plan": plan},
                 return_url="https://cadio.net/?upgrade=success&session_id={CHECKOUT_SESSION_ID}",
             )

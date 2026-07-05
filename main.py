@@ -26,12 +26,30 @@ app = FastAPI(title="Cadio AI CAD Platform", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    # Cadio authenticates with Bearer tokens in the Authorization header, not
+    # cookies. allow_credentials must therefore be False — combining it with
+    # allow_origins=["*"] is invalid per the CORS spec and makes browsers reject
+    # cross-origin account/billing calls (the "API request failed" symptom).
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(router)
+
+
+@app.on_event("startup")
+def _warm_source_providers() -> None:
+    """Prime the design-provider connections/cache on boot so the first real
+    generation isn't cold (a cold search can time out and silently drop source
+    attribution). Best-effort — never block or fail startup."""
+    try:
+        from backend.services.design_providers import get_provider_registry
+
+        get_provider_registry()  # spawns a background warm-up thread
+    except Exception:
+        pass
 
 
 @app.get("/health")

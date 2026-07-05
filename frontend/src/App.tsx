@@ -501,7 +501,29 @@ function isModelBusyStatus(status: string) {
   return /applying|loading|sketching|generating|importing/i.test(status || "");
 }
 
+// Staged progress messages shown while a generation runs. The backend does one
+// long request, so we advance these on a timer — telling the user what Cadio is
+// actually doing makes the same wait feel much shorter than a static label.
+const GENERATION_STAGES: Array<[number, string]> = [
+  [0, "Searching Printables, Thingiverse & MakerWorld…"],
+  [5, "Ranking the best matches for your prompt…"],
+  [10, "Downloading the model files…"],
+  [18, "Importing real geometry onto your plate…"],
+  [28, "Refining mesh and dimensions…"],
+  [40, "Almost there — finalizing your model…"],
+];
+
 function ModelLoadingOverlay({ status }: { status: string }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed((Date.now() - started) / 1000), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const isGeneration = /generating/i.test(status || "");
+  const staged = isGeneration
+    ? GENERATION_STAGES.reduce((msg, [at, text]) => (elapsed >= at ? text : msg), GENERATION_STAGES[0][1])
+    : status || "Building your model…";
   return (
     <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-cadio-bg/45 backdrop-blur-[3px]">
       <style>{`
@@ -537,7 +559,7 @@ function ModelLoadingOverlay({ status }: { status: string }) {
             <span style={{ animation: "cadio-dots 1.4s infinite", animationDelay: "0.2s" }}>.</span>
             <span style={{ animation: "cadio-dots 1.4s infinite", animationDelay: "0.4s" }}>.</span>
           </p>
-          <p className="max-w-xs text-xs text-white/45">{status || "Building your model…"}</p>
+          <p className="max-w-xs text-xs text-white/45">{staged}</p>
           {/* Shimmer bar */}
           <div className="mt-1 h-1 w-44 overflow-hidden rounded-full bg-white/8">
             <div className="h-full w-1/3 rounded-full" style={{ background: "linear-gradient(90deg, transparent, #2bb8dc, transparent)", animation: "cadio-shimmer 1.3s ease-in-out infinite" }} />
@@ -583,6 +605,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
     applyExpertOperation,
     selectAllObjects,
     onDeleteObject,
+    deleteSelectedObjects,
     snapSelectedObjects,
     setPrinter,
     runPrompt,
@@ -594,6 +617,8 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
     prefetchDemoModels,
     notice,
     setNotice,
+    undo,
+    redo,
   } = useCadStore();
 
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
@@ -687,14 +712,36 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      // Ctrl/Cmd+Z → undo, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y → redo (the CAD
+      // muscle-memory shortcuts; every edit is recoverable).
+      if ((e.ctrlKey || e.metaKey) && !typing) {
+        const k = e.key.toLowerCase();
+        if (k === "z") {
+          e.preventDefault();
+          void (e.shiftKey ? redo() : undo());
+          return;
+        }
+        if (k === "y") {
+          e.preventDefault();
+          void redo();
+          return;
+        }
+      }
+      // "/" jumps to the prompt box, like search on YouTube/GitHub.
+      if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("cadio-focus-prompt"));
+        return;
+      }
       if (e.key !== "Delete" && e.key !== "Backspace") return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (typing) return;
       if (!selectedObjectId) return;
       void onDeleteObject();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [selectedObjectId, onDeleteObject]);
+  }, [selectedObjectId, onDeleteObject, undo, redo]);
 
   useEffect(() => {
     const shared = readProjectShareFromHash();
@@ -860,6 +907,7 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
           onSetOperationAmount={setOperationAmount}
           onApplyExpertOperation={(op, amount, objectId, target) => void applyExpertOperation(op, amount, objectId, target)}
           onCreatePrimitive={(payload) => void createPrimitive(payload)}
+          onDeleteSelected={() => void deleteSelectedObjects()}
           showMeasurements={showMeasurements}
         />
         </ErrorBoundary>
@@ -931,6 +979,25 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
               <span className="h-4 w-px bg-cadio-border/60" />
               <span className="text-sm font-medium text-cadio-text max-w-[140px] truncate">{projectTitle}</span>
             </button>
+            <div className="flex items-center rounded-xl border border-cadio-border/50 bg-cadio-surface/80 backdrop-blur-sm">
+              <button
+                onClick={() => void undo()}
+                disabled={modelBusy}
+                title="Undo (Ctrl+Z)"
+                className="flex h-9 w-9 items-center justify-center rounded-l-xl text-cadio-muted transition-colors hover:bg-white/5 hover:text-cadio-text disabled:opacity-30"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11" /></svg>
+              </button>
+              <span className="h-4 w-px bg-cadio-border/60" />
+              <button
+                onClick={() => void redo()}
+                disabled={modelBusy}
+                title="Redo (Ctrl+Shift+Z)"
+                className="flex h-9 w-9 items-center justify-center rounded-r-xl text-cadio-muted transition-colors hover:bg-white/5 hover:text-cadio-text disabled:opacity-30"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 000 11H13" /></svg>
+              </button>
+            </div>
             {demoLabel && (
               <div className="flex items-center gap-2">
                 <span
@@ -1165,6 +1232,15 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
           <button onClick={() => setShowMeasurements((v) => !v)}
             className={`h-8 shrink-0 rounded-lg px-3 text-xs font-medium transition-all ${showMeasurements ? "bg-white text-cadio-bg" : "border border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-white"}`}>
             Measure
+          </button>
+          <div className="mx-1 w-px bg-cadio-border/40" />
+          <button onClick={() => void undo()} disabled={modelBusy} title="Undo"
+            className="flex h-8 w-9 shrink-0 items-center justify-center rounded-lg border border-cadio-border/50 bg-cadio-surface text-cadio-muted transition-colors hover:text-white disabled:opacity-30">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11" /></svg>
+          </button>
+          <button onClick={() => void redo()} disabled={modelBusy} title="Redo"
+            className="flex h-8 w-9 shrink-0 items-center justify-center rounded-lg border border-cadio-border/50 bg-cadio-surface text-cadio-muted transition-colors hover:text-white disabled:opacity-30">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 000 11H13" /></svg>
           </button>
         </div>
 

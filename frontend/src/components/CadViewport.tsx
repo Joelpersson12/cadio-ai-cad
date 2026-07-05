@@ -745,6 +745,7 @@ interface CadViewportProps {
     objectIdOverride?: string,
     targetOverride?: string,
   ) => void;
+  onDeleteSelected?: () => void;
   mobileMode?: boolean;
   showMeasurements?: boolean;
 }
@@ -853,15 +854,16 @@ function SketchPlane({
           <lineBasicMaterial color="#7de7ff" />
         </line>
       )}
-      {preview && (tool === "circle" || tool === "hole") && (
+      {preview && tool === "hole" && (
+        <mesh position={[preview.cx, 50, preview.cz]}>
+          <cylinderGeometry args={[preview.radius, preview.radius, 100, 48, 1, true]} />
+          <meshBasicMaterial color="#fb7185" transparent opacity={0.4} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {preview && tool === "circle" && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[preview.cx, 0.35, preview.cz]}>
           <circleGeometry args={[preview.radius, 48]} />
-          <meshBasicMaterial
-            color={tool === "hole" ? "#fb7185" : "#7dd3fc"}
-            transparent
-            opacity={0.4}
-            side={THREE.DoubleSide}
-          />
+          <meshBasicMaterial color="#7dd3fc" transparent opacity={0.4} side={THREE.DoubleSide} />
         </mesh>
       )}
     </group>
@@ -923,6 +925,7 @@ export default function CadViewport({
   onSetSketchHeight,
   onSetOperationAmount,
   onApplyExpertOperation,
+  onDeleteSelected,
   mobileMode = false,
   showMeasurements = false,
 }: CadViewportProps) {
@@ -969,7 +972,7 @@ export default function CadViewport({
       onContextMenu={(e) => e.preventDefault()}
     >
       <div
-        className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-6 top-[72px] z-10 w-64 flex-col gap-2 rounded-2xl border border-white/10 bg-cadio-surface/85 p-3 backdrop-blur-2xl transition-all`}
+        className={`${expertMode ? "hidden md:flex" : "hidden"} absolute left-44 top-[72px] z-10 w-64 flex-col gap-2 rounded-2xl border border-white/10 bg-cadio-surface/85 p-3 backdrop-blur-2xl transition-all`}
         style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 60px -24px rgba(0,0,0,0.8)" }}
       >
         <div className="flex items-center justify-between px-2 py-1 mb-2">
@@ -1088,6 +1091,15 @@ export default function CadViewport({
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            disabled={!expertMode || (!selectedObjectId && selectedObjectIds.length === 0)}
+            title="Delete the selected part(s) from the build plate"
+            onClick={() => onDeleteSelected?.()}
+            className="mt-1 w-full rounded-lg border border-red-500/25 py-2 text-[11px] font-bold tracking-wide text-red-400/80 transition-all hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30"
+          >
+            Delete selected part{selectedObjectIds.length > 1 ? "s" : ""}
+          </button>
         </div>
       </div>
 

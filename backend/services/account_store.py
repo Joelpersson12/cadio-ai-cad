@@ -39,19 +39,124 @@ def _db_path() -> Path:
     return path
 
 
+# Records what _connect() ACTUALLY used on its last call, so diagnostics reflect
+# the real data path rather than a separate probe. Critically: the app can
+# connect to Turso but then fall back to ephemeral local SQLite if a later setup
+# step (row_factory / _init) throws — these globals capture that.
+_ACTIVE_BACKEND: str = "unknown"
+_TURSO_ERROR: str = ""
+
+
+# ---------------------------------------------------------------------------
+# libsql (Turso) compatibility shims.
+#
+# libsql_experimental's Rust-backed objects only partially mimic sqlite3:
+#   * its Cursor is not iterable (handled in _ensure_column),
+#   * its Connection does NOT support the `with conn:` context manager, and
+#   * its rows are plain tuples (no row["column"] access).
+# This module relies on all three sqlite3 behaviours, so a libsql connection is
+# wrapped to provide them. Local sqlite3 connections are returned unwrapped.
+# ---------------------------------------------------------------------------
+
+
+class _LibsqlRow:
+    """A row supporting both name access (row["col"]) and index access (row[0]),
+    plus .keys()/in/.get(), matching the sqlite3.Row API this module uses."""
+
+    __slots__ = ("_values", "_map")
+
+    def __init__(self, columns: list[str], values: Any) -> None:
+        self._values = values
+        self._map = {col: values[idx] for idx, col in enumerate(columns)}
+
+    def __getitem__(self, key: Any) -> Any:
+        if isinstance(key, int):
+            return self._values[key]
+        return self._map[key]
+
+    def keys(self) -> Any:
+        return list(self._map.keys())
+
+    def __contains__(self, key: Any) -> bool:
+        return key in self._map
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._map.get(key, default)
+
+
+class _LibsqlCursor:
+    def __init__(self, cursor: Any) -> None:
+        self._cursor = cursor
+
+    def _columns(self) -> list[str]:
+        return [d[0] for d in (self._cursor.description or [])]
+
+    def fetchone(self) -> Any:
+        row = self._cursor.fetchone()
+        return None if row is None else _LibsqlRow(self._columns(), row)
+
+    def fetchall(self) -> list[Any]:
+        columns = self._columns()
+        return [_LibsqlRow(columns, row) for row in self._cursor.fetchall()]
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._cursor, name)
+
+
+class _LibsqlConn:
+    """Adapter so a libsql connection works with `with conn:` and returns rows
+    that support name and index access — the sqlite3 behaviours this code uses."""
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    def execute(self, *args: Any, **kwargs: Any) -> _LibsqlCursor:
+        return _LibsqlCursor(self._conn.execute(*args, **kwargs))
+
+    def __enter__(self) -> "_LibsqlConn":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        try:
+            if exc_type is None:
+                self._conn.commit()
+            else:
+                try:
+                    self._conn.rollback()
+                except Exception:  # noqa: BLE001
+                    pass
+        finally:
+            try:
+                self._conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return False
+
+    def commit(self) -> Any:
+        return self._conn.commit()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+
 def _connect():
+    global _ACTIVE_BACKEND, _TURSO_ERROR
     turso_url = os.environ.get("TURSO_DATABASE_URL", "")
     turso_token = os.environ.get("TURSO_AUTH_TOKEN", "")
     if turso_url:
         try:
             import libsql_experimental as libsql  # type: ignore[import]
-            conn = libsql.connect(database=turso_url, auth_token=turso_token)
-            conn.row_factory = sqlite3.Row
+            raw = libsql.connect(database=turso_url, auth_token=turso_token)
+            # Wrap so `with conn:` and row["col"]/row[0] access work like sqlite3.
+            conn = _LibsqlConn(raw)
             _init(conn)
+            _ACTIVE_BACKEND = "turso"
+            _TURSO_ERROR = ""
             return conn
         except ImportError:
             # Driver missing — the persistent DB silently degrades to ephemeral
             # local storage. Loud warning so this is caught instead of losing data.
+            _TURSO_ERROR = "libsql-experimental not installed"
             print(
                 "[account_store] WARNING: TURSO_DATABASE_URL is set but "
                 "'libsql-experimental' is not installed — falling back to "
@@ -59,30 +164,94 @@ def _connect():
                 "Add 'libsql-experimental' to requirements.txt."
             )
         except Exception as exc:  # noqa: BLE001 — never let DB setup crash the app
+            _TURSO_ERROR = repr(exc)
             print(f"[account_store] WARNING: Turso connection failed ({exc!r}); falling back to local SQLite.")
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     _init(conn)
+    _ACTIVE_BACKEND = "local-ephemeral"
     return conn
 
 
 def db_backend_status() -> dict[str, Any]:
-    """Report which database backend is actually in use (for diagnostics)."""
+    """Report which database backend is ACTUALLY in use (for diagnostics).
+
+    This opens a live connection and runs a real query so it reflects the truth,
+    not merely whether the env vars are set. ``_connect()`` silently falls back
+    to ephemeral local SQLite when a configured Turso connection fails at
+    runtime, which otherwise hides the real reason accounts/logins keep resetting
+    on every Space rebuild.
+    """
     turso_url = os.environ.get("TURSO_DATABASE_URL", "")
+    turso_token = os.environ.get("TURSO_AUTH_TOKEN", "")
     if not turso_url:
-        return {"backend": "local-ephemeral", "turso_configured": False, "persistent": False}
+        return {
+            "backend": "local-ephemeral",
+            "turso_configured": False,
+            "persistent": False,
+            "hint": "Set TURSO_DATABASE_URL + TURSO_AUTH_TOKEN on the Space to persist accounts across rebuilds.",
+        }
+
     try:
-        import libsql_experimental as libsql  # type: ignore[import] # noqa: F401
-        return {"backend": "turso", "turso_configured": True, "persistent": True, "driver_installed": True}
+        import libsql_experimental as libsql  # type: ignore[import]
     except ImportError:
         return {
             "backend": "local-ephemeral",
             "turso_configured": True,
             "persistent": False,
             "driver_installed": False,
-            "warning": "libsql-experimental not installed; Turso vars ignored.",
+            "auth_token_set": bool(turso_token),
+            "warning": "TURSO_DATABASE_URL is set but 'libsql-experimental' is not installed — Turso vars are ignored and accounts are EPHEMERAL.",
+        }
+
+    # Vars set + driver present — exercise the APP's real _connect() path so we
+    # report the backend it actually lands on. _connect() can connect to Turso
+    # and then fall back to ephemeral if a setup step throws, which a separate
+    # probe would miss.
+    try:
+        conn = _connect()
+        accounts = 0
+        sessions = 0
+        try:
+            row = conn.execute("SELECT count(*) FROM accounts").fetchone()
+            accounts = int(row[0]) if row else 0
+            row = conn.execute("SELECT count(*) FROM sessions").fetchone()
+            sessions = int(row[0]) if row else 0
+        except Exception:
+            pass
+        if _ACTIVE_BACKEND == "turso":
+            return {
+                "backend": "turso",
+                "turso_configured": True,
+                "persistent": True,
+                "driver_installed": True,
+                "connection": "ok",
+                "auth_token_set": bool(turso_token),
+                "accounts": accounts,
+                "sessions": sessions,
+                "url_tail": turso_url[-32:],
+            }
+        return {
+            "backend": "local-ephemeral (TURSO FELL BACK)",
+            "turso_configured": True,
+            "persistent": False,
+            "driver_installed": True,
+            "connection": "fell_back",
+            "auth_token_set": bool(turso_token),
+            "turso_error": _TURSO_ERROR[:300],
+            "accounts_in_ephemeral": accounts,
+            "hint": "The app connected but fell back to EPHEMERAL local SQLite (writes lost on rebuild). See turso_error for why.",
+        }
+    except Exception as exc:  # noqa: BLE001 — diagnostics must never throw
+        return {
+            "backend": "unknown (probe failed)",
+            "turso_configured": True,
+            "persistent": False,
+            "driver_installed": True,
+            "auth_token_set": bool(turso_token),
+            "error": str(exc)[:300],
         }
 
 
@@ -160,7 +329,18 @@ def _ensure_column(
     column: str,
     definition: str,
 ) -> None:
-    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    # NOTE: libsql (Turso) cursors are NOT iterable — `for row in conn.execute(...)`
+    # raises "'builtins.Cursor' object is not iterable", which previously made
+    # _init() throw and silently dropped the whole app back to ephemeral local
+    # SQLite (every account/login lost on each rebuild). Always materialize with
+    # fetchall(), and read the column name by key OR position (col 1 of
+    # PRAGMA table_info) so it works whether rows are sqlite3.Row, dict, or tuple.
+    columns: set[str] = set()
+    for row in conn.execute(f"PRAGMA table_info({table})").fetchall():
+        try:
+            columns.add(row["name"])
+        except (TypeError, KeyError, IndexError):
+            columns.add(row[1])
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
