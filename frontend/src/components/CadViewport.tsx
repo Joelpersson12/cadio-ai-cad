@@ -13,8 +13,10 @@ const VIEW_COLORS = {
   background: "#111418",
   plate: "#1a2530",
   plateEdge: "#2bb8dc",
-  gridCell: "#1e2832",
-  gridSection: "#2bb8dc",
+  gridCell: "#232d38",
+  // Softer, desaturated teal for the section lines — the grid should recede
+  // behind the model instead of competing with it in bright cyan.
+  gridSection: "#1d5f74",
   neutralBody: "#d4d9e0",
   selectedBody: "#f0a020",
   hoveredBody: "#dde3ea",
@@ -1111,18 +1113,19 @@ export default function CadViewport({
           gl.outputColorSpace = THREE.SRGBColorSpace;
           // Filmic tonemapping for richer contrast and a premium, cinematic look.
           gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 0.92;
+          gl.toneMappingExposure = 1.06;
           // Subtle vertical gradient backdrop (lighter top, near-black bottom) for
           // a deeper, premium "OLED" sense of space instead of a flat fill.
+          // Lifted a touch so the area above the model reads as space, not void.
           const grad = document.createElement("canvas");
           grad.width = 2;
           grad.height = 512;
           const ctx = grad.getContext("2d");
           if (ctx) {
             const g = ctx.createLinearGradient(0, 0, 0, 512);
-            g.addColorStop(0, "#171d24");
-            g.addColorStop(0.55, "#0f1318");
-            g.addColorStop(1, "#070a0d");
+            g.addColorStop(0, "#1d242d");
+            g.addColorStop(0.55, "#131920");
+            g.addColorStop(1, "#0a0e13");
             ctx.fillStyle = g;
             ctx.fillRect(0, 0, 2, 512);
             const tex = new THREE.CanvasTexture(grad);
@@ -1145,16 +1148,18 @@ export default function CadViewport({
         <Lightformer intensity={1.0} rotation-x={-Math.PI / 2} position={[0, 8, 0]} scale={[12, 12, 1]} color="#dfeefc" />
       </Environment>
 
-      {/* Key light — top-right-front, main shading source */}
-      <directionalLight position={[300, 500, 300]} intensity={1.05} color="#f5f8ff" />
+      {/* Key light — top-right-front, main shading source. Slightly warm so
+          the plastic reads friendly instead of clinical blue-grey. */}
+      <directionalLight position={[300, 500, 300]} intensity={1.15} color="#fff6ea" />
       {/* Fill — soft left, reduces harsh shadows */}
-      <directionalLight position={[-350, 250, -150]} intensity={0.5} color="#c8dff0" />
+      <directionalLight position={[-350, 250, -150]} intensity={0.55} color="#cfe0f0" />
       {/* Rim — back edge separation */}
-      <directionalLight position={[0, 150, -500]} intensity={0.32} color="#ffffff" />
+      <directionalLight position={[0, 150, -500]} intensity={0.38} color="#ffffff" />
       {/* Bottom fill — prevents underside faces from going black */}
       <directionalLight position={[0, -300, 0]} intensity={0.35} color="#8ab4cc" />
-      {/* Ambient hemisphere — warmer ground so floor-facing faces stay visible */}
-      <hemisphereLight intensity={0.28} color="#dde8f0" groundColor="#3a4a5a" />
+      {/* Ambient hemisphere — lifted so the model never sinks into the dark
+          background (the old 0.28 left phone screens looking murky) */}
+      <hemisphereLight intensity={0.42} color="#e4ecf4" groundColor="#46566a" />
 
       {/* Soft contact shadow grounds the model so it doesn't float. Only render
           it when there's actually a model — otherwise the baked shadow texture
@@ -1252,11 +1257,13 @@ export default function CadViewport({
       {/* Premium postprocessing (desktop only) */}
       <PremiumEffects enabled={highGraphics} sceneRadius={sceneRadius} />
 
-      {/* Orientation gizmo */}
+      {/* Orientation gizmo — negative-axis dots hidden: on small screens the
+          six-ball layout reads as a glitch rather than a navigation aid. */}
       <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
         <GizmoViewport
           axisColors={["#ff6b6b", "#4ecdc4", "#74b9ff"]}
           labelColor="white"
+          hideNegativeAxes
         />
       </GizmoHelper>
       </Canvas>
