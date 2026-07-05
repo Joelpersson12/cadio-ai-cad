@@ -979,6 +979,25 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
               <span className="h-4 w-px bg-cadio-border/60" />
               <span className="text-sm font-medium text-cadio-text max-w-[140px] truncate">{projectTitle}</span>
             </button>
+            <div className="flex items-center rounded-xl border border-cadio-border/50 bg-cadio-surface/80 backdrop-blur-sm">
+              <button
+                onClick={() => void undo()}
+                disabled={modelBusy}
+                title="Undo (Ctrl+Z)"
+                className="flex h-9 w-9 items-center justify-center rounded-l-xl text-cadio-muted transition-colors hover:bg-white/5 hover:text-cadio-text disabled:opacity-30"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11" /></svg>
+              </button>
+              <span className="h-4 w-px bg-cadio-border/60" />
+              <button
+                onClick={() => void redo()}
+                disabled={modelBusy}
+                title="Redo (Ctrl+Shift+Z)"
+                className="flex h-9 w-9 items-center justify-center rounded-r-xl text-cadio-muted transition-colors hover:bg-white/5 hover:text-cadio-text disabled:opacity-30"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 000 11H13" /></svg>
+              </button>
+            </div>
             {demoLabel && (
               <div className="flex items-center gap-2">
                 <span
@@ -1213,6 +1232,15 @@ function WorkspaceApp({ onHome, initialPrompt, onInitialPromptConsumed }: { onHo
           <button onClick={() => setShowMeasurements((v) => !v)}
             className={`h-8 shrink-0 rounded-lg px-3 text-xs font-medium transition-all ${showMeasurements ? "bg-white text-cadio-bg" : "border border-cadio-border/50 bg-cadio-surface text-cadio-muted hover:text-white"}`}>
             Measure
+          </button>
+          <div className="mx-1 w-px bg-cadio-border/40" />
+          <button onClick={() => void undo()} disabled={modelBusy} title="Undo"
+            className="flex h-8 w-9 shrink-0 items-center justify-center rounded-lg border border-cadio-border/50 bg-cadio-surface text-cadio-muted transition-colors hover:text-white disabled:opacity-30">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11" /></svg>
+          </button>
+          <button onClick={() => void redo()} disabled={modelBusy} title="Redo"
+            className="flex h-8 w-9 shrink-0 items-center justify-center rounded-lg border border-cadio-border/50 bg-cadio-surface text-cadio-muted transition-colors hover:text-white disabled:opacity-30">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 000 11H13" /></svg>
           </button>
         </div>
 
