@@ -183,12 +183,14 @@ export function SourceFilesModal({
   const srcLabel = source ? (SOURCE_LABELS[source.source] ?? source.source) : "";
   return (
     <div
-      className="fixed inset-0 z-[200] grid place-items-center px-4 py-6"
-      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)" }}
+      // Mobile: bottom sheet with a light, unblurred overlay so the build plate
+      // stays visible above — picking a file swaps the model live where you can
+      // see it. Desktop: centered dialog over a dimmed, blurred backdrop.
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/30 sm:grid sm:place-items-center sm:bg-black/70 sm:px-4 sm:py-6 sm:backdrop-blur-xl"
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-lg max-h-[88vh] flex-col overflow-hidden rounded-2xl shadow-2xl"
+        className="flex w-full max-w-lg max-h-[58vh] flex-col overflow-hidden rounded-t-2xl shadow-2xl sm:max-h-[88vh] sm:rounded-2xl"
         style={{ background: "#0d1318", border: "1px solid rgba(43,184,220,0.25)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -235,7 +237,7 @@ export function SourceFilesModal({
             return (
               <div
                 key={f.id}
-                className={`group flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                className={`group flex w-full flex-col gap-2.5 rounded-xl px-4 py-3 text-left transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${
                   f.active
                     ? "border border-cadio-accent/40 bg-cadio-accent/10"
                     : "border border-white/7 bg-white/[0.03] hover:border-cadio-accent/30 hover:bg-white/[0.06]"
@@ -262,8 +264,15 @@ export function SourceFilesModal({
                     )}
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-white">{f.name}</p>
-                    <p className="text-[11px] text-white/35">
+                    {/* Full name, wrapping up to two lines — a squeezed single-line
+                        truncate turned names into "e…" on narrow phone screens. */}
+                    <p
+                      className="break-words text-sm font-medium leading-snug text-white"
+                      style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                    >
+                      {f.name}
+                    </p>
+                    <p className="mt-0.5 whitespace-nowrap text-[11px] text-white/35">
                       {isAssembly
                         ? `${f.part_count ?? ""} parts`
                         : [f.file_type?.toUpperCase(), formatFileSize(f.file_size)].filter(Boolean).join(" · ")}
@@ -274,12 +283,12 @@ export function SourceFilesModal({
                   <button
                     disabled={busy}
                     onClick={() => onSelect(f.id, "swap")}
-                    className="shrink-0 rounded-lg bg-cadio-accent/15 px-3 py-1.5 text-[11px] font-bold text-cadio-accent transition-colors hover:bg-cadio-accent/25 disabled:opacity-50"
+                    className="shrink-0 self-end rounded-lg bg-cadio-accent/15 px-3 py-1.5 text-[11px] font-bold text-cadio-accent transition-colors hover:bg-cadio-accent/25 disabled:opacity-50 sm:self-auto"
                   >
                     Place all →
                   </button>
                 ) : f.active ? (
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-auto">
                     <span className="rounded-full bg-cadio-accent/15 px-2 py-1 text-[10px] font-bold text-cadio-accent">On plate</span>
                     <button
                       disabled={busy}
@@ -299,7 +308,7 @@ export function SourceFilesModal({
                     </button>
                   </div>
                 ) : (
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-auto">
                     <button
                       disabled={busy}
                       onClick={() => onSelect(f.id, "add")}
