@@ -24,3 +24,6 @@ Thumbs.db
 # Temp
 *.tmp
 *.log
+
+# Local runtime data (ephemeral account DB used in dev)
+runtime-data/
