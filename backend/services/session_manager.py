@@ -1181,7 +1181,7 @@ def _try_replace_with_imported_source_model(
 
         examples = [
             example
-            for example in get_provider_registry().search_all(prompt, limit=14)
+            for example in get_provider_registry().search_all(prompt, limit=20)
             if example.source in _IMPORTABLE_SOURCES
         ]
     except Exception:
@@ -1237,7 +1237,9 @@ def _try_replace_with_imported_source_model(
                 _spawn_source_file_prefetch(
                     session.get("session_id", ""), first_dicts, prompt, first_candidate.get("id")
                 )
-                _spawn_variant_prefetch(session.get("session_id", ""), top_examples[1:], prompt)
+                # Warm the ENTIRE ranked variant list (not just the scoring
+                # candidates) so repeated "Next model" presses are all instant.
+                _spawn_variant_prefetch(session.get("session_id", ""), examples[1:], prompt)
                 selected_file_name = first_candidate.get("name")
                 options_n = len([o for o in session["source_files"] if o.get("id") != "__all__"])
                 return [
@@ -1559,51 +1561,83 @@ def _spawn_source_file_prefetch(
     Thread(target=_work, name="cadio-source-prefetch", daemon=True).start()
 
 
+# How many runner-up models to warm in the background after a generation, and
+# the ceiling on cached meshes per session (memory guard — ~20 variants plus
+# the active model's own files). Tunable via env without a code change.
+_VARIANT_PREFETCH_COUNT = max(1, int(os.environ.get("VARIANT_PREFETCH_COUNT", "20")))
+_MESH_CACHE_MAX = max(8, int(os.environ.get("SOURCE_MESH_CACHE_MAX", "28")))
+
+
+def _mesh_cache_full(session_id: str) -> bool:
+    with _lock:
+        sess = _sessions.get(session_id)
+        if sess is None:
+            return True
+        cache = sess.get("_source_mesh_cache")
+        return isinstance(cache, dict) and len(cache) >= _MESH_CACHE_MAX
+
+
 def _spawn_variant_prefetch(session_id: str, examples: list[Any], prompt: str) -> None:
     """Warm the runner-up models in the background after the fast path showed
     the #1 match: resolve each one's file list (fills the resolve cache) and
-    download its best file into the session mesh cache, so 'Next model' and
-    variant switching are instant. Best-effort; never blocks or raises."""
+    download its best file into the session mesh cache, so pressing
+    'Next model' repeatedly is instant — the whole variant list is ready
+    before the user gets there. Best-effort; never blocks or raises."""
     if not session_id or not examples:
         return
     prefer_flat = _prefer_flat_for_prompt(prompt)
-    ex_data = [(ex.url, ex.source) for ex in examples[:3]]
+    ex_data = [(ex.url, ex.source) for ex in examples[:_VARIANT_PREFETCH_COUNT]]
 
-    def _work() -> None:
+    def _warm_one(url: str, source: str) -> None:
         from backend.services.design_providers import resolve_source_model_files as _resolve
 
-        for url, source in ex_data:
-            try:
-                ranked = _rank_source_files(_resolve(url, source, limit=24), prompt, 0)
-            except Exception:  # noqa: BLE001
-                continue
-            cand = next(
-                (f.to_dict() for f in ranked if _source_file_is_importable(f.to_dict())),
-                None,
-            )
-            if cand is None:
-                continue
-            fid = str(cand.get("id") or "")
-            if not fid:
-                continue
-            with _lock:
-                sess = _sessions.get(session_id)
-                if sess is None:
-                    return
-                cache = sess.get("_source_mesh_cache")
-                if isinstance(cache, dict) and fid in cache:
-                    continue
-            try:
-                shape = _try_import_source_stl(cand, prefer_flat=prefer_flat)
-            except Exception:  # noqa: BLE001
-                continue
-            if shape is None:
-                continue
-            with _lock:
-                sess = _sessions.get(session_id)
-                if sess is None:
-                    return
-                sess.setdefault("_source_mesh_cache", {})[fid] = shape
+        if _mesh_cache_full(session_id):
+            return
+        try:
+            ranked = _rank_source_files(_resolve(url, source, limit=24), prompt, 0)
+        except Exception:  # noqa: BLE001
+            return
+        cand = next(
+            (f.to_dict() for f in ranked if _source_file_is_importable(f.to_dict())),
+            None,
+        )
+        if cand is None:
+            return
+        fid = str(cand.get("id") or "")
+        if not fid:
+            return
+        with _lock:
+            sess = _sessions.get(session_id)
+            if sess is None:
+                return
+            cache = sess.get("_source_mesh_cache")
+            if isinstance(cache, dict) and fid in cache:
+                return
+        try:
+            shape = _try_import_source_stl(cand, prefer_flat=prefer_flat)
+        except Exception:  # noqa: BLE001
+            return
+        if shape is None:
+            return
+        with _lock:
+            sess = _sessions.get(session_id)
+            if sess is None:
+                return
+            cache = sess.setdefault("_source_mesh_cache", {})
+            if len(cache) < _MESH_CACHE_MAX:
+                cache[fid] = shape
+
+    def _work() -> None:
+        # A few workers so ~20 models warm in a fraction of the sequential
+        # time, while staying gentle on the providers and the Space's memory.
+        from concurrent.futures import ThreadPoolExecutor
+
+        pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="cadio-variant-warm")
+        try:
+            for url, source in ex_data:
+                pool.submit(_warm_one, url, source)
+        finally:
+            pool.shutdown(wait=True)
 
     Thread(target=_work, name="cadio-variant-prefetch", daemon=True).start()
 
@@ -1781,7 +1815,7 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
 
     examples = [
         example
-        for example in get_provider_registry().search_all(prompt, limit=14)
+        for example in get_provider_registry().search_all(prompt, limit=20)
         if example.source in _IMPORTABLE_SOURCES
     ]
     if not examples:
