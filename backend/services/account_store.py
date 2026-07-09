@@ -333,6 +333,17 @@ def _init(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS usage_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL DEFAULT '',
+            prompt TEXT NOT NULL DEFAULT '',
+            session_id TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
 
 
@@ -772,6 +783,70 @@ def consume_download(token: str | None, session_id: str = "", fmt: str = "") -> 
         ).fetchone()
         conn.commit()
     return _account_from_row(updated)
+
+
+def log_usage_event(kind: str, prompt: str = "", session_id: str = "") -> None:
+    """Record an anonymous usage event (e.g. a generation) for owner stats.
+
+    Runs the DB write on a daemon thread so a slow Turso round-trip can never
+    add latency to generation. Best-effort: failures are swallowed."""
+    from threading import Thread
+
+    def _write() -> None:
+        try:
+            with _connect() as conn:
+                conn.execute(
+                    "INSERT INTO usage_events (kind, prompt, session_id, created_at) VALUES (?, ?, ?, ?)",
+                    (kind[:32], (prompt or "")[:300], (session_id or "")[:64], _now()),
+                )
+                conn.commit()
+        except Exception:  # noqa: BLE001 — stats must never break the app
+            pass
+
+    Thread(target=_write, name="cadio-usage-log", daemon=True).start()
+
+
+def usage_stats(days: int = 14, prompt_limit: int = 50) -> dict[str, Any]:
+    """Anonymous usage summary: generations per day, recent prompts, sessions."""
+    with _connect() as conn:
+        per_day: list[dict[str, Any]] = []
+        for row in conn.execute(
+            """
+            SELECT substr(created_at, 1, 10) AS day,
+                   COUNT(*) AS events,
+                   COUNT(DISTINCT session_id) AS sessions
+            FROM usage_events
+            GROUP BY day
+            ORDER BY day DESC
+            LIMIT ?
+            """,
+            (max(1, min(60, days)),),
+        ).fetchall():
+            per_day.append(
+                {
+                    "day": _row_value(row, "day", ""),
+                    "generations": int(_row_value(row, "events", 0)),
+                    "unique_sessions": int(_row_value(row, "sessions", 0)),
+                }
+            )
+        prompts: list[dict[str, Any]] = []
+        for row in conn.execute(
+            "SELECT prompt, kind, created_at FROM usage_events ORDER BY id DESC LIMIT ?",
+            (max(1, min(200, prompt_limit)),),
+        ).fetchall():
+            prompts.append(
+                {
+                    "prompt": _row_value(row, "prompt", ""),
+                    "kind": _row_value(row, "kind", ""),
+                    "at": _row_value(row, "created_at", ""),
+                }
+            )
+        total = conn.execute("SELECT COUNT(*) FROM usage_events").fetchone()
+    return {
+        "total_usage_events": int(total[0]) if total else 0,
+        "per_day": per_day,
+        "recent_prompts": prompts,
+    }
 
 
 def download_stats(limit: int = 100) -> dict[str, Any]:
