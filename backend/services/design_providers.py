@@ -1857,23 +1857,20 @@ class ProviderRegistry:
     _search_cache: dict[str, tuple[float, list]] = {}
     _SEARCH_CACHE_TTL = 45.0
 
-    def search_all(self, query: str, limit: int = 5) -> list[ExampleDesign]:
-        """Search all available providers in parallel with a total 4-second deadline."""
-        from concurrent.futures import ThreadPoolExecutor, wait as _wait
+    def _fan_out_search(self, search_query: str, deadline_s: float, per_query_limit: int) -> dict[str, tuple[float, ExampleDesign]]:
+        """Query every available provider in parallel and rank the hits.
 
-        search_query = normalize_source_query(query) or query
-        cache_key = search_query.lower().strip()
-        now = time.monotonic()
-
-        cached = self._search_cache.get(cache_key)
-        if cached is not None:
-            ts, cached_results = cached
-            if now - ts < self._SEARCH_CACHE_TTL:
-                return cached_results[:limit]
+        Two latency rules make this fast without hurting cold-start reliability:
+        - EARLY EXIT: once we have plenty of ranked results and at least a couple
+          of seconds have passed, stop waiting for stragglers — the slowest
+          provider no longer gates every generation.
+        - NON-BLOCKING SHUTDOWN: the executor is shut down with wait=False.
+          The old `with ThreadPoolExecutor(...)` form blocked on exit until every
+          in-flight provider call finished, which silently defeated the deadline.
+        """
+        from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait as _wait
 
         variants = _query_variants(search_query) or [search_query]
-        per_query_limit = max(limit * 2, 12)
-
         tasks = [
             (provider, variant)
             for provider in self.providers.values()
@@ -1889,35 +1886,89 @@ class ProviderRegistry:
                 return []
 
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
+        started = time.monotonic()
+        deadline = started + deadline_s
+        min_wait_s = 2.2   # always give slow-but-good providers a fair chance
+        enough_results = 8
+
+        executor = ThreadPoolExecutor(max_workers=16)
+        try:
+            pending = {executor.submit(_search_one, task) for task in tasks}
+            while pending:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                done, pending = _wait(pending, timeout=min(remaining, 0.25), return_when=FIRST_COMPLETED)
+                for future in done:
+                    try:
+                        for design in future.result(timeout=0):
+                            score = _design_score(search_query, design)
+                            if score <= 0:
+                                continue
+                            existing = ranked.get(design.url)
+                            if existing is None or score > existing[0]:
+                                ranked[design.url] = (score, design)
+                    except Exception:
+                        pass
+                elapsed = time.monotonic() - started
+                if elapsed >= min_wait_s and len(ranked) >= enough_results:
+                    break
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+        return ranked
+
+    def search_all(self, query: str, limit: int = 5) -> list[ExampleDesign]:
+        """Search all available providers in parallel within a deadline.
+
+        Handles any input language: non-Latin scripts are translated to an
+        English query up front (the model sites are English-only), and if a
+        Latin-script query finds nothing, one LLM-translated retry runs so
+        free-form prompts in e.g. German, Polish or Spanish still hit."""
+        from backend.services.prompt_translation import (
+            llm_translate_search_query,
+            query_needs_llm_translation,
+        )
+
+        search_query = normalize_source_query(query) or query
+        cache_key = search_query.lower().strip()
+        now = time.monotonic()
+
+        cached = self._search_cache.get(cache_key)
+        if cached is not None:
+            ts, cached_results = cached
+            if now - ts < self._SEARCH_CACHE_TTL:
+                return cached_results[:limit]
+
+        # Non-Latin scripts (Cyrillic, CJK, Arabic, ...) can never match the
+        # English-only providers — translate before the first fan-out.
+        if query_needs_llm_translation(search_query):
+            translated = llm_translate_search_query(query)
+            if translated:
+                search_query = normalize_source_query(translated) or translated
+
+        per_query_limit = max(limit * 2, 12)
         # Cross-provider fan-out deadline. A too-tight budget silently drops all
         # results on a cold container (first request after a deploy pays DNS+TLS
         # setup to every provider), which makes generation fall back to a
         # source-less procedural model — i.e. the "Source/Files are gone" bug.
-        # Generation overall allows ~45s, so we can afford a more forgiving
-        # search window. Override with SOURCE_SEARCH_DEADLINE if needed.
+        # The early-exit in _fan_out_search means warm requests rarely wait this
+        # long. Override with SOURCE_SEARCH_DEADLINE if needed.
         try:
             search_deadline = float(os.environ.get("SOURCE_SEARCH_DEADLINE", "9.0"))
         except ValueError:
             search_deadline = 9.0
-        deadline = time.monotonic() + search_deadline
 
-        with ThreadPoolExecutor(max_workers=16) as executor:
-            futures = {executor.submit(_search_one, task) for task in tasks}
-            remaining = max(0.0, deadline - time.monotonic())
-            done, not_done = _wait(futures, timeout=remaining)
-            for f in not_done:
-                f.cancel()
-            for future in done:
-                try:
-                    for design in future.result(timeout=0):
-                        score = _design_score(search_query, design)
-                        if score <= 0:
-                            continue
-                        existing = ranked.get(design.url)
-                        if existing is None or score > existing[0]:
-                            ranked[design.url] = (score, design)
-                except Exception:
-                    pass
+        ranked = self._fan_out_search(search_query, search_deadline, per_query_limit)
+
+        # Latin-script prompt that found nothing — probably a language (or very
+        # loose phrasing) the deterministic dictionary doesn't cover. One
+        # LLM-translated retry with a shorter deadline.
+        if not ranked:
+            translated = llm_translate_search_query(query)
+            if translated:
+                retry_query = normalize_source_query(translated) or translated
+                if retry_query.lower().strip() != search_query.lower().strip():
+                    ranked = self._fan_out_search(retry_query, min(6.0, search_deadline), per_query_limit)
 
         results = list(ranked.values())
         results.sort(key=lambda item: item[0], reverse=True)

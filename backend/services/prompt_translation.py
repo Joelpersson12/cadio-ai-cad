@@ -639,3 +639,95 @@ def translated_query_action(prompt: str) -> str | None:
     if not query:
         return None
     return f'translated-query: "{query}"'
+
+
+# ---------------------------------------------------------------------------
+# LLM-powered free-language translation
+# ---------------------------------------------------------------------------
+# The regex dictionary above covers common Swedish phrasing deterministically.
+# For every OTHER language (and very free phrasing in any language) we ask a
+# fast LLM to boil the prompt down to a short English search query. Results
+# are cached so repeated prompts cost nothing, and every failure path returns
+# None so source search continues with the original query — the LLM can only
+# improve results, never block them.
+
+_LLM_QUERY_CACHE: dict[str, str | None] = {}
+
+_NON_LATIN_RE = re.compile(
+    "[Ѐ-ӿ֐-׿؀-ۿऀ-ॿ一-鿿"
+    "぀-ヿ가-힯฀-๿]"
+)
+
+
+def query_needs_llm_translation(prompt: str) -> bool:
+    """True when the prompt is written in a non-Latin script — the model sites
+    are English-only, so these can't succeed without translation."""
+    return bool(_NON_LATIN_RE.search(prompt or ""))
+
+
+def llm_translate_search_query(prompt: str) -> str | None:
+    """Translate a free-form prompt in any language into a short English
+    search query for 3D-model sites. Returns None when no LLM is configured
+    or the call fails; callers must treat None as "use the original query"."""
+    import os
+
+    text = (prompt or "").strip()
+    if not text:
+        return None
+    cache_key = text.lower()
+    if cache_key in _LLM_QUERY_CACHE:
+        return _LLM_QUERY_CACHE[cache_key]
+
+    instruction = (
+        "The user describes a 3D-printable object, possibly in any language and "
+        "very loosely worded. Reply with ONLY a short English search query "
+        "(2-6 words, no punctuation) that best matches the object on 3D model "
+        "sites like Printables or Thingiverse. Keep brand names, standards and "
+        "measurements. Do not explain."
+    )
+    result: str | None = None
+    try:
+        if os.environ.get("GROQ_API_KEY"):
+            from openai import OpenAI
+
+            client = OpenAI(
+                api_key=os.environ["GROQ_API_KEY"],
+                base_url="https://api.groq.com/openai/v1",
+                timeout=4.0,
+                max_retries=0,
+            )
+            resp = client.chat.completions.create(
+                model=os.environ.get("GROQ_TRANSLATE_MODEL", "llama-3.1-8b-instant"),
+                messages=[
+                    {"role": "system", "content": instruction},
+                    {"role": "user", "content": text},
+                ],
+                temperature=0,
+                max_tokens=40,
+            )
+            result = (resp.choices[0].message.content or "").strip()
+        elif os.environ.get("ANTHROPIC_API_KEY"):
+            import anthropic
+
+            client = anthropic.Anthropic(timeout=6.0, max_retries=0)
+            resp = client.messages.create(
+                model="claude-opus-4-8",
+                max_tokens=40,
+                system=instruction,
+                messages=[{"role": "user", "content": text}],
+            )
+            result = "".join(
+                block.text for block in resp.content if getattr(block, "type", "") == "text"
+            ).strip()
+    except Exception:  # noqa: BLE001 — translation is best-effort, never fatal
+        result = None
+
+    if result:
+        # Guard against chatty replies: keep it query-shaped or drop it.
+        result = result.strip().strip('"').strip()
+        if len(result) > 80 or "\n" in result:
+            result = None
+    _LLM_QUERY_CACHE[cache_key] = result
+    if len(_LLM_QUERY_CACHE) > 512:
+        _LLM_QUERY_CACHE.clear()
+    return result
