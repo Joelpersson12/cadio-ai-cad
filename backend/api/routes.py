@@ -181,7 +181,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-07-06T-fastpath-stats-ui"
+BUILD_MARKER = "2026-07-06T-deep-variant-prefetch"
 
 
 @router.get("/api/debug/version")
