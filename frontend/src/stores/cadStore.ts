@@ -71,6 +71,9 @@ interface CadState {
   // UI
   status: string;
   isBusy: boolean;
+  // The most recent generation prompt — lets export recover automatically
+  // when a server redeploy wiped the in-memory model session.
+  lastPrompt: string;
   transformMode: TransformMode;
   expertMode: boolean;
   expertTool: ExpertTool;
@@ -157,6 +160,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   printSettings: null,
   status: "Ready",
   isBusy: false,
+  lastPrompt: "",
   transformMode: "off",
   expertMode: false,
   expertTool: "select",
@@ -284,7 +288,7 @@ export const useCadStore = create<CadState>((set, get) => ({
   runPrompt: async (prompt: string) => {
     const { sessionId, printer } = get();
     const startedAt = Date.now();
-    set({ status: "Generating model...", isBusy: true });
+    set({ status: "Generating model...", isBusy: true, lastPrompt: prompt });
     try {
       const data = await apiGenerate({
         session_id: sessionId || undefined,

@@ -320,10 +320,16 @@ def _init(conn: sqlite3.Connection) -> None:
         )
         """
     )
-    conn.execute(
+    # Stats tables are strictly best-effort: _connect() treats ANY _init
+    # failure as "Turso is broken" and silently falls back to an EMPTY
+    # ephemeral database — which wipes every account/plan from the app's
+    # point of view. Optional tables must never be able to trigger that.
+    # (Plain INTEGER PRIMARY KEY auto-increments in SQLite; AUTOINCREMENT
+    # is unnecessary and some libsql/Turso versions reject it.)
+    for ddl in (
         """
         CREATE TABLE IF NOT EXISTS download_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             account_id TEXT NOT NULL,
             email TEXT NOT NULL DEFAULT '',
             plan TEXT NOT NULL DEFAULT 'free',
@@ -331,19 +337,21 @@ def _init(conn: sqlite3.Connection) -> None:
             format TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL
         )
-        """
-    )
-    conn.execute(
+        """,
         """
         CREATE TABLE IF NOT EXISTS usage_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             kind TEXT NOT NULL DEFAULT '',
             prompt TEXT NOT NULL DEFAULT '',
             session_id TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL
         )
-        """
-    )
+        """,
+    ):
+        try:
+            conn.execute(ddl)
+        except Exception:  # noqa: BLE001 — stats tables must never sink the DB
+            pass
     conn.commit()
 
 
