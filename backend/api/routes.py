@@ -181,7 +181,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-07-06T-fast-search-anylang-dlstats"
+BUILD_MARKER = "2026-07-06T-usage-stats"
 
 
 @router.get("/api/debug/version")
@@ -223,9 +223,13 @@ def debug_downloads(key: str = Query(default=""), limit: int = Query(default=100
     if not key or key != admin_key:
         return _error(403, "Wrong or missing key.")
     try:
-        from backend.services.account_store import download_stats
+        from backend.services.account_store import download_stats, usage_stats
 
-        return {"build": BUILD_MARKER, **download_stats(limit=limit)}
+        return {
+            "build": BUILD_MARKER,
+            **download_stats(limit=limit),
+            "usage": usage_stats(),
+        }
     except Exception as exc:
         return _error(500, f"{type(exc).__name__}: {exc}")
 
@@ -895,6 +899,14 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
 @router.post("/api/generate", response_model=None)
 async def generate(data: GenerateRequest) -> ScenePayload | JSONResponse:
     try:
+        # Anonymous usage stats for the owner dashboard (fire-and-forget —
+        # the write happens on a daemon thread, generation never waits).
+        try:
+            from backend.services.account_store import log_usage_event
+
+            log_usage_event("generate", data.prompt or "", data.session_id or "")
+        except Exception:
+            pass
         payload, session_id = await asyncio.wait_for(
             asyncio.to_thread(_sync_generate, data),
             timeout=GENERATION_TIMEOUT_SECONDS,
