@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useCadStore } from "../stores/cadStore";
 import { downloadExport } from "../utils/api";
 import { copyText } from "../utils/projectShare";
@@ -27,7 +27,13 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
     printSettings,
     selectedObjectId,
     setSelectedScalePercent,
+    runPrompt,
+    lastPrompt,
   } = useCadStore();
+  // One automatic recovery per dialog: a server redeploy wipes in-memory
+  // model sessions, so the first download after a deploy would 404. We
+  // silently regenerate from the last prompt and retry once.
+  const retriedRef = useRef(false);
   const [format, setFormat] = useState("stl");
   const [copied, setCopied] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
@@ -102,6 +108,18 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
       } else if (msg.includes("free download") || msg.includes("limit") || msg.toLowerCase().includes("upgrade") || msg.includes("402")) {
         onRequestUpgrade?.();
       } else if (msg.toLowerCase().includes("session not found") || msg.includes("404")) {
+        if (lastPrompt && !retriedRef.current) {
+          retriedRef.current = true;
+          setExportError("The server was updated — rebuilding your model…");
+          try {
+            await runPrompt(lastPrompt);
+            setExportError("");
+            await handleDownload();
+            return;
+          } catch {
+            // fall through to the manual message
+          }
+        }
         setExportError("Session expired — please regenerate your model and try again.");
       } else {
         setExportError(msg);
