@@ -181,7 +181,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-07-04T-parallel-resolve-faster-gen"
+BUILD_MARKER = "2026-07-06T-fast-search-anylang-dlstats"
 
 
 @router.get("/api/debug/version")
@@ -206,6 +206,28 @@ def debug_version() -> dict[str, Any]:
         "database": db,
         "llm": llm,
     }
+
+
+@router.get("/api/debug/downloads", response_model=None)
+def debug_downloads(key: str = Query(default=""), limit: int = Query(default=100)) -> dict[str, Any] | JSONResponse:
+    """Owner-only download statistics: who downloaded what, and when.
+
+    Contains customer emails, so it requires the ADMIN_STATS_KEY secret
+    (set it in the Space settings and call /api/debug/downloads?key=...).
+    """
+    import os as _os
+
+    admin_key = _os.environ.get("ADMIN_STATS_KEY", "")
+    if not admin_key:
+        return _error(503, "Set the ADMIN_STATS_KEY env var in your Space, then call this endpoint with ?key=<that value>.")
+    if not key or key != admin_key:
+        return _error(403, "Wrong or missing key.")
+    try:
+        from backend.services.account_store import download_stats
+
+        return {"build": BUILD_MARKER, **download_stats(limit=limit)}
+    except Exception as exc:
+        return _error(500, f"{type(exc).__name__}: {exc}")
 
 
 @router.get("/api/debug/search")
@@ -1420,7 +1442,7 @@ def export_model(
 
         # Consume one download credit after exporting (raises on limit)
         try:
-            consume_download(token)
+            consume_download(token, session_id=session_id, fmt=fmt_key)
         except PermissionError as exc:
             return _error(401, str(exc))
         except ValueError as exc:

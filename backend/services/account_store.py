@@ -320,6 +320,19 @@ def _init(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS download_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id TEXT NOT NULL,
+            email TEXT NOT NULL DEFAULT '',
+            plan TEXT NOT NULL DEFAULT 'free',
+            session_id TEXT NOT NULL DEFAULT '',
+            format TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
 
 
@@ -688,7 +701,7 @@ def get_account_profile(token: str | None) -> dict[str, Any]:
     return account
 
 
-def consume_download(token: str | None) -> dict[str, Any]:
+def consume_download(token: str | None, session_id: str = "", fmt: str = "") -> dict[str, Any]:
     if not token:
         raise PermissionError("Login required to download")
     now = _now()
@@ -744,12 +757,59 @@ def consume_download(token: str | None) -> dict[str, Any]:
             "UPDATE sessions SET last_seen = ? WHERE token = ?",
             (now, token),
         )
+        # Log the download so the owner can see who exports files and when
+        # (surfaced via /api/debug/downloads).
+        try:
+            conn.execute(
+                "INSERT INTO download_events (account_id, email, plan, session_id, format, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (account_id, _row_value(row, "email", ""), plan, session_id[:64], fmt[:12], now),
+            )
+        except Exception:  # noqa: BLE001 — stats must never block a download
+            pass
         updated = conn.execute(
             "SELECT * FROM accounts WHERE id = ?",
             (account_id,),
         ).fetchone()
         conn.commit()
     return _account_from_row(updated)
+
+
+def download_stats(limit: int = 100) -> dict[str, Any]:
+    """Owner-facing stats: recent download events + per-account totals."""
+    with _connect() as conn:
+        events = []
+        for row in conn.execute(
+            "SELECT email, plan, session_id, format, created_at FROM download_events ORDER BY id DESC LIMIT ?",
+            (max(1, min(500, limit)),),
+        ).fetchall():
+            events.append(
+                {
+                    "email": _row_value(row, "email", "") or _row_value(row, "account_id", ""),
+                    "plan": _row_value(row, "plan", ""),
+                    "session_id": _row_value(row, "session_id", ""),
+                    "format": _row_value(row, "format", ""),
+                    "at": _row_value(row, "created_at", ""),
+                }
+            )
+        total = conn.execute("SELECT COUNT(*) FROM download_events").fetchone()
+        accounts = []
+        for row in conn.execute(
+            "SELECT email, plan, downloads_used, monthly_downloads_used, created_at FROM accounts ORDER BY created_at DESC LIMIT 200"
+        ).fetchall():
+            accounts.append(
+                {
+                    "email": _row_value(row, "email", ""),
+                    "plan": _row_value(row, "plan", "free"),
+                    "downloads_used": int(_row_value(row, "downloads_used", 0)),
+                    "monthly_downloads_used": int(_row_value(row, "monthly_downloads_used", 0)),
+                    "signed_up": _row_value(row, "created_at", ""),
+                }
+            )
+    return {
+        "total_download_events": int(total[0]) if total else 0,
+        "recent_downloads": events,
+        "accounts": accounts,
+    }
 
 
 def upgrade_plan(
