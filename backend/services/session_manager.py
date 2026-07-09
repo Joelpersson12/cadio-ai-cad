@@ -1200,6 +1200,54 @@ def _try_replace_with_imported_source_model(
     except (TypeError, ValueError):
         _max_candidates = 4
     top_examples = examples[:_max_candidates]
+
+    # ── FAST PATH ────────────────────────────────────────────────────────────
+    # Show the #1-ranked model IMMEDIATELY: resolve just its file list, import
+    # its best file, and return — instead of waiting for all candidates to
+    # resolve before anything appears. The remaining candidates resolve and
+    # download on a background thread so "Next model" switches instantly.
+    # If anything about the top model fails we fall through to the full
+    # multi-candidate scoring below (candidate 0 re-resolves from cache).
+    if top_examples:
+        first_example = top_examples[0]
+        try:
+            first_files = _rank_source_files(
+                resolve_source_model_files(first_example.url, first_example.source, limit=24),
+                prompt,
+                preferred_slots,
+            )
+        except Exception:  # noqa: BLE001
+            first_files = []
+        first_dicts = [f.to_dict() for f in first_files]
+        first_candidate = next((c for c in first_dicts if _source_file_is_importable(c)), None)
+        if first_candidate is not None:
+            imported_shape = _import_source_stl_cached(session, first_candidate, prefer_flat)
+            if imported_shape is not None:
+                source_example = first_example.to_dict()
+                source_obj = _create_imported_source_object(
+                    prompt, imported_shape, source_example, first_dicts, first_candidate
+                )
+                _remove_object_direct(session, obj["id"])
+                add_object(session, source_obj)
+                session["selected_object_id"] = ""
+                session["source_info"] = [source_example]
+                session["source_files"] = _build_source_file_options(
+                    first_dicts, prompt, preferred_slots, session=session, active_id=first_candidate.get("id")
+                )
+                _spawn_source_file_prefetch(
+                    session.get("session_id", ""), first_dicts, prompt, first_candidate.get("id")
+                )
+                _spawn_variant_prefetch(session.get("session_id", ""), top_examples[1:], prompt)
+                selected_file_name = first_candidate.get("name")
+                options_n = len([o for o in session["source_files"] if o.get("id") != "__all__"])
+                return [
+                    _source_signal_summary(prompt),
+                    f"source-match: {first_example.title}",
+                    f"source-files: selected {selected_file_name}" if selected_file_name else "source-files: selected public STL",
+                    f"imported real {_source_label(first_example.source)} mesh as starting geometry",
+                    f"source-file-options: {options_n} files available to choose from" if options_n > 1 else "",
+                ], source_obj
+
     resolved_files: dict[int, list[Any]] = {}
     if top_examples:
         from concurrent.futures import ThreadPoolExecutor
@@ -1509,6 +1557,55 @@ def _spawn_source_file_prefetch(
                 sess.setdefault("_source_mesh_cache", {})[fid] = shape
 
     Thread(target=_work, name="cadio-source-prefetch", daemon=True).start()
+
+
+def _spawn_variant_prefetch(session_id: str, examples: list[Any], prompt: str) -> None:
+    """Warm the runner-up models in the background after the fast path showed
+    the #1 match: resolve each one's file list (fills the resolve cache) and
+    download its best file into the session mesh cache, so 'Next model' and
+    variant switching are instant. Best-effort; never blocks or raises."""
+    if not session_id or not examples:
+        return
+    prefer_flat = _prefer_flat_for_prompt(prompt)
+    ex_data = [(ex.url, ex.source) for ex in examples[:3]]
+
+    def _work() -> None:
+        from backend.services.design_providers import resolve_source_model_files as _resolve
+
+        for url, source in ex_data:
+            try:
+                ranked = _rank_source_files(_resolve(url, source, limit=24), prompt, 0)
+            except Exception:  # noqa: BLE001
+                continue
+            cand = next(
+                (f.to_dict() for f in ranked if _source_file_is_importable(f.to_dict())),
+                None,
+            )
+            if cand is None:
+                continue
+            fid = str(cand.get("id") or "")
+            if not fid:
+                continue
+            with _lock:
+                sess = _sessions.get(session_id)
+                if sess is None:
+                    return
+                cache = sess.get("_source_mesh_cache")
+                if isinstance(cache, dict) and fid in cache:
+                    continue
+            try:
+                shape = _try_import_source_stl(cand, prefer_flat=prefer_flat)
+            except Exception:  # noqa: BLE001
+                continue
+            if shape is None:
+                continue
+            with _lock:
+                sess = _sessions.get(session_id)
+                if sess is None:
+                    return
+                sess.setdefault("_source_mesh_cache", {})[fid] = shape
+
+    Thread(target=_work, name="cadio-variant-prefetch", daemon=True).start()
 
 
 def select_source_file(session: Session, file_id: str, mode: str = "swap") -> list[str]:
