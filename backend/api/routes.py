@@ -14,7 +14,7 @@ import traceback
 from typing import Any
 
 from fastapi import APIRouter, File, Form, Header, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from backend.models.schema import (
     AdMakerRequest,
@@ -181,7 +181,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-07-06T-usage-stats"
+BUILD_MARKER = "2026-07-06T-fastpath-stats-ui"
 
 
 @router.get("/api/debug/version")
@@ -208,12 +208,110 @@ def debug_version() -> dict[str, Any]:
     }
 
 
-@router.get("/api/debug/downloads", response_model=None)
-def debug_downloads(key: str = Query(default=""), limit: int = Query(default=100)) -> dict[str, Any] | JSONResponse:
-    """Owner-only download statistics: who downloaded what, and when.
+def _stats_dashboard_html(data: dict[str, Any]) -> str:
+    """Render the owner stats as a small dark dashboard page."""
+    import html as _html
 
-    Contains customer emails, so it requires the ADMIN_STATS_KEY secret
-    (set it in the Space settings and call /api/debug/downloads?key=...).
+    def esc(v: Any) -> str:
+        return _html.escape(str(v or ""))
+
+    def when(ts: str) -> str:
+        return esc((ts or "").replace("T", " ")[:16])
+
+    usage = data.get("usage", {})
+    per_day = usage.get("per_day", [])
+    max_gen = max((d.get("generations", 0) for d in per_day), default=1) or 1
+
+    day_rows = "".join(
+        f"<tr><td>{esc(d['day'])}</td>"
+        f"<td class='num'>{d['generations']}</td>"
+        f"<td class='num'>{d['unique_sessions']}</td>"
+        f"<td class='barcell'><div class='bar' style='width:{max(3, round(100 * d['generations'] / max_gen))}%'></div></td></tr>"
+        for d in per_day
+    ) or "<tr><td colspan='4' class='empty'>No generations yet</td></tr>"
+
+    prompt_rows = "".join(
+        f"<tr><td class='muted'>{when(p.get('at', ''))}</td><td>{esc(p.get('prompt'))}</td></tr>"
+        for p in usage.get("recent_prompts", [])
+    ) or "<tr><td colspan='2' class='empty'>No prompts yet</td></tr>"
+
+    dl_rows = "".join(
+        f"<tr><td class='muted'>{when(e.get('at', ''))}</td><td>{esc(e.get('email'))}</td>"
+        f"<td><span class='pill'>{esc(e.get('plan'))}</span></td><td>{esc(e.get('format', '')).upper()}</td></tr>"
+        for e in data.get("recent_downloads", [])
+    ) or "<tr><td colspan='4' class='empty'>No downloads yet</td></tr>"
+
+    acct_rows = "".join(
+        f"<tr><td>{esc(a.get('email'))}</td><td><span class='pill'>{esc(a.get('plan'))}</span></td>"
+        f"<td class='num'>{a.get('downloads_used', 0)}</td><td class='num'>{a.get('monthly_downloads_used', 0)}</td>"
+        f"<td class='muted'>{when(a.get('signed_up', ''))}</td></tr>"
+        for a in data.get("accounts", [])
+    ) or "<tr><td colspan='5' class='empty'>No accounts yet</td></tr>"
+
+    total_gen = usage.get("total_usage_events", 0)
+    total_dl = data.get("total_download_events", 0)
+    n_accounts = len(data.get("accounts", []))
+    n_paying = sum(1 for a in data.get("accounts", []) if a.get("plan") in ("pro", "unlimited"))
+
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>Cadio — Stats</title>
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box }}
+  body {{ background:#141618; color:#e8eaed; font:14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding:24px; }}
+  .wrap {{ max-width:860px; margin:0 auto }}
+  h1 {{ font-size:20px; font-weight:800; margin-bottom:2px }}
+  .sub {{ color:#8a9099; font-size:12px; margin-bottom:20px }}
+  .cards {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:24px }}
+  .card {{ background:#1e2226; border:1px solid #2c3238; border-radius:14px; padding:14px 16px }}
+  .card .v {{ font-size:26px; font-weight:800; color:#fff }}
+  .card .l {{ font-size:11px; color:#8a9099; margin-top:2px }}
+  .card.accent .v {{ color:#2bb8dc }}
+  h2 {{ font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#8a9099; margin:22px 0 8px }}
+  table {{ width:100%; border-collapse:collapse; background:#1e2226; border:1px solid #2c3238; border-radius:14px; overflow:hidden }}
+  th {{ text-align:left; font-size:11px; color:#8a9099; font-weight:600; padding:9px 12px; border-bottom:1px solid #2c3238; background:#191d21 }}
+  td {{ padding:8px 12px; border-bottom:1px solid #23282e; font-size:13px; vertical-align:top }}
+  tr:last-child td {{ border-bottom:none }}
+  .num {{ text-align:right; font-variant-numeric:tabular-nums }}
+  .muted {{ color:#8a9099; white-space:nowrap; font-size:12px }}
+  .empty {{ color:#5a6067; text-align:center; padding:16px }}
+  .pill {{ background:rgba(43,184,220,.12); color:#7fd9ef; border-radius:999px; padding:2px 9px; font-size:11px; font-weight:700 }}
+  .barcell {{ width:38% }}
+  .bar {{ height:8px; border-radius:4px; background:linear-gradient(90deg,#2bb8dc,#6fe6ff) }}
+  .table-scroll {{ overflow-x:auto }}
+</style></head><body><div class="wrap">
+<h1>Cadio statistics</h1>
+<p class="sub">Build {esc(data.get('build'))} · owner-only · add <code>&amp;format=json</code> for raw data</p>
+<div class="cards">
+  <div class="card accent"><div class="v">{total_gen}</div><div class="l">Generations (total)</div></div>
+  <div class="card"><div class="v">{total_dl}</div><div class="l">Downloads (logged)</div></div>
+  <div class="card"><div class="v">{n_accounts}</div><div class="l">Accounts</div></div>
+  <div class="card"><div class="v">{n_paying}</div><div class="l">Paying</div></div>
+</div>
+<h2>Generations per day</h2>
+<div class="table-scroll"><table><tr><th>Day</th><th class="num">Generations</th><th class="num">Unique sessions</th><th></th></tr>{day_rows}</table></div>
+<h2>Latest prompts</h2>
+<div class="table-scroll"><table><tr><th>When (UTC)</th><th>Prompt</th></tr>{prompt_rows}</table></div>
+<h2>Downloads</h2>
+<div class="table-scroll"><table><tr><th>When (UTC)</th><th>Account</th><th>Plan</th><th>Format</th></tr>{dl_rows}</table></div>
+<h2>Accounts</h2>
+<div class="table-scroll"><table><tr><th>Email</th><th>Plan</th><th class="num">Downloads</th><th class="num">This month</th><th>Signed up</th></tr>{acct_rows}</table></div>
+</div></body></html>"""
+
+
+@router.get("/api/debug/downloads", response_model=None)
+def debug_downloads(
+    request: Request,
+    key: str = Query(default=""),
+    limit: int = Query(default=100),
+    format: str = Query(default=""),
+) -> dict[str, Any] | JSONResponse | HTMLResponse:
+    """Owner-only statistics: downloads, accounts and anonymous usage.
+
+    Browsers get a readable dashboard page; API clients (or ?format=json)
+    get raw JSON. Contains customer emails, so it requires the
+    ADMIN_STATS_KEY secret (set it in the Space settings and call
+    /api/debug/downloads?key=...).
     """
     import os as _os
 
@@ -225,11 +323,17 @@ def debug_downloads(key: str = Query(default=""), limit: int = Query(default=100
     try:
         from backend.services.account_store import download_stats, usage_stats
 
-        return {
+        data = {
             "build": BUILD_MARKER,
             **download_stats(limit=limit),
             "usage": usage_stats(),
         }
+        wants_html = format != "json" and (
+            format == "html" or "text/html" in (request.headers.get("accept") or "")
+        )
+        if wants_html:
+            return HTMLResponse(_stats_dashboard_html(data))
+        return data
     except Exception as exc:
         return _error(500, f"{type(exc).__name__}: {exc}")
 
