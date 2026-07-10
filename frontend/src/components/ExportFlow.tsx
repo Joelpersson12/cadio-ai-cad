@@ -34,6 +34,7 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
   // model sessions, so the first download after a deploy would 404. We
   // silently regenerate from the last prompt and retry once.
   const retriedRef = useRef(false);
+  const netRetryRef = useRef(false);
   const [format, setFormat] = useState("stl");
   const [copied, setCopied] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
@@ -121,6 +122,20 @@ export function ExportFlowContent({ onClose, onRequestUpgrade }: { onClose?: () 
           }
         }
         setExportError("Session expired — please regenerate your model and try again.");
+      } else if (/load failed|failed to fetch|network\s?error|typeerror/i.test(msg)) {
+        // Safari says "Load failed", Chrome "Failed to fetch" — the request
+        // never reached the server, typically because the backend is
+        // restarting right after a deploy. Wait briefly and retry once.
+        if (!netRetryRef.current) {
+          netRetryRef.current = true;
+          setExportError("Connection hiccup — retrying…");
+          await new Promise((resolve) => window.setTimeout(resolve, 3000));
+          await handleDownload();
+          return;
+        }
+        setExportError(
+          "Couldn't reach the server — it may be restarting after an update. Wait ~30 seconds and press Download again.",
+        );
       } else {
         setExportError(msg);
       }
