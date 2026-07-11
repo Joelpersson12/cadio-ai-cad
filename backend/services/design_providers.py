@@ -1888,8 +1888,11 @@ class ProviderRegistry:
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
         started = time.monotonic()
         deadline = started + deadline_s
-        min_wait_s = 1.6   # always give slow-but-good providers a fair chance
-        enough_results = 6
+        # The fast path only needs the single best match — exit as soon as a
+        # decent handful of ranked results is in. Cold start (zero results)
+        # still waits the full deadline.
+        min_wait_s = 1.0
+        enough_results = 4
 
         executor = ThreadPoolExecutor(max_workers=16)
         try:
