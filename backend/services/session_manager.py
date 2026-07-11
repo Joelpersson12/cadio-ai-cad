@@ -1675,7 +1675,9 @@ def _spawn_variant_prefetch(session_id: str, examples: list[Any], prompt: str) -
         # time, while staying gentle on the providers and the Space's memory.
         from concurrent.futures import ThreadPoolExecutor
 
-        pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="cadio-variant-warm")
+        # Two workers: enough to warm the list quickly, gentle enough that the
+        # providers don't rate-limit us (which made "Next model" fail fast).
+        pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="cadio-variant-warm")
         try:
             for url, source in ex_data:
                 pool.submit(_warm_one, url, source)
@@ -1870,13 +1872,25 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
     if isinstance(matched, dict):
         current_url = str(matched.get("url") or "")
 
-    current_index = next((idx for idx, example in enumerate(examples) if example.url == current_url), -1)
+    def _norm_url(url: str) -> str:
+        return (url or "").strip().lower().rstrip("/").removeprefix("https://").removeprefix("http://").removeprefix("www.")
+
+    normalized_current = _norm_url(current_url)
+    current_index = next(
+        (idx for idx, example in enumerate(examples) if _norm_url(example.url) == normalized_current),
+        -1,
+    )
     step = -1 if direction.strip().lower().startswith("prev") else 1
     start = current_index if current_index >= 0 else (-1 if step > 0 else 0)
     order = [((start + step * offset) % len(examples)) for offset in range(1, len(examples) + 1)]
 
     for index in order:
         example = examples[index]
+        # Never "switch" to the model already on the plate — with a fuzzy URL
+        # match that used to return instantly with the same model, which read
+        # as "Next model aborted".
+        if normalized_current and _norm_url(example.url) == normalized_current:
+            continue
         files = _rank_source_files(resolve_source_model_files(example.url, example.source, limit=24), prompt, 0)
         files_dicts = [source_file.to_dict() for source_file in files]
         assembly_files = _select_source_assembly_files(files_dicts, prompt, 0, max_parts=6)
@@ -2923,32 +2937,28 @@ def _apply_mesh_hole_cuts(mesh: TriMesh, params: dict[str, float]) -> TriMesh:
     counterbore_depth = max(0.0, float(params.get("counterbore_depth", 0.0)))
     counterbore_z0 = max(z0, z1 - counterbore_depth) if counterbore_depth > 0 else z1
 
-    cut_specs: list[tuple[float, float, float, float, float]] = []
+    # REAL subtraction per hole (plane clips, same technique as Cut slot) —
+    # the old centroid test left "surface marks" instead of holes on coarse
+    # meshes, or deleted whole giant triangles (missing chunks + floating
+    # wall tubes). Each hole clips the mesh against an N-gon column; the
+    # counterbore only cuts material above its shoulder height.
+    has_counterbore = counterbore_diameter > 0 and counterbore_depth > 0
+    cut = mesh
     for x, y, diameter in holes:
         radius = max(0.1, diameter / 2.0)
-        cut_specs.append((x, y, radius, z0, z1))
-        if counterbore_diameter > diameter and counterbore_depth > 0:
-            cut_specs.append((x, y, counterbore_diameter / 2.0, counterbore_z0, z1))
-
-    cut = TriMesh()
-    cut.verts = list(mesh.verts)
-    for a, b, c in mesh.tris:
-        va, vb, vc = mesh.verts[a], mesh.verts[b], mesh.verts[c]
-        cx = (va[0] + vb[0] + vc[0]) / 3.0
-        cy = (va[1] + vb[1] + vc[1]) / 3.0
-        cz = (va[2] + vb[2] + vc[2]) / 3.0
-        inside_cut = any(
-            hz0 <= cz <= hz1 and (cx - hx) ** 2 + (cy - hy) ** 2 <= hr ** 2
-            for hx, hy, hr, hz0, hz1 in cut_specs
-        )
-        if not inside_cut:
-            cut.tris.append((a, b, c))
+        cut = _subtract_cylinder_column(cut, x, y, radius)
+        if has_counterbore and counterbore_diameter > diameter:
+            cut = _subtract_cylinder_column(cut, x, y, counterbore_diameter / 2.0, z_from=counterbore_z0)
 
     for x, y, diameter in holes:
         radius = max(0.1, diameter / 2.0)
-        _add_cylinder_wall(cut, x, y, radius, max(0.0, z0), z1)
-        if counterbore_diameter > diameter and counterbore_depth > 0:
-            _add_cylinder_wall(cut, x, y, counterbore_diameter / 2.0, counterbore_z0, z1)
+        if has_counterbore and counterbore_diameter > diameter:
+            cb_radius = counterbore_diameter / 2.0
+            _add_cylinder_wall(cut, x, y, radius, max(0.0, z0), counterbore_z0)
+            _add_cylinder_wall(cut, x, y, cb_radius, counterbore_z0, z1)
+            _add_annulus_ring(cut, x, y, radius, cb_radius, counterbore_z0)
+        else:
+            _add_cylinder_wall(cut, x, y, radius, max(0.0, z0), z1)
 
     return shift_mesh_to_buildplate(_apply_mesh_rect_cutouts(cut, params))
 
@@ -4649,6 +4659,94 @@ def _plane_clip_trimesh(
             result.tris.append((base, base + k, base + k + 1))
 
     return result
+
+
+def _merge_trimeshes(parts: list[TriMesh]) -> TriMesh:
+    result = TriMesh()
+    for part in parts:
+        if not part.verts:
+            continue
+        base = len(result.verts)
+        result.verts.extend(part.verts)
+        for (a, b, c) in part.tris:
+            result.tris.append((a + base, b + base, c + base))
+    return result
+
+
+def _subtract_cylinder_column(
+    mesh: TriMesh,
+    cx: float,
+    cy: float,
+    radius: float,
+    z_from: float | None = None,
+    sides: int = 12,
+) -> TriMesh:
+    """Remove a vertical cylindrical column from a mesh — a REAL subtraction.
+
+    The old centroid test removed nothing on coarse meshes (holes became
+    surface marks) or removed whole giant triangles (chunks of the model
+    vanished). This clips the mesh against the column like Cut slot does:
+    the material outside the hole's bounding box is kept verbatim, and the
+    small core region is decomposed against an N-gon approximation of the
+    circle, keeping every piece outside it. ``z_from`` limits the cut to
+    material above that height (used for counterbores)."""
+    if not mesh.verts or radius <= 0.0:
+        return mesh
+    r = radius
+    x0, x1, y0, y1 = cx - r, cx + r, cy - r, cy + r
+
+    left = _plane_clip_trimesh(mesh, 1.0, 0.0, 0.0, -x0, keep_sign=-1)
+    right = _plane_clip_trimesh(mesh, 1.0, 0.0, 0.0, -x1, keep_sign=1)
+    mid = _plane_clip_trimesh(mesh, 1.0, 0.0, 0.0, -x0, keep_sign=1)
+    mid = _plane_clip_trimesh(mid, 1.0, 0.0, 0.0, -x1, keep_sign=-1)
+    front = _plane_clip_trimesh(mid, 0.0, 1.0, 0.0, -y0, keep_sign=-1)
+    back = _plane_clip_trimesh(mid, 0.0, 1.0, 0.0, -y1, keep_sign=1)
+    core = _plane_clip_trimesh(mid, 0.0, 1.0, 0.0, -y0, keep_sign=1)
+    core = _plane_clip_trimesh(core, 0.0, 1.0, 0.0, -y1, keep_sign=-1)
+
+    parts: list[TriMesh] = [left, right, front, back]
+    if z_from is not None:
+        parts.append(_plane_clip_trimesh(core, 0.0, 0.0, 1.0, -z_from, keep_sign=-1))  # below stays
+        core = _plane_clip_trimesh(core, 0.0, 0.0, 1.0, -z_from, keep_sign=1)
+
+    # Complement decomposition of the N-gon column inside the core: piece i is
+    # outside edge-plane i and inside planes 0..i-1, so the union tiles the
+    # core minus the hole exactly once. Edge planes are tangent to the circle
+    # (apothem = r), so the hole is never smaller than requested.
+    edge_planes: list[tuple[float, float, float]] = []
+    for i in range(sides):
+        ang = 2.0 * math.pi * (i + 0.5) / sides
+        nx_, ny_ = math.cos(ang), math.sin(ang)
+        edge_planes.append((nx_, ny_, -(nx_ * cx + ny_ * cy) - r))
+    for i, (nx_, ny_, d_) in enumerate(edge_planes):
+        piece = _plane_clip_trimesh(core, nx_, ny_, 0.0, d_, keep_sign=1)
+        for j in range(i):
+            if not piece.verts:
+                break
+            pnx, pny, pd = edge_planes[j]
+            piece = _plane_clip_trimesh(piece, pnx, pny, 0.0, pd, keep_sign=-1)
+        parts.append(piece)
+
+    result = _merge_trimeshes(parts)
+    return result if result.verts else mesh
+
+
+def _add_annulus_ring(
+    mesh: TriMesh, x: float, y: float, r_in: float, r_out: float, z: float, *, segments: int = 28
+) -> None:
+    """Horizontal ring surface (counterbore shoulder), facing up."""
+    if r_out <= r_in or r_in < 0.0:
+        return
+    inner: list[int] = []
+    outer: list[int] = []
+    for index in range(segments):
+        angle = 2.0 * math.pi * index / segments
+        ca, sa = math.cos(angle), math.sin(angle)
+        inner.append(mesh.add_vertex((x + ca * r_in, y + sa * r_in, z)))
+        outer.append(mesh.add_vertex((x + ca * r_out, y + sa * r_out, z)))
+    for index in range(segments):
+        nxt = (index + 1) % segments
+        mesh.add_quad(inner[index], inner[nxt], outer[nxt], outer[index])
 
 
 def _subtract_box_column(mesh: TriMesh, x0: float, x1: float, y0: float, y1: float) -> TriMesh:
