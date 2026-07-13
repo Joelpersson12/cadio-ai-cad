@@ -2072,6 +2072,7 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
                 if m:
                     dims[axis] = _spec_num(m.group(1))
                     break
+    is_l_bracket = bool(re.search(r"\b(?:l[\s-]?bracket|angle\s+bracket|vinkeljarn|vinkelfaste)\b", text))
     # A cylinder/rod spec: diameter + length
     is_round = any(re.search(rf"\b{w}\b", text) for w in ("cylinder", "rod", "stav", "tube", "ror", "washer", "bricka", "disc", "disk"))
     if is_round and "width" not in dims:
@@ -2110,7 +2111,24 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
         spacing = _spec_num(sm_.group(1)) if sm_ else 0.0
         holes = {"count": float(max(1, min(8, count))), "diameter": max(0.5, min(60.0, diameter)), "spacing": spacing}
 
-    return {"dims": dims, "holes": holes, "round": is_round}
+    if is_l_bracket:
+        # L-brackets: "Nmm legs" sets both legs; "thick" is material thickness
+        # (the axis parse above maps it to height, which is wrong here).
+        thickness = 4.0
+        tm = re.search(rf"\b{_NUM}\s*mm\s*(?:\w+\s+)?(?:thick|thickness|tjock)\b", text)
+        if tm:
+            thickness = max(1.0, min(20.0, _spec_num(tm.group(1))))
+            if abs(dims.get("height", -1.0) - thickness) < 0.01:
+                del dims["height"]
+        legm = re.search(rf"\b{_NUM}\s*mm\s*(?:\w+\s+)?(?:legs?|ben)\b", text)
+        if legm:
+            leg = max(thickness * 2.0, min(300.0, _spec_num(legm.group(1))))
+            dims["depth"] = leg
+            dims["height"] = leg
+        elif "height" not in dims:
+            dims["height"] = dims.get("depth", 30.0)
+        dims["l_thickness"] = thickness
+    return {"dims": dims, "holes": holes, "round": is_round, "l_bracket": is_l_bracket}
 
 
 def is_spec_part_prompt(prompt: str) -> bool:
@@ -2140,7 +2158,28 @@ def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -
         }
     )
 
-    if spec["round"]:
+    if spec.get("l_bracket"):
+        # A real L-profile: horizontal leg W x D, vertical leg W x H rising
+        # from the back edge, both `thickness` thick. Thickness comes from the
+        # smallest stated dimension when three were given, else 4mm.
+        thickness = float(dims.get("l_thickness", 4.0))
+        leg_h = max(thickness * 2.0, height)
+        h_leg = make_rounded_box(width, depth, thickness, 0.0, segments=4)
+        v_leg = _translate_mesh(
+            make_rounded_box(width, thickness, leg_h, 0.0, segments=4),
+            0.0, (depth - thickness) / 2.0, 0.0,
+        )
+        shape = _merge_trimeshes([h_leg, v_leg])
+        params["height"] = leg_h
+        params["thickness"] = thickness
+        part = create_manual_object("spec_part", shape, params)
+        # Raw merged mesh: rebuilds must re-cut holes in THIS geometry, never
+        # regenerate a plain box.
+        part["primitive"] = "imported_source_mesh"
+        part["imported_source_mesh"] = True
+        part["source_original_shape"] = deepcopy(shape)
+        part["source_dimensions"] = {"width": width, "depth": depth, "height": leg_h}
+    elif spec["round"]:
         radius = width / 2.0
         shape = make_cylinder_body(radius, height) or make_cylinder(radius, height)
         part = create_manual_object("spec_part", shape, params)
@@ -2156,12 +2195,16 @@ def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -
         count = int(holes["count"])
         diameter = holes["diameter"]
         spacing = holes["spacing"]
+        hole_y = 0.0
+        if spec.get("l_bracket"):
+            # Centre of the exposed horizontal leg (the wall sits at the back).
+            hole_y = -float(part["parameters"].get("thickness", 4.0)) / 2.0
         if spacing > 0 and count >= 2:
             # Exact centre-to-centre spacing along the length, centred.
             span = spacing * (count - 1)
-            positions = [(-span / 2.0 + spacing * i, 0.0) for i in range(count)]
+            positions = [(-span / 2.0 + spacing * i, hole_y) for i in range(count)]
         else:
-            positions = _mounting_hole_positions(width, depth, count)
+            positions = [(x, hole_y if spec.get("l_bracket") else y) for x, y in _mounting_hole_positions(width, depth, count)]
         for index, (x, y) in enumerate(positions):
             part["parameters"][f"custom_hole_{index}_x"] = x
             part["parameters"][f"custom_hole_{index}_y"] = y
@@ -2175,6 +2218,11 @@ def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -
             f", {spacing:g}mm apart (exact)" if spacing > 0 and count >= 2 else " (symmetric)"
         )
 
+    # Spec parts are prompt-generated content: a NEW generation must replace
+    # them like any generated model (the "sticky session" bug - the previous
+    # plate survived every following prompt). assembly_source marks them as
+    # generated while manual=True keeps every edit tool working.
+    part["assembly_source"] = "spec-part"
     _remove_object_direct(session, obj["id"])
     center_object_on_plate(part)
     add_object(session, part)
@@ -2184,7 +2232,7 @@ def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -
     # number you get" is verified, not assumed.
     mins, maxs = _mesh_extents(part["shape"])
     measured = (maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2])
-    shape_word = "cylinder" if spec["round"] else "plate"
+    shape_word = "L-bracket" if spec.get("l_bracket") else ("cylinder" if spec["round"] else "plate")
     actions = [
         f"spec-part: {width:g} × {depth:g} × {height:g} mm {shape_word}, built parametrically",
         f"measured: {measured[0]:.1f} × {measured[1]:.1f} × {measured[2]:.1f} mm",
@@ -3159,15 +3207,18 @@ def _apply_mesh_hole_cuts(mesh: TriMesh, params: dict[str, float]) -> TriMesh:
         if has_counterbore and counterbore_diameter > diameter:
             cut = _subtract_cylinder_column(cut, x, y, counterbore_diameter / 2.0, z_from=counterbore_z0)
 
+    # Wall tubes end exactly at the surfaces — the ±0.2 overshoot is only for
+    # the subtraction reach, not visible geometry (it inflated measured height).
+    wall_z0, wall_z1 = mins[2], maxs[2]
     for x, y, diameter in holes:
         radius = max(0.1, diameter / 2.0)
         if has_counterbore and counterbore_diameter > diameter:
             cb_radius = counterbore_diameter / 2.0
-            _add_cylinder_wall(cut, x, y, radius, max(0.0, z0), counterbore_z0)
-            _add_cylinder_wall(cut, x, y, cb_radius, counterbore_z0, z1)
+            _add_cylinder_wall(cut, x, y, radius, wall_z0, counterbore_z0)
+            _add_cylinder_wall(cut, x, y, cb_radius, counterbore_z0, wall_z1)
             _add_annulus_ring(cut, x, y, radius, cb_radius, counterbore_z0)
         else:
-            _add_cylinder_wall(cut, x, y, radius, max(0.0, z0), z1)
+            _add_cylinder_wall(cut, x, y, radius, wall_z0, wall_z1)
 
     return shift_mesh_to_buildplate(_apply_mesh_rect_cutouts(cut, params))
 
@@ -3855,13 +3906,19 @@ def _smart_mesh_hole_positions(
 
 
 def _mounting_hole_positions(width: float, depth: float, count: int) -> list[tuple[float, float]]:
+    """Symmetric hole layout that HONORS the requested count. The old version
+    silently downgraded 4 holes to 2 on plates smaller than 55x45mm - the user
+    asked for 4, was told 4 were added, and got 2."""
     count = max(2, min(4, int(count)))
-    if count >= 4 and width >= 55.0 and depth >= 45.0:
+    if count >= 4:
+        # Corner pattern scaled to the plate: works on small plates too.
+        fx = 0.32 if width >= 55.0 else 0.30
+        fy = 0.26 if depth >= 45.0 else 0.28
         return [
-            (-width * 0.32, -depth * 0.26),
-            (width * 0.32, -depth * 0.26),
-            (-width * 0.32, depth * 0.26),
-            (width * 0.32, depth * 0.26),
+            (-width * fx, -depth * fy),
+            (width * fx, -depth * fy),
+            (-width * fx, depth * fy),
+            (width * fx, depth * fy),
         ]
     if count == 3:
         return [
@@ -3969,7 +4026,6 @@ def add_mounting_holes_to_session(
     applied_count = 0
     for target in candidates:
         target_count = 4 if count >= 4 or float(target["parameters"].get("width", 0.0)) >= 150.0 else max(2, count)
-        applied_count = max(applied_count, target_count)
         if _apply_mounting_holes_to_object(
             target,
             count=target_count,
@@ -3977,6 +4033,7 @@ def add_mounting_holes_to_session(
             counterbore_diameter=counterbore_diameter,
         ):
             any_studied = True
+        applied_count = max(applied_count, int(target["parameters"].get("custom_hole_count", 0.0)))
 
     names = ", ".join(str(target.get("name", "part")) for target in candidates[:4])
     how = (
