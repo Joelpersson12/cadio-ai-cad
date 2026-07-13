@@ -2101,6 +2101,31 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
     elif is_round and re.search(r"\b(?:tube|ror|washer|bricka)\b", text):
         bore = dims.get("width", 20.0) * 0.5
 
+    if is_l_bracket:
+        # L-brackets: "Nmm legs" sets both legs, "40 x 20mm legs" sets each
+        # leg separately, and "walls" is a synonym for material thickness.
+        thickness = 4.0
+        tm = re.search(rf"\b{_NUM}\s*mm\s*(?:\w+\s+)?(?:thick|thickness|tjock|walls?|vaggar)\b", text)
+        if tm:
+            thickness = max(1.0, min(20.0, _spec_num(tm.group(1))))
+            if abs(dims.get("height", -1.0) - thickness) < 0.01:
+                del dims["height"]
+        pair = re.search(rf"\b{_NUM}\s*(?:mm)?\s*[x×*]\s*{_NUM}\s*mm\s*(?:\w+\s+)?(?:legs?|ben)\b", text)
+        legm = re.search(rf"\b{_NUM}\s*mm\s*(?:\w+\s+)?(?:legs?|ben)\b", text)
+        if pair:
+            leg_a = max(thickness * 2.0, min(300.0, _spec_num(pair.group(1))))
+            leg_b = max(thickness * 2.0, min(300.0, _spec_num(pair.group(2))))
+            dims["depth"] = leg_a
+            dims["height"] = leg_b
+            dims.setdefault("width", max(leg_a, leg_b))
+        elif legm:
+            leg = max(thickness * 2.0, min(300.0, _spec_num(legm.group(1))))
+            dims["depth"] = leg
+            dims["height"] = leg
+        elif "height" not in dims:
+            dims["height"] = dims.get("depth", 30.0)
+        dims["l_thickness"] = thickness
+
     if len(dims) < 2:
         return None
 
@@ -2146,7 +2171,7 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
         m_size = int(mm_.group(1)) if mm_ else 0
         if diameter <= 0.0:
             diameter = m_clearance.get(m_size, 5.0) if m_size else 5.0
-        sm_ = re.search(rf"\b{_NUM}\s*mm\s*(?:apart|isar|mellan|c\s*-?\s*c|center)", text)
+        sm_ = re.search(rf"\b{_NUM}\s*mm\s*(?:on\s+)?(?:apart|isar|mellan|c\s*-?\s*c|cent(?:er|re)s?)", text)
         spacing = _spec_num(sm_.group(1)) if sm_ else 0.0
         # "10mm from each end/edge" -> exact end-inset placement.
         em = re.search(rf"\b{_NUM}\s*mm\s*from\s*(?:each|the|both)\s*(?:ends?|edges?|sidorna|kanterna)\b", text)
@@ -2169,23 +2194,6 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
         pass  # bore validated at build time against actual OD
     else:
         bore = min(bore, max(0.0, dims.get("width", 20.0) - 1.0)) if bore > 0 else 0.0
-    if is_l_bracket:
-        # L-brackets: "Nmm legs" sets both legs; "thick" is material thickness
-        # (the axis parse above maps it to height, which is wrong here).
-        thickness = 4.0
-        tm = re.search(rf"\b{_NUM}\s*mm\s*(?:\w+\s+)?(?:thick|thickness|tjock)\b", text)
-        if tm:
-            thickness = max(1.0, min(20.0, _spec_num(tm.group(1))))
-            if abs(dims.get("height", -1.0) - thickness) < 0.01:
-                del dims["height"]
-        legm = re.search(rf"\b{_NUM}\s*mm\s*(?:\w+\s+)?(?:legs?|ben)\b", text)
-        if legm:
-            leg = max(thickness * 2.0, min(300.0, _spec_num(legm.group(1))))
-            dims["depth"] = leg
-            dims["height"] = leg
-        elif "height" not in dims:
-            dims["height"] = dims.get("depth", 30.0)
-        dims["l_thickness"] = thickness
     return {
         "dims": dims,
         "holes": holes,
@@ -4037,6 +4045,7 @@ def _apply_mounting_holes_to_object(
     count: int,
     diameter: float,
     counterbore_diameter: float,
+    row_layout: bool = False,
 ) -> bool:
     """Apply the holes; returns True when placement came from studying the
     actual mesh geometry (vs the bounding-box pattern)."""
@@ -4063,7 +4072,13 @@ def _apply_mounting_holes_to_object(
     # complex models). Parametric shapes keep the proven layout unchanged.
     positions: list[tuple[float, float]] | None = None
     studied = False
-    if imported_source and isinstance(obj.get("shape"), TriMesh):
+    if row_layout:
+        # "N holes even spacing": a single evenly-pitched row along the
+        # length, with half-pitch end margins.
+        n = max(2, min(8, int(count)))
+        pitch = width / n
+        positions = [(-width / 2.0 + pitch * (i + 0.5), 0.0) for i in range(n)]
+    if not positions and imported_source and isinstance(obj.get("shape"), TriMesh):
         positions = _smart_mesh_hole_positions(obj["shape"], count, safe_diameter)
         studied = positions is not None
     if not positions:
@@ -4101,6 +4116,7 @@ def add_mounting_holes_to_session(
     count: int = 2,
     diameter: float = 5.0,
     counterbore_diameter: float = 9.0,
+    row_layout: bool = False,
 ) -> list[str]:
     """Add predictable mounting holes to base-like bodies without regenerating."""
     candidates: list[CadObject] = []
@@ -4124,12 +4140,16 @@ def add_mounting_holes_to_session(
     any_studied = False
     applied_count = 0
     for target in candidates:
-        target_count = 4 if count >= 4 or float(target["parameters"].get("width", 0.0)) >= 150.0 else max(2, count)
+        if row_layout:
+            target_count = max(2, min(8, count))
+        else:
+            target_count = 4 if count >= 4 or float(target["parameters"].get("width", 0.0)) >= 150.0 else max(2, count)
         if _apply_mounting_holes_to_object(
             target,
             count=target_count,
             diameter=diameter,
             counterbore_diameter=counterbore_diameter,
+            row_layout=row_layout,
         ):
             any_studied = True
         applied_count = max(applied_count, int(target["parameters"].get("custom_hole_count", 0.0)))
@@ -4725,7 +4745,32 @@ def apply_structural_ai_edit_from_prompt(session: Session, prompt: str) -> list[
     dimension_actions = _apply_dimension_edit_from_prompt(session, prompt)
     if dimension_actions:
         return dimension_actions
-    if any(token in text for token in ("hole", "holes", "screw", "hal", "skruv")):
+    # "Extend it 10mm each side keep holes the same" is a RESIZE, not a hole
+    # command — handle it before the hole branch (which used to hijack it and
+    # add 10mm holes instead).
+    ext = re.search(
+        r"\b(?:extend|widen|lengthen|stretch|forlang|bredda)\b[^.]{0,40}?(\d+(?:[.,]\d+)?)\s*mm(\s*(?:on\s+)?(?:each|both|per|every)\s*side)?",
+        text,
+    )
+    if ext:
+        targets = _select_ai_edit_targets(session, prefer_base=True)
+        target = targets[0] if targets else get_object(session, session.get("selected_object_id"))
+        if target is not None:
+            delta = float(ext.group(1).replace(",", "."))
+            if ext.group(2):
+                delta *= 2.0
+            params = target["parameters"]
+            params["width"] = max(1.0, float(params.get("width", 40.0)) + delta)
+            if target.get("manual"):
+                rebuild_manual_object(target)
+            else:
+                rebuild_object(target)
+            kept = int(params.get("custom_hole_count", 0.0))
+            note = f", holes kept in place ({kept})" if kept else ""
+            return [f"extended width by {delta:g}mm to {params['width']:g}mm{note}"]
+
+    holes_kept_intent = bool(re.search(r"\bkeep\b[^.]{0,24}\bholes?\b|\bholes?\s+the\s+same\b", text))
+    if not holes_kept_intent and any(token in text for token in ("hole", "holes", "screw", "hal", "skruv")):
         targets = _select_ai_edit_targets(session, prefer_base=True)
         selected = targets[0] if targets else get_object(session, session.get("selected_object_id"))
         count = _parse_feature_count(prompt, ("hole", "holes", "screw", "screws", "hal"), 2, 1, 8)
@@ -4737,6 +4782,7 @@ def apply_structural_ai_edit_from_prompt(session: Session, prompt: str) -> list[
             count=count,
             diameter=diameter,
             counterbore_diameter=counterbore,
+            row_layout=bool(re.search(r"\beven(?:ly)?\b|\bjamn(?:t|a)?\b|\bin\s+a\s+(?:row|line)\b", text)),
         )
     return []
 
