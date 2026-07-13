@@ -2021,7 +2021,18 @@ def is_bottom_plate_prompt(prompt: str) -> bool:
     text = _prompt_match_text(prompt)
     plate_terms = ("bottom plate", "base plate", "bottenplatta", "botten platta")
     relation_terms = ("outside", "around", "under", "below", "utanför", "utanfor", "runt", "under")
-    return any(term in text for term in plate_terms) and any(term in text for term in relation_terms)
+    if any(term in text for term in plate_terms) and any(term in text for term in relation_terms):
+        return True
+    # "give the model a (full/solid) base" in any common phrasing — including
+    # Polish "podstawa" (a user asked "niech model ma podstawę" and got his
+    # model REPLACED instead of edited).
+    if re.search(r"\bpodstaw\w*\b", text):
+        return True
+    return bool(
+        re.search(r"\b(?:add|give|needs?|niech|ge|lagg\s+till|med|ma|full|solid)\b", text)
+        and re.search(r"\b(?:base|bas|bottom)\b", text)
+        and len(text.split()) <= 10
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2034,7 +2045,20 @@ _SPEC_SHAPE_WORDS = (
     "plate", "platta", "skiva", "block", "kloss", "box", "bar", "beam",
     "spacer", "shim", "washer", "bricka", "disc", "disk", "bracket",
     "cylinder", "rod", "stav", "tube", "ror",
+    "tetrahedron", "tetraeder", "pyramid", "cone", "kon", "sphere", "kula",
+    "hexagon", "cube", "kub",
 )
+
+# Pure geometric solids: buildable from a single size, never worth a model
+# search ("Create a tetrahedron 150mm tall" must yield a tetrahedron).
+_SPEC_SOLIDS = {
+    "tetrahedron": "tetrahedron", "tetraeder": "tetrahedron",
+    "pyramid": "pyramid",
+    "cone": "cone", "kon": "cone",
+    "sphere": "sphere", "kula": "sphere",
+    "hexagon": "hexagon",
+    "cube": "cube", "kub": "cube",
+}
 _SPEC_EDIT_BLOCKERS = ("make it", "resize", "gor den", "gor det", "andra den", "scale it")
 
 _NUM = r"(\d+(?:[.,]\d+)?)"
@@ -2072,6 +2096,7 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
                 if m:
                     dims[axis] = _spec_num(m.group(1))
                     break
+    solid = next((kind for word, kind in _SPEC_SOLIDS.items() if re.search(rf"\b{word}\b", text)), None)
     is_l_bracket = bool(re.search(r"\b(?:l[\s-]?bracket|angle\s+bracket|vinkeljarn|vinkelfaste)\b", text))
     # A cylinder/rod spec: diameter + length
     is_round = any(re.search(rf"\b{w}\b", text) for w in ("cylinder", "rod", "stav", "tube", "ror", "washer", "bricka", "disc", "disk"))
@@ -2126,7 +2151,17 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
             dims["height"] = dims.get("depth", 30.0)
         dims["l_thickness"] = thickness
 
-    if len(dims) < 2:
+    if solid is not None:
+        # A single stated size (or none) is enough for a pure solid.
+        size = dims.get("height") or dims.get("width") or 0.0
+        if size <= 0.0:
+            sm0 = re.search(rf"\b{_NUM}\s*mm\b", text)
+            size = _spec_num(sm0.group(1)) if sm0 else 60.0
+        size = max(2.0, min(400.0, size))
+        dims.setdefault("height", size)
+        dims.setdefault("width", size)
+        dims.setdefault("depth", dims["width"])
+    elif len(dims) < 2:
         return None
 
     dims.setdefault("width", 40.0)
@@ -2201,11 +2236,79 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
         "l_bracket": is_l_bracket,
         "bore": bore,
         "corner_radius": corner_radius,
+        "solid": solid,
     }
 
 
 def is_spec_part_prompt(prompt: str) -> bool:
     return _parse_spec_part(prompt) is not None
+
+
+def _make_solid_mesh(kind: str, width: float, height: float) -> TriMesh:
+    """Simple watertight meshes for pure geometric solids, sitting on z=0."""
+    mesh = TriMesh()
+
+    def tri(a, b, c):
+        ia, ib, ic = mesh.add_vertex(a), mesh.add_vertex(b), mesh.add_vertex(c)
+        mesh.add_tri(ia, ib, ic)
+
+    if kind == "tetrahedron":
+        # Regular tetrahedron scaled to the requested height.
+        edge = height / math.sqrt(2.0 / 3.0)
+        r = edge / math.sqrt(3.0)
+        base = [
+            (r * math.cos(a), r * math.sin(a), 0.0)
+            for a in (math.pi / 2, math.pi / 2 + 2 * math.pi / 3, math.pi / 2 + 4 * math.pi / 3)
+        ]
+        apex = (0.0, 0.0, height)
+        tri(base[0], base[2], base[1])
+        for i in range(3):
+            tri(base[i], base[(i + 1) % 3], apex)
+    elif kind == "pyramid":
+        h = width / 2.0
+        base = [(-h, -h, 0.0), (h, -h, 0.0), (h, h, 0.0), (-h, h, 0.0)]
+        apex = (0.0, 0.0, height)
+        tri(base[0], base[2], base[1]); tri(base[0], base[3], base[2])
+        for i in range(4):
+            tri(base[i], base[(i + 1) % 4], apex)
+    elif kind == "cone":
+        n = 40
+        r = width / 2.0
+        ring = [(r * math.cos(2 * math.pi * i / n), r * math.sin(2 * math.pi * i / n), 0.0) for i in range(n)]
+        apex = (0.0, 0.0, height)
+        centre = (0.0, 0.0, 0.0)
+        for i in range(n):
+            tri(ring[i], ring[(i + 1) % n], apex)
+            tri(ring[(i + 1) % n], ring[i], centre)
+    elif kind == "sphere":
+        seg, rings = 28, 18
+        r = height / 2.0
+        grid = []
+        for j in range(rings + 1):
+            phi = math.pi * j / rings
+            row = []
+            for i in range(seg):
+                th = 2 * math.pi * i / seg
+                row.append((r * math.sin(phi) * math.cos(th), r * math.sin(phi) * math.sin(th), r + r * math.cos(phi)))
+            grid.append(row)
+        for j in range(rings):
+            for i in range(seg):
+                a, b = grid[j][i], grid[j][(i + 1) % seg]
+                c, d = grid[j + 1][(i + 1) % seg], grid[j + 1][i]
+                tri(a, b, c); tri(a, c, d)
+    elif kind == "hexagon":
+        n = 6
+        r = width / 2.0
+        bot = [(r * math.cos(2 * math.pi * i / n + math.pi / 6), r * math.sin(2 * math.pi * i / n + math.pi / 6), 0.0) for i in range(n)]
+        top = [(x, y, height) for x, y, _ in bot]
+        cb, ct = (0.0, 0.0, 0.0), (0.0, 0.0, height)
+        for i in range(n):
+            j = (i + 1) % n
+            tri(bot[j], bot[i], cb); tri(top[i], top[j], ct)
+            tri(bot[i], bot[j], top[j]); tri(bot[i], top[j], top[i])
+    else:  # cube
+        return make_rounded_box(width, width, width, 0.0, segments=4)
+    return mesh
 
 
 def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -> list[str]:
@@ -2231,7 +2334,23 @@ def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -
         }
     )
 
-    if spec.get("l_bracket"):
+    if spec.get("solid"):
+        kind = spec["solid"]
+        size_h = height if kind != "cube" else width
+        shape = _make_solid_mesh(kind, width, size_h)
+        if kind == "cube":
+            params["depth"] = params["height"] = params["thickness"] = width
+        part = create_manual_object("spec_part", shape, params)
+        part["primitive"] = "imported_source_mesh"
+        part["imported_source_mesh"] = True
+        part["source_original_shape"] = deepcopy(shape)
+        mins0, maxs0 = _mesh_extents(shape)
+        part["source_dimensions"] = {
+            "width": maxs0[0] - mins0[0],
+            "depth": maxs0[1] - mins0[1],
+            "height": maxs0[2] - mins0[2],
+        }
+    elif spec.get("l_bracket"):
         # A real L-profile: horizontal leg W x D, vertical leg W x H rising
         # from the back edge, both `thickness` thick. Thickness comes from the
         # smallest stated dimension when three were given, else 4mm.
@@ -2339,7 +2458,7 @@ def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -
     # number you get" is verified, not assumed.
     mins, maxs = _mesh_extents(part["shape"])
     measured = (maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2])
-    shape_word = "L-bracket" if spec.get("l_bracket") else ("cylinder" if spec["round"] else "plate")
+    shape_word = spec.get("solid") or ("L-bracket" if spec.get("l_bracket") else ("cylinder" if spec["round"] else "plate"))
     actions = [
         f"spec-part: {width:g} × {depth:g} × {height:g} mm {shape_word}, built parametrically",
         f"measured: {measured[0]:.1f} × {measured[1]:.1f} × {measured[2]:.1f} mm",
@@ -2365,6 +2484,10 @@ def _plate_thickness_from_prompt(prompt: str) -> float:
 
 def add_bottom_plate_from_prompt(session: Session, prompt: str) -> list[str]:
     target = _active_source_object(session) or get_object(session, session.get("selected_object_id"))
+    if target is None and session.get("object_order"):
+        # Nothing selected (normal right after a generation) — the user means
+        # the model on the plate.
+        target = session["objects"].get(session["object_order"][-1])
     if target is None:
         return ["bottom plate skipped: no target model"]
     targets = _source_group_objects(session, target) or [target]
@@ -4158,6 +4281,7 @@ def add_mounting_holes_to_session(
     how = (
         "studied the model and placed them in the base plate"
         if any_studied
+        else "in an evenly spaced row" if row_layout
         else "placed them in a symmetric pattern"
     )
     return [f"added {applied_count} mounting holes ({diameter:g}mm, counterbored) to {names} — {how}"]
@@ -4645,7 +4769,15 @@ def is_structural_ai_edit_prompt(prompt: str) -> bool:
             "add",
             "adjust",
             "change",
+            "put",
+            "place",
+            "satt",
             "set",
+            "extend",
+            "widen",
+            "lengthen",
+            "forlang",
+            "bredda",
             "remove",
             "delete",
             "make it",
@@ -4674,7 +4806,9 @@ def is_structural_ai_edit_prompt(prompt: str) -> bool:
         )
     )
     if not has_edit_action:
-        return False
+        # Bare hole-spec phrasings like "4 holes even spacing" are edits too,
+        # even without a verb.
+        return bool(re.search(r"\b[1-8]\s+holes?\b|\bholes?\s+(?:even|evenly|spacing)\b", text))
     return any(
         token in text
         for token in (
@@ -4693,6 +4827,12 @@ def is_structural_ai_edit_prompt(prompt: str) -> bool:
             "clamp",
             "hook",
             "hanger",
+            "wall",
+            "walls",
+            "vagg",
+            "extend",
+            "widen",
+            "spacing",
             "stronger",
             "rib",
             "ribs",
@@ -4768,6 +4908,42 @@ def apply_structural_ai_edit_from_prompt(session: Session, prompt: str) -> list[
             kept = int(params.get("custom_hole_count", 0.0))
             note = f", holes kept in place ({kept})" if kept else ""
             return [f"extended width by {delta:g}mm to {params['width']:g}mm{note}"]
+
+    # "Put a solid wall on the front face so the battery will stop when slid
+    # in" — add a wall plate against a named face of the model.
+    wallm = re.search(
+        r"\bwalls?\b[^.]{0,40}?\b(front|back|rear|left|right|framsidan|baksidan|fram|bak)\b"
+        r"|\b(front|back|rear|left|right|framsidan|baksidan|fram|bak)\b[^.]{0,24}?\bwalls?\b",
+        text,
+    )
+    if wallm and re.search(r"\b(?:put|add|place|solid|satt|lagg|behov|need|so\s+the)\b", text):
+        face = (wallm.group(1) or wallm.group(2) or "front").strip()
+        face = {"framsidan": "front", "fram": "front", "baksidan": "back", "bak": "back", "rear": "back"}.get(face, face)
+        target = _active_source_object(session) or get_object(session, session.get("selected_object_id"))
+        targets = _source_group_objects(session, target) or ([target] if target else [])
+        if targets:
+            mins, maxs = _world_extents_for_objects(targets)
+            t = max(1.5, min(12.0, _parse_named_mm(prompt, ("wall", "thick", "vagg"), 3.0)))
+            zh = max(4.0, maxs[2] - mins[2])
+            if face in ("front", "back"):
+                w_, d_ = max(4.0, maxs[0] - mins[0]), t
+                cx = (mins[0] + maxs[0]) / 2.0
+                cy = (mins[1] - t / 2.0) if face == "front" else (maxs[1] + t / 2.0)
+            else:
+                w_, d_ = t, max(4.0, maxs[1] - mins[1])
+                cy = (mins[1] + maxs[1]) / 2.0
+                cx = (mins[0] - t / 2.0) if face == "left" else (maxs[0] + t / 2.0)
+            shape = make_box_body(w_, d_, zh, fillet=0.0) or make_rounded_box(w_, d_, zh, 0.0, segments=4)
+            wparams = dict(DEFAULT_PARAMETERS)
+            wparams.update({"width": w_, "depth": d_, "height": zh, "thickness": t, "hole_count": 0.0})
+            wall = create_manual_object(f"{face}_wall", shape, wparams)
+            wall["primitive"] = "rectangle"
+            wall["template_component"] = True
+            wall["assembly_source"] = "chat-edit:face-wall"
+            wall["transform"].position[0] = cx
+            wall["transform"].position[1] = cy
+            add_object(session, wall)
+            return [f"added a solid {t:g}mm wall on the {face} face ({w_:.0f} × {zh:.0f}mm)"]
 
     holes_kept_intent = bool(re.search(r"\bkeep\b[^.]{0,24}\bholes?\b|\bholes?\s+the\s+same\b", text))
     if not holes_kept_intent and any(token in text for token in ("hole", "holes", "screw", "hal", "skruv")):
