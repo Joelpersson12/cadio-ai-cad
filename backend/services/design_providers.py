@@ -1872,27 +1872,32 @@ class ProviderRegistry:
 
         variants = _query_variants(search_query) or [search_query]
         tasks = [
-            (provider, variant)
-            for provider in self.providers.values()
+            (provider_key, provider, variant)
+            for provider_key, provider in self.providers.items()
             if provider.is_available()
             for variant in variants
         ]
 
-        def _search_one(args: tuple) -> list[ExampleDesign]:
-            provider, variant = args
+        def _search_one(args: tuple) -> tuple[str, list[ExampleDesign]]:
+            provider_key, provider, variant = args
             try:
-                return provider.search(variant, per_query_limit)
+                return provider_key, provider.search(variant, per_query_limit)
             except Exception:
-                return []
+                return provider_key, []
 
         ranked: dict[str, tuple[float, ExampleDesign]] = {}
         started = time.monotonic()
         deadline = started + deadline_s
-        # The fast path only needs the single best match — exit as soon as a
-        # decent handful of ranked results is in. Cold start (zero results)
-        # still waits the full deadline.
-        min_wait_s = 1.0
-        enough_results = 4
+        # Early exit is gated on QUALITY, not just speed: at least one
+        # high-relevance provider (Printables/Thingiverse/MakerWorld) must
+        # have answered before we stop waiting. Otherwise whichever
+        # low-quality source replies fastest decides the model — that's how
+        # "pegboard tool holder" once came back as a battery holder. Cold
+        # start (zero results) still waits the full deadline.
+        min_wait_s = 1.2
+        enough_results = 5
+        quality_providers = {"printables", "thingiverse", "makerworld"}
+        done_providers: set[str] = set()
 
         executor = ThreadPoolExecutor(max_workers=16)
         try:
@@ -1904,7 +1909,9 @@ class ProviderRegistry:
                 done, pending = _wait(pending, timeout=min(remaining, 0.25), return_when=FIRST_COMPLETED)
                 for future in done:
                     try:
-                        for design in future.result(timeout=0):
+                        provider_key, designs = future.result(timeout=0)
+                        done_providers.add(str(provider_key).lower())
+                        for design in designs:
                             score = _design_score(search_query, design)
                             if score <= 0:
                                 continue
@@ -1914,7 +1921,8 @@ class ProviderRegistry:
                     except Exception:
                         pass
                 elapsed = time.monotonic() - started
-                if elapsed >= min_wait_s and len(ranked) >= enough_results:
+                quality_in = bool(done_providers & quality_providers)
+                if elapsed >= min_wait_s and len(ranked) >= enough_results and (quality_in or elapsed >= 4.5):
                     break
         finally:
             executor.shutdown(wait=False, cancel_futures=True)

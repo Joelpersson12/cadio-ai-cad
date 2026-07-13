@@ -1251,7 +1251,11 @@ def _try_replace_with_imported_source_model(
     # download on a background thread so "Next model" switches instantly.
     # If anything about the top model fails we fall through to the full
     # multi-candidate scoring below (candidate 0 re-resolves from cache).
-    if top_examples:
+    # The fast path is only trusted when the top hit's title actually relates
+    # to the prompt - "pegboard tool holder" must never fast-path into a
+    # battery mount just because that result arrived first. Otherwise the
+    # full scoring loop below weighs title relevance across all candidates.
+    if top_examples and _source_title_score(top_examples[0].title, prompt) > 0:
         first_example = top_examples[0]
         try:
             first_files = _rank_source_files(
@@ -1893,6 +1897,41 @@ def switch_source_model_variant(session: Session, direction: str = "next") -> li
             continue
         files = _rank_source_files(resolve_source_model_files(example.url, example.source, limit=24), prompt, 0)
         files_dicts = [source_file.to_dict() for source_file in files]
+
+        # If the background warm-up already downloaded one of this model's
+        # files, use it IMMEDIATELY - this is what makes every "Next model"
+        # press land instantly instead of failing on a throttled download.
+        mesh_cache = session.get("_source_mesh_cache")
+        if isinstance(mesh_cache, dict) and mesh_cache:
+            warmed = next(
+                (
+                    c for c in files_dicts
+                    if _source_file_is_importable(c) and str(c.get("id") or "") in mesh_cache
+                ),
+                None,
+            )
+            if warmed is not None:
+                shape = _import_source_stl_cached(session, warmed, _prefer_flat_for_prompt(prompt))
+                if shape is not None:
+                    source_obj = _create_imported_source_object(
+                        prompt, shape, example.to_dict(), files_dicts, warmed
+                    )
+                    source_obj["color"] = current.get("color", source_obj.get("color", "#a9aaad"))
+                    source_obj["source_model"]["variant_index"] = index
+                    source_obj["source_model"]["variant_count"] = len(examples)
+                    _remove_source_group_direct(session, current)
+                    add_object(session, source_obj)
+                    session["selected_object_id"] = ""
+                    session["source_info"] = [example.to_dict()]
+                    session["source_files"] = _build_source_file_options(
+                        files_dicts, prompt, 0, session=session, active_id=warmed.get("id")
+                    )
+                    return [
+                        f"{'previous' if step < 0 else 'next'} source model",
+                        f"source-match: {example.title}",
+                        f"source-files: selected {warmed.get('name')}",
+                    ]
+
         assembly_files = _select_source_assembly_files(files_dicts, prompt, 0, max_parts=6)
         if len(assembly_files) >= 2:
             imported_parts = _try_import_source_stl_assembly(
@@ -1983,6 +2022,176 @@ def is_bottom_plate_prompt(prompt: str) -> bool:
     plate_terms = ("bottom plate", "base plate", "bottenplatta", "botten platta")
     relation_terms = ("outside", "around", "under", "below", "utanför", "utanfor", "runt", "under")
     return any(term in text for term in plate_terms) and any(term in text for term in relation_terms)
+
+
+# ---------------------------------------------------------------------------
+# Spec parts: "a rectangular plate, 40mm long, 20mm wide, 3mm thick, two 5mm
+# through holes 25mm apart" must produce EXACTLY that part — parametrically,
+# with the typed numbers surviving generation — never a searched model.
+# ---------------------------------------------------------------------------
+
+_SPEC_SHAPE_WORDS = (
+    "plate", "platta", "skiva", "block", "kloss", "box", "bar", "beam",
+    "spacer", "shim", "washer", "bricka", "disc", "disk", "bracket",
+    "cylinder", "rod", "stav", "tube", "ror",
+)
+_SPEC_EDIT_BLOCKERS = ("make it", "resize", "gor den", "gor det", "andra den", "scale it")
+
+_NUM = r"(\d+(?:[.,]\d+)?)"
+
+
+def _spec_num(match_val: str) -> float:
+    return float(match_val.replace(",", "."))
+
+
+def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
+    """Parse a dimensioned simple-part request; None when it isn't one."""
+    text = _prompt_match_text(prompt)
+    if not any(re.search(rf"\b{word}\b", text) for word in _SPEC_SHAPE_WORDS):
+        return None
+    if any(blocker in text for blocker in _SPEC_EDIT_BLOCKERS):
+        return None
+
+    dims: dict[str, float] = {}
+    triple = re.search(rf"\b{_NUM}\s*[x×*]\s*{_NUM}\s*[x×*]\s*{_NUM}\s*(?:mm)?\b", text)
+    if triple:
+        dims["width"], dims["depth"], dims["height"] = (
+            _spec_num(triple.group(1)), _spec_num(triple.group(2)), _spec_num(triple.group(3))
+        )
+    else:
+        axis_words = {
+            "width": ("long", "length", "lang", "langd"),
+            "depth": ("wide", "width", "bred", "bredd", "deep", "depth", "djup"),
+            "height": ("thick", "thickness", "tjock", "tall", "high", "height", "hog", "hojd"),
+        }
+        for axis, words in axis_words.items():
+            for word in words:
+                m = re.search(rf"\b{_NUM}\s*mm\s*(?:\w+\s+)?{word}\b", text) or re.search(
+                    rf"\b{word}\b\D{{0,10}}{_NUM}\s*mm\b", text
+                )
+                if m:
+                    dims[axis] = _spec_num(m.group(1))
+                    break
+    # A cylinder/rod spec: diameter + length
+    is_round = any(re.search(rf"\b{w}\b", text) for w in ("cylinder", "rod", "stav", "tube", "ror", "washer", "bricka", "disc", "disk"))
+    if is_round and "width" not in dims:
+        dm = re.search(rf"\b{_NUM}\s*mm\s*(?:in\s+)?(?:diameter|dia|diameter)\b", text) or re.search(
+            rf"\b(?:diameter|dia)\D{{0,10}}{_NUM}\s*mm\b", text
+        )
+        if dm:
+            dims["width"] = dims["depth"] = _spec_num(dm.group(1))
+
+    if len(dims) < 2:
+        return None
+
+    dims.setdefault("width", 40.0)
+    dims.setdefault("depth", dims["width"] if is_round else 20.0)
+    dims.setdefault("height", 3.0)
+    for key in dims:
+        dims[key] = max(0.4, min(500.0, dims[key]))
+
+    # Holes: "two 5mm (through) holes 25mm apart"
+    holes: dict[str, float] | None = None
+    if re.search(r"\bholes?\b|\bhal\b", text):
+        count_words = {"one": 1, "two": 2, "three": 3, "four": 4, "en": 1, "ett": 1, "tva": 2, "tre": 3, "fyra": 4}
+        cm = re.search(r"\b(one|two|three|four|en|ett|tva|tre|fyra|[1-8])\b[^.]{0,30}\bholes?\b", text) or re.search(
+            r"\bholes?\b[^.]{0,12}\b(one|two|three|four|[1-8])\b", text
+        )
+        count = 2
+        if cm:
+            token = cm.group(1)
+            count = count_words.get(token, int(token) if token.isdigit() else 2)
+        # The number must sit right next to "holes" (max two words between,
+        # e.g. "5mm through holes") — otherwise "3mm thick, two 5mm holes"
+        # would steal the thickness as the hole diameter.
+        dm = re.search(rf"\b{_NUM}\s*mm\s*(?:\w+\s+){{0,2}}holes?\b", text)
+        diameter = _spec_num(dm.group(1)) if dm else 5.0
+        sm_ = re.search(rf"\b{_NUM}\s*mm\s*(?:apart|isar|mellan|c\s*-?\s*c|center)", text)
+        spacing = _spec_num(sm_.group(1)) if sm_ else 0.0
+        holes = {"count": float(max(1, min(8, count))), "diameter": max(0.5, min(60.0, diameter)), "spacing": spacing}
+
+    return {"dims": dims, "holes": holes, "round": is_round}
+
+
+def is_spec_part_prompt(prompt: str) -> bool:
+    return _parse_spec_part(prompt) is not None
+
+
+def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -> list[str]:
+    """Build the exact dimensioned part the user typed. Returns [] if the
+    prompt isn't a spec-part request (caller continues the normal pipeline)."""
+    spec = _parse_spec_part(prompt)
+    if spec is None:
+        return []
+    dims = spec["dims"]
+    width, depth, height = dims["width"], dims["depth"], dims["height"]
+
+    params = dict(DEFAULT_PARAMETERS)
+    params.update(
+        {
+            "width": width,
+            "depth": depth,
+            "height": height,
+            "thickness": height,
+            "fillet_radius": 0.0,
+            "chamfer_size": 0.0,
+            "hole_count": 0.0,
+            "wall_thickness": height,
+        }
+    )
+
+    if spec["round"]:
+        radius = width / 2.0
+        shape = make_cylinder_body(radius, height) or make_cylinder(radius, height)
+        part = create_manual_object("spec_part", shape, params)
+        part["primitive"] = "cylinder"
+    else:
+        shape = make_box_body(width, depth, height, fillet=0.0) or make_rounded_box(width, depth, height, 0.0, segments=4)
+        part = create_manual_object("spec_part", shape, params)
+        part["primitive"] = "rectangle"
+
+    hole_action = ""
+    holes = spec["holes"]
+    if holes:
+        count = int(holes["count"])
+        diameter = holes["diameter"]
+        spacing = holes["spacing"]
+        if spacing > 0 and count >= 2:
+            # Exact centre-to-centre spacing along the length, centred.
+            span = spacing * (count - 1)
+            positions = [(-span / 2.0 + spacing * i, 0.0) for i in range(count)]
+        else:
+            positions = _mounting_hole_positions(width, depth, count)
+        for index, (x, y) in enumerate(positions):
+            part["parameters"][f"custom_hole_{index}_x"] = x
+            part["parameters"][f"custom_hole_{index}_y"] = y
+            part["parameters"][f"custom_hole_{index}_diameter"] = diameter
+        part["parameters"]["custom_hole_count"] = float(len(positions))
+        part["parameters"]["hole_count"] = float(len(positions))
+        part["parameters"]["hole_diameter"] = diameter
+        _set_feature_enabled(part["feature_tree"], "mount_holes", True)
+        rebuild_manual_object(part)
+        hole_action = f"holes: {len(positions)} × {diameter:g}mm" + (
+            f", {spacing:g}mm apart (exact)" if spacing > 0 and count >= 2 else " (symmetric)"
+        )
+
+    _remove_object_direct(session, obj["id"])
+    center_object_on_plate(part)
+    add_object(session, part)
+    session["selected_object_id"] = part["id"]
+
+    # Self-check: measure the real mesh so "the number you typed is the
+    # number you get" is verified, not assumed.
+    mins, maxs = _mesh_extents(part["shape"])
+    measured = (maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2])
+    shape_word = "cylinder" if spec["round"] else "plate"
+    actions = [
+        f"spec-part: {width:g} × {depth:g} × {height:g} mm {shape_word}, built parametrically",
+        f"measured: {measured[0]:.1f} × {measured[1]:.1f} × {measured[2]:.1f} mm",
+    ]
+    if hole_action:
+        actions.insert(1, hole_action)
+    return actions
 
 
 def _plate_margin_from_prompt(prompt: str) -> float:
@@ -3034,6 +3243,9 @@ def _extract_label_text(prompt: str) -> str:
                 match.group(1),
                 flags=re.IGNORECASE,
             )
+            # Strip leading articles so "add a sony logo" engraves "SONY",
+            # not "A SONY".
+            candidate = re.sub(r"^\s*(?:a|an|the|en|ett|min|mitt|my)\s+", "", candidate, flags=re.IGNORECASE)
             label = _sanitize_label_text(candidate)
             if label:
                 return label
