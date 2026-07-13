@@ -2075,12 +2075,31 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
     is_l_bracket = bool(re.search(r"\b(?:l[\s-]?bracket|angle\s+bracket|vinkeljarn|vinkelfaste)\b", text))
     # A cylinder/rod spec: diameter + length
     is_round = any(re.search(rf"\b{w}\b", text) for w in ("cylinder", "rod", "stav", "tube", "ror", "washer", "bricka", "disc", "disk"))
-    if is_round and "width" not in dims:
-        dm = re.search(rf"\b{_NUM}\s*mm\s*(?:in\s+)?(?:diameter|dia|diameter)\b", text) or re.search(
-            rf"\b(?:diameter|dia)\D{{0,10}}{_NUM}\s*mm\b", text
+    if is_round:
+        dm = re.search(rf"\b{_NUM}\s*mm\s*(?:in\s+)?(?:od|outer\s+diameter|ytterdiameter|diameter|dia)\b", text) or re.search(
+            rf"\b(?:od|outer\s+diameter|ytterdiameter|diameter|dia)\D{{0,10}}{_NUM}\s*mm\b", text
         )
         if dm:
             dims["width"] = dims["depth"] = _spec_num(dm.group(1))
+            # For round parts "long/length" is the AXIS length, not the width
+            # the generic axis parse assumed ("tube 20mm OD, 50mm long").
+            lm = re.search(rf"\b{_NUM}\s*mm\s*(?:\w+\s+)?(?:long|length|tall|high|lang|langd|hog|hojd)\b", text)
+            if lm and abs(_spec_num(lm.group(1)) - dims["width"]) > 0.01:
+                dims["height"] = _spec_num(lm.group(1))
+
+    # Bore: "16mm ID", "inner diameter 16mm", "bore 16mm". Tubes and washers
+    # without a stated bore still get one - a solid "washer" is just wrong.
+    bore = 0.0
+    bm = re.search(rf"\b{_NUM}\s*mm\s*(?:id|inner\s+diameter|innerdiameter|inre\s+diameter|bore|hal\s+i\s+mitten)\b", text) or re.search(
+        rf"\b(?:id|inner\s+diameter|innerdiameter|inre\s+diameter|bore)\D{{0,10}}{_NUM}\s*mm\b", text
+    )
+    if bm:
+        bore = _spec_num(bm.group(1))
+    elif re.search(r"\bhole\s+in\s+the\s+(?:middle|center|centre|mitten)\b|\bcenter\s+hole\b|\bcentre\s+hole\b|\bcenterhal\b", text):
+        cm0 = re.search(rf"\b{_NUM}\s*mm\b[^.]{{0,30}}\b(?:middle|center|centre|mitten)\b", text)
+        bore = _spec_num(cm0.group(1)) if cm0 else max(2.0, dims.get("width", 20.0) * 0.3)
+    elif is_round and re.search(r"\b(?:tube|ror|washer|bricka)\b", text):
+        bore = dims.get("width", 20.0) * 0.5
 
     if len(dims) < 2:
         return None
@@ -2090,6 +2109,16 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
     dims.setdefault("height", 3.0)
     for key in dims:
         dims[key] = max(0.4, min(500.0, dims[key]))
+
+    # Rounded corners: "rounded corners", "corner radius 3mm", "3mm fillet"
+    corner_radius = 0.0
+    cr = re.search(rf"\b{_NUM}\s*mm\s*(?:corner\s+radius|fillet|radie)\b", text) or re.search(
+        rf"\b(?:corner\s+radius|fillet|radie)\D{{0,10}}{_NUM}\s*mm\b", text
+    )
+    if cr:
+        corner_radius = max(0.0, min(20.0, _spec_num(cr.group(1))))
+    elif re.search(r"\brounded\s+corners?\b|\brundade\s+horn\b", text):
+        corner_radius = 2.0
 
     # Holes: "two 5mm (through) holes 25mm apart"
     holes: dict[str, float] | None = None
@@ -2102,15 +2131,44 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
         if cm:
             token = cm.group(1)
             count = count_words.get(token, int(token) if token.isdigit() else 2)
+        elif bore > 0.0:
+            # The only hole mentioned was the centre hole/bore - don't add a
+            # default pattern of extra holes on top of it.
+            count = 0
         # The number must sit right next to "holes" (max two words between,
         # e.g. "5mm through holes") — otherwise "3mm thick, two 5mm holes"
         # would steal the thickness as the hole diameter.
         dm = re.search(rf"\b{_NUM}\s*mm\s*(?:\w+\s+){{0,2}}holes?\b", text)
-        diameter = _spec_num(dm.group(1)) if dm else 5.0
+        diameter = _spec_num(dm.group(1)) if dm else 0.0
+        # Metric thread callouts: "two M5 holes" -> standard clearance fit.
+        m_clearance = {3: 3.4, 4: 4.5, 5: 5.5, 6: 6.6, 8: 9.0, 10: 11.0}
+        mm_ = re.search(r"\bm([2-9]|1[02])\b[^.]{0,16}\bholes?\b", text) or re.search(r"\bholes?\b[^.]{0,12}\bm([2-9]|1[02])\b", text)
+        m_size = int(mm_.group(1)) if mm_ else 0
+        if diameter <= 0.0:
+            diameter = m_clearance.get(m_size, 5.0) if m_size else 5.0
         sm_ = re.search(rf"\b{_NUM}\s*mm\s*(?:apart|isar|mellan|c\s*-?\s*c|center)", text)
         spacing = _spec_num(sm_.group(1)) if sm_ else 0.0
-        holes = {"count": float(max(1, min(8, count))), "diameter": max(0.5, min(60.0, diameter)), "spacing": spacing}
+        # "10mm from each end/edge" -> exact end-inset placement.
+        em = re.search(rf"\b{_NUM}\s*mm\s*from\s*(?:each|the|both)\s*(?:ends?|edges?|sidorna|kanterna)\b", text)
+        end_inset = _spec_num(em.group(1)) if em else 0.0
+        wants_counterbore = bool(re.search(r"\bcounterbore(?:d)?\b|\bcountersunk\b|\bcountersink\b|\bforsankta?\b|\bforsankning\b", text))
+        cb_head = {3: 6.0, 4: 8.0, 5: 10.0, 6: 12.0, 8: 16.0, 10: 20.0}.get(m_size, 0.0) or diameter * 2.0
+        if count == 0:
+            holes = None
+            spacing = 0.0
+        else:
+            holes = {
+                "count": float(max(1, min(8, count))),
+                "diameter": max(0.5, min(60.0, diameter)),
+                "spacing": spacing,
+                "end_inset": end_inset,
+                "counterbore": cb_head if wants_counterbore else 0.0,
+            }
 
+    if bore > 0.0 and bore < dims.get("width", 999.0):
+        pass  # bore validated at build time against actual OD
+    else:
+        bore = min(bore, max(0.0, dims.get("width", 20.0) - 1.0)) if bore > 0 else 0.0
     if is_l_bracket:
         # L-brackets: "Nmm legs" sets both legs; "thick" is material thickness
         # (the axis parse above maps it to height, which is wrong here).
@@ -2128,7 +2186,14 @@ def _parse_spec_part(prompt: str) -> dict[str, Any] | None:
         elif "height" not in dims:
             dims["height"] = dims.get("depth", 30.0)
         dims["l_thickness"] = thickness
-    return {"dims": dims, "holes": holes, "round": is_round, "l_bracket": is_l_bracket}
+    return {
+        "dims": dims,
+        "holes": holes,
+        "round": is_round,
+        "l_bracket": is_l_bracket,
+        "bore": bore,
+        "corner_radius": corner_radius,
+    }
 
 
 def is_spec_part_prompt(prompt: str) -> bool:
@@ -2185,7 +2250,11 @@ def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -
         part = create_manual_object("spec_part", shape, params)
         part["primitive"] = "cylinder"
     else:
-        shape = make_box_body(width, depth, height, fillet=0.0) or make_rounded_box(width, depth, height, 0.0, segments=4)
+        corner_r = min(float(spec.get("corner_radius", 0.0)), min(width, depth) * 0.3)
+        params["fillet_radius"] = corner_r
+        shape = make_box_body(width, depth, height, fillet=corner_r) or make_rounded_box(
+            width, depth, height, corner_r, segments=8 if corner_r > 0 else 4
+        )
         part = create_manual_object("spec_part", shape, params)
         part["primitive"] = "rectangle"
 
@@ -2199,7 +2268,13 @@ def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -
         if spec.get("l_bracket"):
             # Centre of the exposed horizontal leg (the wall sits at the back).
             hole_y = -float(part["parameters"].get("thickness", 4.0)) / 2.0
-        if spacing > 0 and count >= 2:
+        end_inset = float(holes.get("end_inset", 0.0))
+        if end_inset > 0 and count >= 2 and end_inset < width / 2.0:
+            # "10mm from each end": exact end-referenced placement, evenly
+            # distributed between the two end holes when count > 2.
+            x0, x1 = -width / 2.0 + end_inset, width / 2.0 - end_inset
+            positions = [(x0 + (x1 - x0) * i / (count - 1), hole_y) for i in range(count)]
+        elif spacing > 0 and count >= 2:
             # Exact centre-to-centre spacing along the length, centred.
             span = spacing * (count - 1)
             positions = [(-span / 2.0 + spacing * i, hole_y) for i in range(count)]
@@ -2212,10 +2287,19 @@ def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -
         part["parameters"]["custom_hole_count"] = float(len(positions))
         part["parameters"]["hole_count"] = float(len(positions))
         part["parameters"]["hole_diameter"] = diameter
+        cb = float(holes.get("counterbore", 0.0))
+        if cb > diameter:
+            part["parameters"]["counterbore_diameter"] = cb
+            part["parameters"]["counterbore_depth"] = max(0.6, min(height * 0.45, 3.0))
         _set_feature_enabled(part["feature_tree"], "mount_holes", True)
         rebuild_manual_object(part)
-        hole_action = f"holes: {len(positions)} × {diameter:g}mm" + (
-            f", {spacing:g}mm apart (exact)" if spacing > 0 and count >= 2 else " (symmetric)"
+        placement = (
+            f", {end_inset:g}mm from each end (exact)" if end_inset > 0 and count >= 2 and end_inset < width / 2.0
+            else f", {spacing:g}mm apart (exact)" if spacing > 0 and count >= 2
+            else " (symmetric)"
+        )
+        hole_action = f"holes: {len(positions)} × {diameter:g}mm{placement}" + (
+            ", counterbored" if cb > diameter else ""
         )
 
     # Spec parts are prompt-generated content: a NEW generation must replace
@@ -2223,6 +2307,21 @@ def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -
     # plate survived every following prompt). assembly_source marks them as
     # generated while manual=True keeps every edit tool working.
     part["assembly_source"] = "spec-part"
+    bore = float(spec.get("bore", 0.0))
+    if bore > 0.5 and bore < width - 0.8:
+        idx = int(part["parameters"].get("custom_hole_count", 0.0))
+        part["parameters"][f"custom_hole_{idx}_x"] = 0.0
+        part["parameters"][f"custom_hole_{idx}_y"] = 0.0
+        part["parameters"][f"custom_hole_{idx}_diameter"] = bore
+        part["parameters"]["custom_hole_count"] = float(idx + 1)
+        part["parameters"]["hole_count"] = float(idx + 1)
+        _set_feature_enabled(part["feature_tree"], "mount_holes", True)
+        rebuild_manual_object(part)
+        if not hole_action:
+            hole_action = f"bore: {bore:g}mm through centre"
+        else:
+            hole_action += f" + {bore:g}mm centre bore"
+
     _remove_object_direct(session, obj["id"])
     center_object_on_plate(part)
     add_object(session, part)
