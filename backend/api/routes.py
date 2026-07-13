@@ -87,7 +87,9 @@ from backend.services.session_manager import (
     get_selected_object,
     get_session,
     import_uploaded_mesh,
+    build_spec_part_from_prompt,
     is_bottom_plate_prompt,
+    is_spec_part_prompt,
     is_structural_ai_edit_prompt,
     is_text_label_prompt,
     prepare_generation_target,
@@ -181,7 +183,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-07-10T-real-hole-subtraction"
+BUILD_MARKER = "2026-07-10T-spec-parts-quality-gate"
 
 
 @router.get("/api/debug/version")
@@ -885,7 +887,16 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
         )
 
         # Special commands
-        if locked_obj is not None and is_edit_request:
+        if is_spec_part_prompt(data.prompt):
+            # Dimensioned simple parts ("plate 40x20x3, two 5mm holes 25mm
+            # apart") are built parametrically with the exact typed numbers -
+            # never routed to model search, which returns lookalike models
+            # with the wrong dimensions.
+            obj = prepare_generation_target(
+                session, f"generated_{len(session['edit_history']) + 1}"
+            )
+            actions = build_spec_part_from_prompt(session, obj, data.prompt)
+        elif locked_obj is not None and is_edit_request:
             actions = [edit_lock_message(locked_obj)]
         elif "duplicate" in command_prompt:
             duplicate_object(session)
