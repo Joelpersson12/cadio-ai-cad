@@ -1956,6 +1956,14 @@ class ProviderRegistry:
             translated = llm_translate_search_query(query)
             if translated:
                 search_query = normalize_source_query(translated) or translated
+        # Long descriptive prompts ("Design a compact 90-degree exhaust adapter
+        # assembly for a portable air conditioner that ...") drown keyword
+        # search in noise and match the wrong model. Distill them to a short
+        # search phrase first (cached; ~300ms on Groq; falls back untouched).
+        elif len(search_query.split()) > 8:
+            distilled = llm_translate_search_query(query)
+            if distilled:
+                search_query = normalize_source_query(distilled) or distilled
 
         per_query_limit = max(limit * 2, 12)
         # Cross-provider fan-out deadline. A too-tight budget silently drops all
