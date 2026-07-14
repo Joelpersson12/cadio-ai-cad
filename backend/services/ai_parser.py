@@ -171,14 +171,19 @@ def is_new_model_prompt(prompt: str) -> bool:
 # 100", "120x80x250". Used so a resize request on the CURRENT model is treated
 # as an edit instead of a fresh generation (which previously searched sources
 # and, ironically, returned a literal 120mm fan for "make it 120mm high").
+# Unit suffix accepted after a number: metric, or inches as 6", 6'', 6 in,
+# 6 inch/inches. Users paste imperial specs constantly ("6\" x 6\"") and a
+# missed unit silently turned their edit into a fresh (wrong) generation.
+_UNIT = r"(?:mm|millimeters?|millimetres?|cm|centimeters?|centimetres?|\"|″|''|in\b|inch(?:es)?)"
+
 _DIMENSION_HINT = re.compile(
-    r"\b\d+(?:\.\d+)?\s*(?:mm|cm|millimeters?|millimetres?)?\s*"
+    rf"\b\d+(?:\.\d+)?\s*{_UNIT}?\s*"
     r"(?:tall|taller|high|height|wide|wider|width|deep|depth|thick|thickness|long|length|"
     r"h[oö]g|h[oö]gt|h[oö]jd|bred|brett|bredd|djup|djupt|tjock|tjockt|tjocklek|l[aå]ng|l[aå]ngt|l[aä]ngd)\b"
-    r"|\b(?:tall|high|height|wide|width|deep|depth|thick|thickness|long|length|"
-    r"h[oö]gd?|h[oö]jd|bred|bredd|djup|tjock|tjocklek|l[aå]ng|l[aä]ngd)\b"
-    r"\s*(?:of|to|at|is|=|:|av|till|p[aå])?\s*\d+(?:\.\d+)?"
-    r"|\b\d+(?:\.\d+)?\s*[x×*]\s*\d+(?:\.\d+)?(?:\s*[x×*]\s*\d+(?:\.\d+)?)?\s*(?:mm|cm)?\b"
+    r"|\b(?:tall|high|height|wide|width|deep|depth|thick|thickness|long|length|dimensions?|"
+    r"h[oö]gd?|h[oö]jd|bred|bredd|djup|tjock|tjocklek|l[aå]ng|l[aä]ngd|m[aå]tt(?:en)?)\b"
+    r"\s*(?:are|of|to|at|is|=|:|av|till|[aä]r|p[aå])?\s*\d+(?:\.\d+)?"
+    rf"|\b\d+(?:\.\d+)?\s*{_UNIT}?\s*[x×*]\s*\d+(?:\.\d+)?\s*{_UNIT}?(?:\s*[x×*]\s*\d+(?:\.\d+)?\s*{_UNIT}?)?"
 )
 
 
@@ -402,6 +407,18 @@ def _apply_deterministic_edit(
     def _set_dim(key: str, value: float, lo: float, hi: float) -> None:
         params[key] = max(lo, min(hi, value))
 
+    # Unit-aware value: users mix mm, cm and inches (6", 6 in, 6 inches).
+    # Everything is stored in mm.
+    _unit_re = r"(mm|millimeters?|millimetres?|cm|centimeters?|centimetres?|\"|″|''|in|inch(?:es)?)"
+
+    def _to_mm(value: float, unit: str | None) -> float:
+        u = (unit or "").strip().lower()
+        if u.startswith("cm") or u.startswith("centimet"):
+            return value * 10.0
+        if u in ('"', "″", "''") or u.startswith("in"):
+            return value * 25.4
+        return value
+
     # axis -> (keyword alternation, min, max)
     _dim_axes = {
         "height": (r"tall|taller|high|height|hoog|hog|hogt|hojd|hög|högt|höjd", 5.0, 1000.0),
@@ -412,33 +429,42 @@ def _apply_deterministic_edit(
     explicit_changes: list[str] = []
     for _key, (_kw, _lo, _hi) in _dim_axes.items():
         _val: float | None = None
-        # "<number> mm <keyword>"  (e.g. "250mm tall")
-        _m = re.search(rf"(\d+(?:\.\d+)?)\s*(?:mm|millimeters?|millimetres?|cm)?\s*(?:{_kw})\b", text)
+        # "<number> [unit] <keyword>"  (e.g. "250mm tall", '6" wide')
+        _m = re.search(rf"(\d+(?:\.\d+)?)\s*{_unit_re}?\s*(?:{_kw})\b", text)
         if _m:
-            _val = float(_m.group(1))
+            _val = _to_mm(float(_m.group(1)), _m.group(2))
         else:
-            # "<keyword> [of/to/=] <number>"  (e.g. "height of 250", "width 100")
-            _m = re.search(rf"\b(?:{_kw})\b\s*(?:of|to|at|is|=|:|av|till|på|pa)?\s*(\d+(?:\.\d+)?)\s*(?:mm|cm)?", text)
+            # "<keyword> [of/to/=] <number> [unit]"  (e.g. "height of 250", 'width 6"')
+            _m = re.search(rf"\b(?:{_kw})\b\s*(?:of|to|at|is|=|:|av|till|på|pa)?\s*(\d+(?:\.\d+)?)\s*{_unit_re}?", text)
             if _m:
-                _val = float(_m.group(1))
+                _val = _to_mm(float(_m.group(1)), _m.group(2))
         if _val is not None:
             _set_dim(_key, _val, _lo, _hi)
             explicit_changes.append(f"{_key} {params[_key]:.0f}mm")
 
-    # "WxDxH" shorthand, e.g. "100x60x250" or "100 x 60 x 250 mm"
-    _wdh = re.search(
-        r"\b(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\b",
-        text,
-    )
+    # "WxDxH" shorthand, e.g. "100x60x250", "100 x 60 x 250 mm", '6" x 6" x 2"'
+    _num = rf"(\d+(?:\.\d+)?)\s*{_unit_re}?"
+    _wdh = re.search(rf"\b{_num}\s*[x×*]\s*{_num}\s*[x×*]\s*{_num}", text)
     if _wdh:
-        _set_dim("width", float(_wdh.group(1)), 5.0, 1000.0)
-        _set_dim("depth", float(_wdh.group(2)), 5.0, 1000.0)
-        _set_dim("height", float(_wdh.group(3)), 5.0, 1000.0)
+        _set_dim("width", _to_mm(float(_wdh.group(1)), _wdh.group(2)), 5.0, 1000.0)
+        _set_dim("depth", _to_mm(float(_wdh.group(3)), _wdh.group(4)), 5.0, 1000.0)
+        _set_dim("height", _to_mm(float(_wdh.group(5)), _wdh.group(6)), 5.0, 1000.0)
         explicit_changes = [
             f"width {params['width']:.0f}mm",
             f"depth {params['depth']:.0f}mm",
             f"height {params['height']:.0f}mm",
         ]
+    else:
+        # "W x D" 2D shorthand — e.g. 'dimensions are 6" x 6"'. Sets the
+        # footprint and leaves height alone.
+        _wd = re.search(rf"\b{_num}\s*[x×*]\s*{_num}", text)
+        if _wd and not explicit_changes:
+            _set_dim("width", _to_mm(float(_wd.group(1)), _wd.group(2)), 5.0, 1000.0)
+            _set_dim("depth", _to_mm(float(_wd.group(3)), _wd.group(4)), 5.0, 1000.0)
+            explicit_changes = [
+                f"width {params['width']:.0f}mm",
+                f"depth {params['depth']:.0f}mm",
+            ]
     if explicit_changes:
         actions.append("set " + ", ".join(explicit_changes))
 
