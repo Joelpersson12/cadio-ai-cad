@@ -476,14 +476,44 @@ def _apply_deterministic_edit(
     # ------------------------------------------------------------------
     if not explicit_changes:
         factor: float | None = None
+        # Axis multiplier — "twice as tall", "3 times as wide". Runs before the
+        # overall resize so "twice as tall" scales height, not the whole model.
+        _axis_words = {"tall": "height", "high": "height", "wide": "width", "broad": "width",
+                       "deep": "depth", "long": "depth", "thick": "thickness"}
+        _mult = re.search(
+            r"\b(?:(\d+(?:[.,]\d+)?)\s*(?:x\b|time?s?\b)?|double|twice|triple)\s*"
+            r"(?:time?s?\s+)?as\s+(tall|high|wide|broad|deep|long|thick)\b",
+            text,
+        )
+        _axis_scaled = False
+        if _mult and _mult.group(2):
+            raw = _mult.group(1)
+            mfac = float(raw.replace(",", ".")) if raw else (3.0 if "triple" in _mult.group(0) else 2.0)
+            mfac = max(0.05, min(10.0, mfac))
+            _mkey = _axis_words[_mult.group(2)]
+            hi = 60.0 if _mkey == "thickness" else 1000.0
+            scale_param(_mkey, mfac, 1.0, hi)
+            actions.append(f"scaled {_mkey} to {mfac * 100:.0f}%")
+            _axis_scaled = True
         pct = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent|procent)", text)
+        # "N times bigger" / the common "10 time bigger" typo / "5x larger"
+        times = re.search(
+            r"\b(\d+(?:[.,]\d+)?)\s*(?:x\b|time?s?\b)[^.]{0,16}?\b(?:bigger|larger|the size|as big|större|storre)"
+            r"|\b(\d+(?:[.,]\d+)?)\s*x\s*(?:bigger|larger|större|storre)\b",
+            text,
+        )
         grow_words = ("bigger", "larger", "enlarge", "grow", "scale up", "scale it up",
                       "increase the size", "upsize", "make it big", "större", "storre",
                       "förstora", "forstora")
         shrink_words = ("smaller", "shrink", "scale down", "scale it down",
                         "reduce the size", "downsize", "make it small", "mindre", "krymp",
                         "förminska", "forminska")
-        if re.search(r"\b(double|twice|2x|two times|dubbelt|dubbla)\b", text):
+        if _axis_scaled:
+            pass
+        elif times:
+            raw = times.group(1) or times.group(2)
+            factor = max(0.05, min(10.0, float(raw.replace(",", "."))))
+        elif re.search(r"\b(double|twice|2x|two times|dubbelt|dubbla)\b", text):
             factor = 2.0
         elif re.search(r"\b(triple|3x|three times)\b", text):
             factor = 3.0
