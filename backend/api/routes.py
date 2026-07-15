@@ -89,6 +89,8 @@ from backend.services.session_manager import (
     import_uploaded_mesh,
     build_spec_part_from_prompt,
     is_bottom_plate_prompt,
+    is_duct_adapter_prompt,
+    build_duct_adapter_from_prompt,
     is_spec_part_prompt,
     is_structural_ai_edit_prompt,
     is_text_label_prompt,
@@ -185,7 +187,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-07-15T-tester-edits-reset-multipliers"
+BUILD_MARKER = "2026-07-16T-parametric-duct-adapter"
 
 
 @router.get("/api/debug/version")
@@ -889,7 +891,15 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
         )
 
         # Special commands
-        if is_spec_part_prompt(data.prompt):
+        if is_duct_adapter_prompt(data.prompt):
+            # Square-to-round duct/hose adapters are lofted from the user's own
+            # numbers — model search can only return someone else's adapter
+            # with the wrong sizes (a real tester hit exactly this).
+            obj = prepare_generation_target(
+                session, f"generated_{len(session['edit_history']) + 1}"
+            )
+            actions = build_duct_adapter_from_prompt(session, obj, data.prompt)
+        elif is_spec_part_prompt(data.prompt):
             # Dimensioned simple parts ("plate 40x20x3, two 5mm holes 25mm
             # apart") are built parametrically with the exact typed numbers -
             # never routed to model search, which returns lookalike models

@@ -139,7 +139,7 @@ CREATE_PATTERNS = (
 
 EDIT_PATTERNS = (
     r"\b(add|remove|delete|change|modify|edit|increase|decrease|resize|scale|rotate|move|write|engrave|emboss)\b",
-    r"\b(make it|taller|wider|thicker|thinner|rounded|fillet|chamfer|extrude|shell|mirror|holes?|text|logo|label|engraved|raised|cutout|notch|slot|boss|standoff|clip|hook|rib|stronger)\b",
+    r"\b(make it|taller|wider|thicker|thinner|rounded|fillet|chamfer|extrude|shell|mirror|holes?|text|logo|label|engraved|raised|cutout|notch|slot|boss|standoff|clip|hook|rib|stronger|bend|bent|b[oö]j)\b",
     # Natural-language size/shape edits so users don't need exact keywords.
     r"\b(bigger|larger|smaller|grow|shrink|enlarge|reduce|expand|downsize|upsize|"
     r"shorter|lower|higher|narrower|broader|slimmer|deeper|longer|shallower|flatter|"

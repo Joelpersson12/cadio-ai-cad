@@ -37,6 +37,7 @@ from backend.services.prompt_translation import normalize_source_query, translat
 
 CadObject = dict[str, Any]
 Session = dict[str, Any]
+Vec3Tuple = tuple[float, float, float]
 
 # ---------------------------------------------------------------------------
 # Module-level state
@@ -2320,6 +2321,195 @@ def _make_solid_mesh(kind: str, width: float, height: float) -> TriMesh:
     else:  # cube
         return make_rounded_box(width, width, width, 0.0, segments=4)
     return mesh
+
+
+# ---------------------------------------------------------------------------
+# Parametric duct / hose adapters — "square 6x6 inch opening to a 6 inch round
+# hose with a 90 degree bend". A real tester asked for exactly this and model
+# search can only ever return SOMEONE ELSE'S adapter with the wrong sizes.
+# These are lofted procedurally from the user's own numbers instead.
+# ---------------------------------------------------------------------------
+
+
+def _parse_duct_adapter(prompt: str) -> dict[str, float] | None:
+    """Detect an adapter/transition request and extract its dimensions (mm)."""
+    text = _prompt_match_text(prompt)
+    if not re.search(r"\b(?:adapter|adaptor|coupler|transition|reducer|övergång|overgang)\b", text):
+        return None
+    if not re.search(r"\b(?:duct|exhaust|hose|vent|air|pipe|tube|slang|rör|ror|kanal|utblås|utblas)\b", text):
+        return None
+
+    def _mm(val: float, unit: str | None) -> float:
+        u = (unit or "").strip().lower()
+        if u.startswith("cm"):
+            return val * 10.0
+        if u in ('"', "″", "''") or u.startswith("in") or u.startswith("tum"):
+            return val * 25.4
+        return val
+
+    unit_re = r"(mm|cm|\"|″|''|in\b|inch(?:es)?|tum)"
+    # Square side: "6 inches by 6 inches", "6x6 inch", "square ... 6 in"
+    square: float | None = None
+    m = re.search(rf"(\d+(?:[.,]\d+)?)\s*{unit_re}?\s*(?:by|x|×)\s*(\d+(?:[.,]\d+)?)\s*{unit_re}?", text)
+    if m:
+        square = _mm(float(m.group(1).replace(",", ".")), m.group(2) or m.group(4))
+    elif re.search(r"\bsquare\b|\bfyrkant", text):
+        m2 = re.search(rf"\bsquare\b[^.]{{0,40}}?(\d+(?:[.,]\d+)?)\s*{unit_re}", text)
+        if m2:
+            square = _mm(float(m2.group(1).replace(",", ".")), m2.group(2))
+    # Round diameter: "6-inch diameter round hose", "diameter 150mm", "Ø150"
+    round_d: float | None = None
+    m3 = re.search(rf"(\d+(?:[.,]\d+)?)\s*{unit_re}?[\s-]*(?:diameter|dia\b|ø)", text) or re.search(
+        rf"(?:diameter|dia\b|ø)\s*(?:of\s*)?(\d+(?:[.,]\d+)?)\s*{unit_re}?", text
+    )
+    if m3:
+        round_d = _mm(float(m3.group(1).replace(",", ".")), m3.group(2))
+    if square is None and round_d is None:
+        return None
+    if square is None:
+        square = round_d
+    if round_d is None:
+        round_d = square
+    bend = 90.0 if re.search(r"\b90\b|\bninety\b|right[\s-]?angle|\bL[\s-]?shape", text) else 0.0
+    if re.search(r"\b(?:wall|thick|v[aä]gg)", text):
+        wall = max(1.6, min(6.0, _parse_named_mm(prompt, ("wall", "thick", "vagg"), 2.5)))
+    else:
+        wall = 2.5
+    return {
+        "square": max(20.0, min(400.0, square)),
+        "round_d": max(20.0, min(400.0, round_d)),
+        "bend": bend,
+        "wall": wall,
+    }
+
+
+def is_duct_adapter_prompt(prompt: str) -> bool:
+    return _parse_duct_adapter(prompt) is not None
+
+
+def _make_duct_adapter_mesh(square: float, round_d: float, bend_deg: float, wall: float) -> TriMesh:
+    """Loft a hollow square-to-round transition, optionally along a 90° bend.
+
+    Watertight: outer skin + inner skin + annular rims at both mouths. The
+    square mouth sits on the build plate (prints flange-down, bend rising up
+    and over — no supports needed inside the smooth sweep)."""
+    P = 48   # points per profile ring
+    S = 28   # sections along the path
+    a_i = square / 2.0          # inner half-size at the square end
+    r_i = round_d / 2.0         # inner radius at the round end
+    bend = math.radians(max(0.0, min(120.0, bend_deg)))
+    # Path length / bend radius scaled to the part so the sweep stays compact.
+    R = max(a_i, r_i) * 1.6
+    straight_len = max(square, round_d) * 1.2
+
+    def profile_radius(theta: float, t: float, inset: float) -> float:
+        """Blend a slightly-rounded square (superellipse) into a circle."""
+        c, sn = abs(math.cos(theta)), abs(math.sin(theta))
+        n = 8.0
+        r_sq = (a_i - inset) / max(1e-6, (c ** n + sn ** n) ** (1.0 / n))
+        r_ci = r_i - inset
+        blend = t * t * (3.0 - 2.0 * t)  # smoothstep
+        return r_sq * (1.0 - blend) + r_ci * blend
+
+    def frame(t: float) -> tuple[Vec3Tuple, Vec3Tuple, Vec3Tuple]:
+        """Section origin + in-plane axes (u sideways, v across) at path t."""
+        if bend <= 1e-6:
+            origin = (0.0, 0.0, straight_len * t)
+        else:
+            phi = bend * t
+            origin = (R * (1.0 - math.cos(phi)), 0.0, R * math.sin(phi))
+        if bend <= 1e-6:
+            u = (1.0, 0.0, 0.0)
+        else:
+            phi = bend * t
+            u = (math.cos(phi), 0.0, -math.sin(phi))
+        v = (0.0, 1.0, 0.0)
+        return origin, u, v
+
+    mesh = TriMesh()
+
+    def build_skin(inset: float) -> list[list[int]]:
+        rings: list[list[int]] = []
+        for si in range(S + 1):
+            t = si / S
+            origin, u, v = frame(t)
+            ring: list[int] = []
+            for pi in range(P):
+                theta = 2.0 * math.pi * pi / P
+                r = profile_radius(theta, t, inset)
+                x_p, y_p = r * math.cos(theta), r * math.sin(theta)
+                pt = (
+                    origin[0] + u[0] * x_p + v[0] * y_p,
+                    origin[1] + u[1] * x_p + v[1] * y_p,
+                    origin[2] + u[2] * x_p + v[2] * y_p,
+                )
+                ring.append(mesh.add_vertex(pt))
+            rings.append(ring)
+        return rings
+
+    outer = build_skin(0.0)
+    inner = build_skin(wall)
+
+    def stitch(r1: list[int], r2: list[int], flip: bool) -> None:
+        for pi in range(P):
+            a, b = r1[pi], r1[(pi + 1) % P]
+            c2, d2 = r2[pi], r2[(pi + 1) % P]
+            if flip:
+                mesh.add_tri(a, c2, b)
+                mesh.add_tri(b, c2, d2)
+            else:
+                mesh.add_tri(a, b, c2)
+                mesh.add_tri(b, d2, c2)
+
+    for si in range(S):
+        stitch(outer[si], outer[si + 1], flip=False)
+        stitch(inner[si], inner[si + 1], flip=True)
+    # Annular rims closing the wall at both mouths.
+    stitch(outer[0], inner[0], flip=True)
+    stitch(outer[S], inner[S], flip=False)
+    return mesh
+
+
+def build_duct_adapter_from_prompt(session: Session, obj: CadObject, prompt: str) -> list[str]:
+    """Build the user's adapter from their own numbers. [] when not an adapter."""
+    spec = _parse_duct_adapter(prompt)
+    if spec is None:
+        return []
+    mesh = _make_duct_adapter_mesh(spec["square"], spec["round_d"], spec["bend"], spec["wall"])
+    params = dict(DEFAULT_PARAMETERS)
+    params.update(
+        {
+            "width": spec["square"],
+            "depth": spec["square"],
+            "height": spec["square"],
+            "thickness": spec["wall"],
+            "wall_thickness": spec["wall"],
+            "hole_count": 0.0,
+            "fillet_radius": 0.0,
+            "chamfer_size": 0.0,
+        }
+    )
+    part = create_manual_object("duct_adapter", mesh, params)
+    part["primitive"] = "imported_source_mesh"
+    part["imported_source_mesh"] = True
+    part["source_original_shape"] = deepcopy(part["shape"])
+    try:
+        from backend.services.mesh_analysis import scan_trimesh
+
+        part["mesh_scan"] = scan_trimesh(part["shape"])
+    except Exception:  # noqa: BLE001
+        part["mesh_scan"] = None
+    part["assembly_source"] = "parametric:duct-adapter"
+    _remove_object_direct(session, obj["id"])
+    add_object(session, part)
+    session["selected_object_id"] = part["id"]
+    center_object_on_plate(part)
+    bend_txt = f" with a {spec['bend']:g}° bend" if spec["bend"] else ""
+    return [
+        "built parametrically from your dimensions (no model search)",
+        f"square mouth {spec['square']:g}×{spec['square']:g}mm → round outlet Ø{spec['round_d']:g}mm{bend_txt}, wall {spec['wall']:g}mm",
+        "tip: say e.g. 'wall 3mm' or different sizes to rebuild it exactly",
+    ]
 
 
 def build_spec_part_from_prompt(session: Session, obj: CadObject, prompt: str) -> list[str]:
@@ -4830,6 +5020,9 @@ def is_structural_ai_edit_prompt(prompt: str) -> bool:
             "hole",
             "holes",
             "screw",
+            "bend",
+            "bent",
+            "boj",
             "flange",
             "flanges",
             "flans",
@@ -4988,8 +5181,38 @@ def _apply_removal_edit_from_prompt(session: Session, prompt: str) -> list[str]:
     ]
 
 
+def _apply_bend_edit_from_prompt(session: Session, prompt: str) -> list[str]:
+    """'Give it a 90-degree bend in the middle' — this used to be routed as a
+    NEW generation and replaced the model with an unrelated search hit
+    ('from ductwork to a phone stand in one fell swoop', as the tester put
+    it). Bending an arbitrary imported mesh isn't supported yet, so keep the
+    model and answer honestly, pointing at the parametric adapter that CAN
+    be built with a bend."""
+    text = _edit_match_text(prompt)
+    if not re.search(r"\b(?:bend|bent|b[oö]j(?:en)?)\b", text):
+        return []
+    target = _active_source_object(session) or get_object(session, session.get("selected_object_id"))
+    if target is None and session.get("object_order"):
+        target = session["objects"].get(session["object_order"][-1])
+    if target is None:
+        return []
+    deg = 90
+    m = re.search(r"(\d{2,3})\s*(?:°|deg|degrees?|grader)", text)
+    if m:
+        deg = int(m.group(1))
+    return [
+        f"bending this model {deg}° isn't supported yet — the model was left unchanged. "
+        "For ducts and hoses, describe the part instead (e.g. 'square 150x150mm to round "
+        f"150mm diameter hose adapter with a {deg} degree bend') and Cadio builds it "
+        "parametrically with the bend included."
+    ]
+
+
 def apply_structural_ai_edit_from_prompt(session: Session, prompt: str) -> list[str]:
     text = _edit_match_text(prompt)
+    bend_actions = _apply_bend_edit_from_prompt(session, prompt)
+    if bend_actions:
+        return bend_actions
     removal_actions = _apply_removal_edit_from_prompt(session, prompt)
     if removal_actions:
         return removal_actions
