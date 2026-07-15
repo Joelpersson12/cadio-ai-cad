@@ -1328,17 +1328,12 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
         .float-y   { animation: float-y 4s ease-in-out infinite; }
         .card-hover { transition: transform .3s ease, box-shadow .3s ease, border-color .3s ease; }
         .card-hover:hover { transform: translateY(-4px); }
-        @keyframes orb-a { 0%,100% { transform: translate(0,0) scale(1) } 50% { transform: translate(6%, 4%) scale(1.12) } }
-        @keyframes orb-b { 0%,100% { transform: translate(0,0) scale(1) } 50% { transform: translate(-5%, -6%) scale(1.08) } }
-        @keyframes orb-c { 0%,100% { transform: translate(0,0) scale(1) } 50% { transform: translate(4%, -4%) scale(1.15) } }
-        @keyframes grad-x { 0%,100% { background-position: 0% 50% } 50% { background-position: 100% 50% } }
-        .accent-gradient {
-          background: linear-gradient(100deg, #2bb8dc 0%, #6fe6ff 25%, #7a5af8 55%, #2bb8dc 100%);
-          background-size: 220% 100%;
-          -webkit-background-clip: text; background-clip: text;
-          -webkit-text-fill-color: transparent; color: transparent;
-          animation: grad-x 7s ease-in-out infinite;
-        }
+        /* Single solid accent — a professional CAD tool speaks in one color.
+           (Was an animated cyan-to-purple gradient; that read "AI startup",
+           not "precision tool".) Class name kept so every usage updates. */
+        .accent-gradient { color: #2bb8dc; }
+        /* Technical section labels — set like drawing annotations. */
+        .sec-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.14em; }
       `}</style>
 
       <div
@@ -1356,32 +1351,21 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
             animate on the GPU for free. */}
         <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
           <div
-            className="absolute -left-[15%] top-[14%] h-[70vh] w-[70vh] rounded-full"
-            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.16) 0%, transparent 62%)", animation: "orb-a 18s ease-in-out infinite", willChange: "transform" }}
-          />
-          <div
-            className="absolute right-[-12%] top-[50%] h-[72vh] w-[72vh] rounded-full"
-            style={{ background: "radial-gradient(circle, rgba(122,90,248,0.13) 0%, transparent 62%)", animation: "orb-b 22s ease-in-out infinite", willChange: "transform" }}
-          />
-          <div
-            className="absolute left-[30%] bottom-[-6%] h-[62vh] w-[62vh] rounded-full"
-            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.12) 0%, transparent 62%)", animation: "orb-c 26s ease-in-out infinite", willChange: "transform" }}
+            className="absolute -left-[10%] top-[8%] h-[70vh] w-[70vh] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(43,184,220,0.07) 0%, transparent 62%)" }}
           />
         </div>
 
-        {/* ── NAVBAR — floating glass pill ──────────────────────────────── */}
-        <header className="fixed inset-x-0 top-0 z-40 flex justify-center px-3 pt-3 transition-all duration-500">
-          <div
-            className="flex h-14 w-full max-w-5xl items-center justify-between rounded-2xl px-4 pl-5 transition-all duration-500 lg:px-5"
-            style={{
-              background: scrolled ? "rgba(13,19,24,0.92)" : "rgba(13,19,24,0.6)",
-              backdropFilter: "blur(12px)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              boxShadow: scrolled
-                ? "0 12px 40px -16px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)"
-                : "0 8px 30px -18px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)",
-            }}
-          >
+        {/* ── NAVBAR — flat, full-width, hairline rule. Tool sites earn trust
+            with structure, not floating glass. ─────────────────────────── */}
+        <header className="fixed inset-x-0 top-0 z-40 transition-all duration-300"
+          style={{
+            background: scrolled ? "rgba(13,17,21,0.96)" : "rgba(13,17,21,0.82)",
+            backdropFilter: "blur(8px)",
+            borderBottom: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 lg:px-6">
             <CadioLogo
               subtitle=""
               onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
@@ -1403,7 +1387,7 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
                   <button
                     onClick={onStartBuilding}
                     className="h-8 sm:h-9 rounded-lg px-3 sm:px-5 text-xs sm:text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.97]"
-                    style={{ background: ACCENT, color: BG, boxShadow: `0 2px 20px ${ACCENT_DIM}0.4)` }}
+                    style={{ background: ACCENT, color: BG }}
                   >
                     <span className="sm:hidden">Builder</span>
                     <span className="hidden sm:inline">Open Builder</span>
@@ -1425,7 +1409,7 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
                   <button
                     onClick={onStartBuilding}
                     className="h-8 sm:h-9 rounded-lg px-3 sm:px-5 text-xs sm:text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.97]"
-                    style={{ background: ACCENT, color: BG, boxShadow: `0 2px 20px ${ACCENT_DIM}0.4)` }}
+                    style={{ background: ACCENT, color: BG }}
                   >
                     <span className="sm:hidden">Build</span>
                     <span className="hidden sm:inline">{text.nav.start}</span>
@@ -1460,25 +1444,10 @@ export default function LandingPage({ onStartBuilding, onSeeDemo }: { onStartBui
           {/* Hero text — centered on mobile, left-aligned beside the 3D on desktop */}
           <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col items-center justify-center px-6 pt-16 pb-32 lg:items-start">
             <div className="flex max-w-xl flex-col items-center text-center lg:max-w-2xl lg:items-start lg:text-left">
-              {/* Eyebrow */}
-              <div
-                className="anim-in mb-8 inline-flex items-center gap-2 rounded-full px-4 py-1.5"
-                style={{
-                  background: `${ACCENT_DIM}0.08)`,
-                  border: `1px solid ${ACCENT_DIM}0.25)`,
-                }}
-              >
-                <span
-                  className="h-1.5 w-1.5 rounded-full pulse-cx"
-                  style={{ background: ACCENT }}
-                />
-                <span
-                  className="text-[11px] font-bold uppercase tracking-[0.22em]"
-                  style={{ color: ACCENT }}
-                >
-                  {text.hero.eyebrow}
-                </span>
-              </div>
+              {/* Eyebrow — plain technical annotation, no pill, no pulsing dot */}
+              <p className="anim-in sec-label mb-8 text-[11px] font-semibold uppercase" style={{ color: `${ACCENT_DIM}0.85)` }}>
+                {text.hero.eyebrow}
+              </p>
 
               {/* Headline */}
               <h1

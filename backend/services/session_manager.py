@@ -1028,6 +1028,15 @@ def _create_imported_source_object(
     source_obj["imported_source_mesh"] = True
     source_obj["source_dimensions"] = dimensions
     source_obj["source_original_shape"] = deepcopy(shape)
+    # Measure what the model actually contains (holes, base, size) so prompt
+    # edits can target the real geometry instead of guessing. Scan the FINAL
+    # stored shape — create_manual_object shifts it onto the build plate.
+    try:
+        from backend.services.mesh_analysis import scan_trimesh
+
+        source_obj["mesh_scan"] = scan_trimesh(source_obj["shape"])
+    except Exception:  # noqa: BLE001 — scanning is best-effort
+        source_obj["mesh_scan"] = None
     source_obj["source_model"] = {
         "prompt": prompt,
         "matched_example": source_example,
@@ -1289,11 +1298,13 @@ def _try_replace_with_imported_source_model(
                 _spawn_variant_prefetch(session.get("session_id", ""), examples[1:], prompt)
                 selected_file_name = first_candidate.get("name")
                 options_n = len([o for o in session["source_files"] if o.get("id") != "__all__"])
+                scan = source_obj.get("mesh_scan") or {}
                 return [
                     _source_signal_summary(prompt),
                     f"source-match: {first_example.title}",
                     f"source-files: selected {selected_file_name}" if selected_file_name else "source-files: selected public STL",
                     f"imported real {_source_label(first_example.source)} mesh as starting geometry",
+                    f"scanned model: {scan['summary']}" if scan.get("summary") else "",
                     f"source-file-options: {options_n} files available to choose from" if options_n > 1 else "",
                 ], source_obj
 
@@ -4858,8 +4869,72 @@ def is_structural_ai_edit_prompt(prompt: str) -> bool:
     )
 
 
+def _apply_scanned_hole_edit(session: Session, prompt: str) -> list[str]:
+    """Resize the model's REAL holes, found by scanning the mesh.
+
+    'Make the holes 6mm' / 'enlarge the holes' on an imported model targets
+    the through-holes the scanner measured — same centers, bigger bore —
+    instead of drilling new generic mounting holes. Enlarging is a true
+    subtraction so it works on any mesh; shrinking would need material added
+    and is answered honestly instead of faked."""
+    text = _edit_match_text(prompt)
+    if not re.search(r"\bholes?\b|\bh[aå]l(?:en)?\b", text):
+        return []
+    # Only when the user speaks about existing holes ("the holes", enlarge/
+    # widen/resize wording) — "add 4 holes" must keep meaning NEW holes.
+    wants_resize = re.search(
+        r"\b(?:enlarge|widen|bigger|larger|increase|resize|expand|f[oö]rstora|st[oö]rre|bredda)\b"
+        r"|\bholes?\s*(?:to|=|:)?\s*\d+(?:[.,]\d+)?\s*mm\b"
+        r"|\bmake\s+(?:the\s+)?holes?\b",
+        text,
+    )
+    wants_new = re.search(r"\b(?:add|drill|new|more|another|extra|l[aä]gg\s*till|fler|nya?)\b", text)
+    if not wants_resize or wants_new:
+        return []
+
+    target = _active_source_object(session) or get_object(session, session.get("selected_object_id"))
+    if target is None or not target.get("imported_source_mesh"):
+        return []
+    scan = target.get("mesh_scan")
+    if not isinstance(scan, dict) or not scan.get("holes"):
+        return []
+    holes = scan["holes"]
+
+    shrink = re.search(r"\b(?:smaller|shrink|reduce|narrow|mindre|krymp|minska)\b", text)
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*mm\b", text)
+    current_max = max(item["diameter"] for item in holes)
+    new_d = float(m.group(1).replace(",", ".")) if m else round(current_max * 1.3, 1)
+    if shrink or new_d <= current_max:
+        return [
+            f"the scanned holes are Ø{current_max:g}mm — making them smaller means filling "
+            "material, which isn't possible on an imported mesh yet. Try a larger diameter."
+        ]
+
+    mesh = deepcopy(target["shape"])
+    for hole in holes:
+        mesh = _subtract_cylinder_column(mesh, hole["cx"], hole["cy"], new_d / 2.0, sides=24)
+    target["shape"] = mesh
+    target["source_original_shape"] = deepcopy(mesh)
+    try:
+        from backend.services.mesh_analysis import scan_trimesh
+
+        target["mesh_scan"] = scan_trimesh(mesh)
+    except Exception:  # noqa: BLE001
+        pass
+    target.setdefault("operation_history", []).append(
+        {"operation": "resize_scanned_holes", "count": len(holes), "diameter": new_d}
+    )
+    return [
+        f"enlarged the model's {len(holes)} scanned hole{'s' if len(holes) != 1 else ''} "
+        f"to Ø{new_d:g}mm at their original positions"
+    ]
+
+
 def apply_structural_ai_edit_from_prompt(session: Session, prompt: str) -> list[str]:
     text = _edit_match_text(prompt)
+    scanned_hole_actions = _apply_scanned_hole_edit(session, prompt)
+    if scanned_hole_actions:
+        return scanned_hole_actions
     slot_actions = _apply_slot_edit_from_prompt(session, prompt)
     if slot_actions:
         return slot_actions
