@@ -97,6 +97,8 @@ from backend.services.session_manager import (
     rebuild_object,
     remove_object,
     add_object,
+    clear_all_objects,
+    is_reset_prompt,
     split_object_by_line,
     cut_object_by_line,
     replace_object_with_research_assembly,
@@ -183,7 +185,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-07-15T-mesh-scan-pro-landing"
+BUILD_MARKER = "2026-07-15T-tester-edits-reset-multipliers"
 
 
 @router.get("/api/debug/version")
@@ -896,6 +898,15 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
                 session, f"generated_{len(session['edit_history']) + 1}"
             )
             actions = build_spec_part_from_prompt(session, obj, data.prompt)
+        elif is_reset_prompt(data.prompt):
+            # "Delete everything and start again" — real testers typed this
+            # and nothing happened, which read as being ignored.
+            removed = clear_all_objects(session)
+            actions = [
+                f"cleared the build plate ({removed} object{'s' if removed != 1 else ''} removed) — describe what to build next"
+                if removed
+                else "the plate is already empty — describe what to build"
+            ]
         elif locked_obj is not None and is_edit_request:
             actions = [edit_lock_message(locked_obj)]
         elif "duplicate" in command_prompt:

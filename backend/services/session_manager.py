@@ -4755,6 +4755,10 @@ def _expert_operation_from_prompt(prompt: str) -> tuple[str, float] | None:
         return "fillet", first or 2.0
     if "chamfer" in text or "fasa" in text:
         return "chamfer", first or 2.0
+    # "Narrow the edges (so force has to be applied to insert it)" — a
+    # press-fit taper request; a chamfer is the printable way to do it.
+    if re.search(r"\b(?:narrow(?:er)?|taper(?:ed)?|tight(?:er)?)\b", text) and re.search(r"\bedges?\b|\bkant(?:er(?:na)?)?\b", text):
+        return "chamfer", first or 1.5
     if "shell" in text or "skal" in text:
         return "shell", first or 2.0
     if "extrude" in text or "extrudera" in text:
@@ -4826,6 +4830,15 @@ def is_structural_ai_edit_prompt(prompt: str) -> bool:
             "hole",
             "holes",
             "screw",
+            "flange",
+            "flanges",
+            "flans",
+            "post",
+            "posts",
+            "lettering",
+            "letters",
+            "logo",
+            "label",
             "boss",
             "bosses",
             "standoff",
@@ -4930,8 +4943,56 @@ def _apply_scanned_hole_edit(session: Session, prompt: str) -> list[str]:
     ]
 
 
+def _apply_removal_edit_from_prompt(session: Session, prompt: str) -> list[str]:
+    """Handle 'remove the X' intents BEFORE the add-branches get a chance.
+
+    A real tester wrote 'remove those newly-introduced posts' and the bosses
+    branch ADDED more posts. Removal intent must never fall through to an
+    add-branch. Parametric holes can genuinely be removed (hole_count -> 0);
+    everything else gets an honest answer with the actual way out (Undo)."""
+    text = _edit_match_text(prompt)
+    if not re.search(r"\b(?:remove|delete|get rid of|ta bort)\b", text):
+        return []
+    if re.search(r"\b(?:add|and add|lagg till|l[aä]gg till)\b", text):
+        return []
+    feature_nouns = re.search(
+        r"\b(?:holes?|posts?|boss(?:es)?|standoffs?|flanges?|ribs?|hooks?|clips?|"
+        r"lettering|letters?|text|logo|labels?|h[aå]l|fl[aä]ns(?:en)?|krok(?:en)?|ribb(?:a|or))\b",
+        text,
+    )
+    if not feature_nouns:
+        return []
+    target = _active_source_object(session) or get_object(session, session.get("selected_object_id"))
+    if target is None and session.get("object_order"):
+        target = session["objects"].get(session["object_order"][-1])
+    if target is None:
+        return []
+
+    wants_holes = bool(re.search(r"\bholes?\b|\bh[aå]l\b", text))
+    if wants_holes and not target.get("imported_source_mesh"):
+        # Parametric bodies can genuinely drop their holes.
+        params = target["parameters"]
+        had = int(params.get("hole_count", 0.0)) or int(params.get("custom_hole_count", 0.0))
+        params["hole_count"] = 0.0
+        params["custom_hole_count"] = 0.0
+        if target.get("manual"):
+            rebuild_manual_object(target)
+        else:
+            rebuild_object(target)
+        return [f"removed the holes ({had or 'all'})"]
+
+    return [
+        "Cadio can't remove that feature from this model yet — press Undo (Ctrl+Z or the ↶ "
+        "button in the top bar) to revert the last change, or use the Cut slot / Split tools "
+        "to slice material away."
+    ]
+
+
 def apply_structural_ai_edit_from_prompt(session: Session, prompt: str) -> list[str]:
     text = _edit_match_text(prompt)
+    removal_actions = _apply_removal_edit_from_prompt(session, prompt)
+    if removal_actions:
+        return removal_actions
     scanned_hole_actions = _apply_scanned_hole_edit(session, prompt)
     if scanned_hole_actions:
         return scanned_hole_actions
@@ -5733,6 +5794,36 @@ def update_imported_source_dimensions(obj: CadObject, changed_keys: set[str]) ->
 def add_object(session: Session, obj: CadObject) -> None:
     session["objects"][obj["id"]] = obj
     session["object_order"].append(obj["id"])
+
+
+def is_reset_prompt(prompt: str) -> bool:
+    """'Delete everything and start again', 'start over', 'clear the plate'…
+
+    Real testers typed these and were (rightly) annoyed that nothing happened."""
+    text = (prompt or "").strip().lower()
+    # Only unambiguous whole-plate phrasings. Deliberately NOT bare "all":
+    # "remove all the holes" is a feature edit, not a reset.
+    return bool(
+        re.search(
+            r"\b(?:delete|remove|clear|rensa|ta bort)\b.{0,12}\b(?:everything|allt|allting|alltihop)\b"
+            r"|\bstart\s*(?:over|again|fresh|from scratch)\b"
+            r"|\bb[oö]rja\s*om\b"
+            r"|\bclear\s+the\s+(?:plate|scene|workspace)\b",
+            text,
+        )
+    )
+
+
+def clear_all_objects(session: Session) -> int:
+    """Remove every object from the plate. Returns how many were removed."""
+    count = len(session["object_order"])
+    session["objects"] = {}
+    session["object_order"] = []
+    session["selected_object_id"] = ""
+    session["source_files"] = []
+    session["source_info"] = []
+    session["_source_mesh_cache"] = {}
+    return count
 
 
 def remove_object(session: Session, object_id: str) -> bool:
