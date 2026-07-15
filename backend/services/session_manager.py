@@ -5192,6 +5192,8 @@ def _apply_bend_edit_from_prompt(session: Session, prompt: str) -> list[str]:
     if not re.search(r"\b(?:bend|bent|b[oö]j(?:en)?)\b", text):
         return []
     target = _active_source_object(session) or get_object(session, session.get("selected_object_id"))
+    if target is None and session.get("object_order"):
+        target = session["objects"].get(session["object_order"][-1])
     if target is None:
         return []
     deg = 90
