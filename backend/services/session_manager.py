@@ -1291,6 +1291,7 @@ def _try_replace_with_imported_source_model(
                 session["source_files"] = _build_source_file_options(
                     first_dicts, prompt, preferred_slots, session=session, active_id=first_candidate.get("id")
                 )
+                respec_notes = _respec_imported_to_prompt(source_obj, prompt)
                 _spawn_source_file_prefetch(
                     session.get("session_id", ""), first_dicts, prompt, first_candidate.get("id")
                 )
@@ -1303,6 +1304,7 @@ def _try_replace_with_imported_source_model(
                 return [
                     _source_signal_summary(prompt),
                     f"source-match: {first_example.title}",
+                    *(respec_notes or []),
                     f"source-files: selected {selected_file_name}" if selected_file_name else "source-files: selected public STL",
                     f"imported real {_source_label(first_example.source)} mesh as starting geometry",
                     f"scanned model: {scan['summary']}" if scan.get("summary") else "",
@@ -1573,6 +1575,91 @@ def _import_source_stl_cached(session: Session, candidate: dict[str, Any], prefe
     if shape is not None and fid:
         session.setdefault("_source_mesh_cache", {})[fid] = deepcopy(shape)
     return shape
+
+
+def _extract_target_dims(prompt: str) -> dict[str, float]:
+    """Explicit dimensions the customer typed, in mm, keyed by axis.
+
+    Understands mm/cm/inches ('6\"', '6 in', '15 cm') and axis words in
+    English and Swedish. Only returns axes that were explicitly stated."""
+    text = (prompt or "").lower()
+    unit_re = r"(mm|millimeters?|cm|centimeters?|\"|″|''|in\b|inch(?:es)?|tum)"
+
+    def _mm(val: str, unit: str | None) -> float:
+        v = float(val.replace(",", "."))
+        u = (unit or "").strip()
+        if u.startswith("cm"):
+            return v * 10.0
+        if u in ('"', "″", "''") or u.startswith("in") or u.startswith("tum"):
+            return v * 25.4
+        return v
+
+    axes = {
+        "height": r"tall|high|height|h[oö]g(?:t)?|h[oö]jd",
+        "width": r"wide|width|bred(?:d|t)?",
+        "depth": r"deep|depth|long|length|djup(?:t)?|l[aå]ng(?:t)?|l[aä]ngd",
+    }
+    out: dict[str, float] = {}
+    for key, kw in axes.items():
+        m = re.search(rf"(\d+(?:[.,]\d+)?)\s*{unit_re}?\s*(?:{kw})\b", text)
+        if not m:
+            m = re.search(rf"\b(?:{kw})\b\s*(?:of|to|at|is|=|:|av|p[aå])?\s*(\d+(?:[.,]\d+)?)\s*{unit_re}?", text)
+        if m:
+            out[key] = max(3.0, min(1000.0, _mm(m.group(1), m.group(2))))
+    return out
+
+
+def _respec_imported_to_prompt(source_obj: CadObject, prompt: str) -> list[str]:
+    """Rebuild an imported model to the customer's explicitly typed sizes.
+
+    'If Cadio can't find a model that is EXACTLY what the customer wants, it
+    builds it': the closest real model is imported, then stretched per-axis
+    to the stated dimensions, so it still looks like the Printables design
+    but measures what the customer asked for. Only stated axes change."""
+    targets = _extract_target_dims(prompt)
+    if not targets:
+        return []
+    mesh = source_obj.get("shape")
+    if mesh is None or not getattr(mesh, "verts", None):
+        return []
+    xs = [v[0] for v in mesh.verts]
+    ys = [v[1] for v in mesh.verts]
+    zs = [v[2] for v in mesh.verts]
+    cur = {
+        "width": max(xs) - min(xs),
+        "depth": max(ys) - min(ys),
+        "height": max(zs) - min(zs),
+    }
+    scale = {
+        "width": targets.get("width", 0.0) / cur["width"] if cur["width"] > 1e-6 and "width" in targets else 1.0,
+        "depth": targets.get("depth", 0.0) / cur["depth"] if cur["depth"] > 1e-6 and "depth" in targets else 1.0,
+        "height": targets.get("height", 0.0) / cur["height"] if cur["height"] > 1e-6 and "height" in targets else 1.0,
+    }
+    if all(abs(f - 1.0) < 0.02 for f in scale.values()):
+        return []  # already matches
+    cx = (max(xs) + min(xs)) / 2.0
+    cy = (max(ys) + min(ys)) / 2.0
+    z0 = min(zs)
+    sx, sy, sz = scale["width"], scale["depth"], scale["height"]
+    mesh.verts = [
+        (cx + (v[0] - cx) * sx, cy + (v[1] - cy) * sy, z0 + (v[2] - z0) * sz)
+        for v in mesh.verts
+    ]
+    source_obj["source_original_shape"] = deepcopy(mesh)
+    params = source_obj.get("parameters", {})
+    for key in ("width", "depth", "height"):
+        if key in targets:
+            params[key] = targets[key]
+        else:
+            params[key] = cur[key] * scale[key]
+    try:
+        from backend.services.mesh_analysis import scan_trimesh
+
+        source_obj["mesh_scan"] = scan_trimesh(mesh)
+    except Exception:  # noqa: BLE001
+        pass
+    changed = ", ".join(f"{k} {targets[k]:g}mm" for k in ("width", "depth", "height") if k in targets)
+    return [f"rebuilt the imported model to your dimensions: {changed}"]
 
 
 def _spawn_source_file_prefetch(
@@ -2332,8 +2419,12 @@ def _make_solid_mesh(kind: str, width: float, height: float) -> TriMesh:
 
 
 def _parse_duct_adapter(prompt: str) -> dict[str, float] | None:
-    """Detect an adapter/transition request and extract its dimensions (mm)."""
-    text = _prompt_match_text(prompt)
+    """Detect an adapter/transition request and extract its dimensions (mm).
+
+    Dimensions are read from the RAW prompt: normalize_source_query strips
+    connective words like 'to', which would make '200mm to round' collapse to
+    '200mm round' and misread the round diameter as 200."""
+    text = (prompt or "").lower()
     if not re.search(r"\b(?:adapter|adaptor|coupler|transition|reducer|övergång|overgang)\b", text):
         return None
     if not re.search(r"\b(?:duct|exhaust|hose|vent|air|pipe|tube|slang|rör|ror|kanal|utblås|utblas)\b", text):
@@ -2357,10 +2448,15 @@ def _parse_duct_adapter(prompt: str) -> dict[str, float] | None:
         m2 = re.search(rf"\bsquare\b[^.]{{0,40}}?(\d+(?:[.,]\d+)?)\s*{unit_re}", text)
         if m2:
             square = _mm(float(m2.group(1).replace(",", ".")), m2.group(2))
-    # Round diameter: "6-inch diameter round hose", "diameter 150mm", "Ø150"
+    # Round diameter: "6-inch diameter round hose", "diameter 150mm", "Ø150",
+    # or a size directly before "round/hose/pipe/tube" ("6 inch round hose",
+    # "to a 100mm hose").
     round_d: float | None = None
-    m3 = re.search(rf"(\d+(?:[.,]\d+)?)\s*{unit_re}?[\s-]*(?:diameter|dia\b|ø)", text) or re.search(
-        rf"(?:diameter|dia\b|ø)\s*(?:of\s*)?(\d+(?:[.,]\d+)?)\s*{unit_re}?", text
+    m3 = (
+        re.search(rf"(\d+(?:[.,]\d+)?)\s*{unit_re}?[\s-]*(?:diameter|dia\b|ø)", text)
+        or re.search(rf"(?:diameter|dia\b|ø)\s*(?:of\s*)?(\d+(?:[.,]\d+)?)\s*{unit_re}?", text)
+        or re.search(rf"(\d+(?:[.,]\d+)?)\s*{unit_re}?[\s-]*(?:round|hose|pipe|tube|slang|r[oö]r)\b", text)
+        or re.search(rf"(?:round|hose|pipe|tube|slang|r[oö]r)\s*(?:of\s*)?(\d+(?:[.,]\d+)?)\s*{unit_re}?", text)
     )
     if m3:
         round_d = _mm(float(m3.group(1).replace(",", ".")), m3.group(2))
@@ -2370,7 +2466,15 @@ def _parse_duct_adapter(prompt: str) -> dict[str, float] | None:
         square = round_d
     if round_d is None:
         round_d = square
-    bend = 90.0 if re.search(r"\b90\b|\bninety\b|right[\s-]?angle|\bL[\s-]?shape", text) else 0.0
+    # Any bend angle the customer asks for — "40 degree bend", "böj 60 grader".
+    bend = 0.0
+    bm = re.search(r"(\d{1,3})\s*(?:°|deg(?:rees?)?|grader)", text)
+    if bm:
+        bend = max(0.0, min(120.0, float(bm.group(1))))
+    elif re.search(r"\bninety\b|right[\s-]?angle|\bL[\s-]?shape|\belbow\b", text):
+        bend = 90.0
+    elif re.search(r"\bbend|b[oö]j", text):
+        bend = 90.0
     if re.search(r"\b(?:wall|thick|v[aä]gg)", text):
         wall = max(1.6, min(6.0, _parse_named_mm(prompt, ("wall", "thick", "vagg"), 2.5)))
     else:
@@ -2500,6 +2604,9 @@ def build_duct_adapter_from_prompt(session: Session, obj: CadObject, prompt: str
     except Exception:  # noqa: BLE001
         part["mesh_scan"] = None
     part["assembly_source"] = "parametric:duct-adapter"
+    # Remember the recipe so a later "change it to 60 degrees" / "make the
+    # round end 100mm" rebuilds the adapter instead of failing.
+    part["duct_spec"] = dict(spec)
     _remove_object_direct(session, obj["id"])
     add_object(session, part)
     session["selected_object_id"] = part["id"]
@@ -5181,6 +5288,130 @@ def _apply_removal_edit_from_prompt(session: Session, prompt: str) -> list[str]:
     ]
 
 
+def is_duct_adapter_edit_prompt(session: Session, prompt: str) -> bool:
+    """True when the plate holds a Cadio-built adapter and the prompt looks
+    like a change to it ('round end 100mm', 'wall 3mm', 'straight', '45°').
+
+    Session-aware, so it catches adapter edits that the generic structural
+    detector misses (e.g. bare 'wall 3mm' with no verb) and keeps them from
+    falling through to a brand-new generation."""
+    target = _active_source_object(session) or get_object(session, session.get("selected_object_id"))
+    if target is None and session.get("object_order"):
+        target = session["objects"].get(session["object_order"][-1])
+    if target is None or not isinstance(target.get("duct_spec"), dict):
+        return False
+    text = _edit_match_text(prompt)
+    return bool(
+        re.search(
+            r"\bbend|b[oö]j|straight|rak\b|angle|vinkel"
+            r"|\d+\s*(?:°|deg|degrees?|grader)"
+            r"|\bround\b|\bsquare\b|\bwall\b|\bdiameter\b|\bthick"
+            r"|\bbigger|smaller|wider|narrower|taller|shorter|st[oö]rre|mindre"
+            r"|\d+\s*(?:mm|cm|inch|in\b|tum)",
+            text,
+        )
+    )
+
+
+def _apply_duct_adapter_edit(session: Session, prompt: str) -> list[str]:
+    """Rebuild a Cadio-built duct adapter to new values.
+
+    This is the core of 'if the customer wants a 40° bend instead of 70°,
+    Cadio rebuilds the model to their wish'. When the current model is a
+    parametric adapter, 'change it to 60 degrees', 'make the round end
+    100mm', 'wall 3mm', 'make the square side 200mm' all re-loft it with the
+    changed value and keep everything else. Returns [] when the model isn't
+    one of ours (so other handlers run)."""
+    target = _active_source_object(session) or get_object(session, session.get("selected_object_id"))
+    if target is None and session.get("object_order"):
+        target = session["objects"].get(session["object_order"][-1])
+    if target is None or not isinstance(target.get("duct_spec"), dict):
+        return []
+
+    spec = dict(target["duct_spec"])
+    text = _edit_match_text(prompt)
+    changed: list[str] = []
+
+    def _mm_from(match: "re.Match[str] | None") -> float | None:
+        if not match:
+            return None
+        val = float(match.group(1).replace(",", "."))
+        unit = (match.group(2) or "").strip().lower()
+        if unit in ('"', "″", "''") or unit.startswith("in") or unit.startswith("tum"):
+            val *= 25.4
+        elif unit.startswith("cm"):
+            val *= 10.0
+        return val
+
+    unit_re = r"(mm|cm|\"|″|''|in\b|inch(?:es)?|tum)"
+
+    # Bend angle: "change it to 60 degrees", "60 degree bend", "make it straight"
+    if re.search(r"\bstraight\b|\bno bend\b|\brak\b", text):
+        if spec["bend"] != 0.0:
+            spec["bend"] = 0.0
+            changed.append("removed the bend (now straight)")
+    else:
+        bm = re.search(r"(\d{1,3})\s*(?:°|deg(?:rees?)?|grader)", text)
+        if bm and re.search(r"\bbend|b[oö]j|angle|vinkel|straight|degrees?|grader|°\b", text):
+            nb = max(0.0, min(120.0, float(bm.group(1))))
+            if abs(nb - spec["bend"]) > 0.1:
+                spec["bend"] = nb
+                changed.append(f"bend {nb:g}°")
+
+    # Round outlet diameter
+    rm = re.search(rf"round\s+(?:end|outlet|side|hose|pipe)?\s*(?:to\s*)?(\d+(?:[.,]\d+)?)\s*{unit_re}?", text)
+    if not rm:
+        rm = re.search(rf"(\d+(?:[.,]\d+)?)\s*{unit_re}?\s*(?:diameter|dia\b|round)", text)
+    rv = _mm_from(rm)
+    if rv is not None and 20.0 <= rv <= 400.0 and abs(rv - spec["round_d"]) > 0.5:
+        spec["round_d"] = rv
+        changed.append(f"round Ø{rv:g}mm")
+
+    # Square mouth side
+    sqm = re.search(rf"square\s+(?:end|side|mouth|opening)?\s*(?:to\s*)?(\d+(?:[.,]\d+)?)\s*{unit_re}?", text)
+    sqv = _mm_from(sqm)
+    if sqv is not None and 20.0 <= sqv <= 400.0 and abs(sqv - spec["square"]) > 0.5:
+        spec["square"] = sqv
+        changed.append(f"square {sqv:g}mm")
+
+    # Wall thickness
+    wm = re.search(rf"wall\s*(?:thickness|to)?\s*(\d+(?:[.,]\d+)?)\s*{unit_re}?|(\d+(?:[.,]\d+)?)\s*{unit_re}?\s*(?:thick|wall)", text)
+    if wm:
+        raw = wm.group(1) or wm.group(3)
+        unit = wm.group(2) or wm.group(4)
+        if raw:
+            wv = float(raw.replace(",", "."))
+            if unit and (unit.startswith("in") or unit in ('"', "''")):
+                wv *= 25.4
+            wv = max(1.2, min(8.0, wv))
+            if abs(wv - spec["wall"]) > 0.05:
+                spec["wall"] = wv
+                changed.append(f"wall {wv:g}mm")
+
+    if not changed:
+        return []
+
+    mesh = _make_duct_adapter_mesh(spec["square"], spec["round_d"], spec["bend"], spec["wall"])
+    target["shape"] = shift_mesh_to_buildplate(mesh)
+    target["source_original_shape"] = deepcopy(target["shape"])
+    target["duct_spec"] = spec
+    params = target.get("parameters", {})
+    params.update({"width": spec["square"], "depth": spec["square"], "height": spec["square"],
+                   "thickness": spec["wall"], "wall_thickness": spec["wall"]})
+    try:
+        from backend.services.mesh_analysis import scan_trimesh
+
+        target["mesh_scan"] = scan_trimesh(target["shape"])
+    except Exception:  # noqa: BLE001
+        pass
+    center_object_on_plate(target)
+    bend_txt = f", {spec['bend']:g}° bend" if spec["bend"] else ", straight"
+    return [
+        f"rebuilt your adapter: {', '.join(changed)}",
+        f"now square {spec['square']:g}mm → round Ø{spec['round_d']:g}mm{bend_txt}, wall {spec['wall']:g}mm",
+    ]
+
+
 def _apply_bend_edit_from_prompt(session: Session, prompt: str) -> list[str]:
     """'Give it a 90-degree bend in the middle' — this used to be routed as a
     NEW generation and replaced the model with an unrelated search hit
@@ -5210,6 +5441,11 @@ def _apply_bend_edit_from_prompt(session: Session, prompt: str) -> list[str]:
 
 def apply_structural_ai_edit_from_prompt(session: Session, prompt: str) -> list[str]:
     text = _edit_match_text(prompt)
+    # Cadio-built adapters can be rebuilt to any new bend/size — must run
+    # before the generic bend handler (which only knows how to say "no").
+    adapter_actions = _apply_duct_adapter_edit(session, prompt)
+    if adapter_actions:
+        return adapter_actions
     bend_actions = _apply_bend_edit_from_prompt(session, prompt)
     if bend_actions:
         return bend_actions

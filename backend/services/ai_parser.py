@@ -191,6 +191,33 @@ def _mentions_explicit_dimension(text: str) -> bool:
     return bool(_DIMENSION_HINT.search(text))
 
 
+_EDIT_VOCAB = frozenset(
+    "make it the a an of to at is are and with for på pa av och med under over"
+    " taller shorter wider narrower deeper longer bigger smaller larger thicker thinner"
+    " tall short wide narrow deep long big small large thick thin high low higher lower"
+    " height width depth size mm cm inch inches in tum millimeter millimeters centimeter"
+    " centimeters percent procent scale resize x by hogre lagre bredare smalare djupare"
+    " tjockare tunnare storre mindre hog bred djup tjock stor liten hojd bredd djup"
+    " round rounded edges edge corner corners fillet chamfer smooth"
+    " twice double triple times half halve quarter"
+    " gör gor den det högre lägre större förstora förminska bredare smalare djupare"
+    " längre kortare tjockare tunnare höjd bredd djup hälften dubbelt dubbla"
+    " så sa hög låg lång kort bred smal stor liten tjock tunn".split()
+)
+
+
+def prompt_has_subject(prompt: str) -> bool:
+    """True when the prompt names a THING beyond edit words and dimensions.
+
+    'headset stand 120mm tall' names a thing; 'make it 120mm tall' doesn't.
+    Used so a dimensioned product prompt on an EMPTY plate generates the
+    product (then rebuilt to the typed sizes) instead of editing nothing."""
+    text = re.sub(r"\d+(?:[.,]\d+)?", " ", (prompt or "").lower())
+    text = re.sub(r"[\"'″°%]", " ", text)
+    words = re.findall(r"[a-zåäö]{3,}", text)
+    return any(w not in _EDIT_VOCAB for w in words)
+
+
 def is_edit_only_prompt(prompt: str) -> bool:
     text = _prompt_match_text(prompt)
     has_edit = (
@@ -392,6 +419,11 @@ def _apply_deterministic_edit(
 ) -> list[str]:
     """Handle common quick edits without relying on an external LLM."""
     text = _prompt_match_text(prompt)
+    # Numeric dimensions and percentages are read from the RAW prompt, never
+    # the normalized text: normalize_source_query strips punctuation, so
+    # "make it 50% taller" becomes "...50 taller", which the dimension parser
+    # would misread as "height 50mm". The raw prompt keeps the "%".
+    raw = (prompt or "").lower()
     actions: list[str] = []
 
     def scale_param(key: str, factor: float, minimum: float = 0.0, maximum: float = 500.0) -> None:
@@ -430,12 +462,12 @@ def _apply_deterministic_edit(
     for _key, (_kw, _lo, _hi) in _dim_axes.items():
         _val: float | None = None
         # "<number> [unit] <keyword>"  (e.g. "250mm tall", '6" wide')
-        _m = re.search(rf"(\d+(?:\.\d+)?)\s*{_unit_re}?\s*(?:{_kw})\b", text)
+        _m = re.search(rf"(\d+(?:\.\d+)?)\s*{_unit_re}?\s*(?:{_kw})\b", raw)
         if _m:
             _val = _to_mm(float(_m.group(1)), _m.group(2))
         else:
             # "<keyword> [of/to/=] <number> [unit]"  (e.g. "height of 250", 'width 6"')
-            _m = re.search(rf"\b(?:{_kw})\b\s*(?:of|to|at|is|=|:|av|till|på|pa)?\s*(\d+(?:\.\d+)?)\s*{_unit_re}?", text)
+            _m = re.search(rf"\b(?:{_kw})\b\s*(?:of|to|at|is|=|:|av|till|på|pa)?\s*(\d+(?:\.\d+)?)\s*{_unit_re}?", raw)
             if _m:
                 _val = _to_mm(float(_m.group(1)), _m.group(2))
         if _val is not None:
@@ -444,7 +476,7 @@ def _apply_deterministic_edit(
 
     # "WxDxH" shorthand, e.g. "100x60x250", "100 x 60 x 250 mm", '6" x 6" x 2"'
     _num = rf"(\d+(?:\.\d+)?)\s*{_unit_re}?"
-    _wdh = re.search(rf"\b{_num}\s*[x×*]\s*{_num}\s*[x×*]\s*{_num}", text)
+    _wdh = re.search(rf"\b{_num}\s*[x×*]\s*{_num}\s*[x×*]\s*{_num}", raw)
     if _wdh:
         _set_dim("width", _to_mm(float(_wdh.group(1)), _wdh.group(2)), 5.0, 1000.0)
         _set_dim("depth", _to_mm(float(_wdh.group(3)), _wdh.group(4)), 5.0, 1000.0)
@@ -457,7 +489,7 @@ def _apply_deterministic_edit(
     else:
         # "W x D" 2D shorthand — e.g. 'dimensions are 6" x 6"'. Sets the
         # footprint and leaves height alone.
-        _wd = re.search(rf"\b{_num}\s*[x×*]\s*{_num}", text)
+        _wd = re.search(rf"\b{_num}\s*[x×*]\s*{_num}", raw)
         if _wd and not explicit_changes:
             _set_dim("width", _to_mm(float(_wd.group(1)), _wd.group(2)), 5.0, 1000.0)
             _set_dim("depth", _to_mm(float(_wd.group(3)), _wd.group(4)), 5.0, 1000.0)
@@ -487,20 +519,20 @@ def _apply_deterministic_edit(
         )
         _axis_scaled = False
         if _mult and _mult.group(2):
-            raw = _mult.group(1)
-            mfac = float(raw.replace(",", ".")) if raw else (3.0 if "triple" in _mult.group(0) else 2.0)
+            _rawnum = _mult.group(1)
+            mfac = float(_rawnum.replace(",", ".")) if _rawnum else (3.0 if "triple" in _mult.group(0) else 2.0)
             mfac = max(0.05, min(10.0, mfac))
             _mkey = _axis_words[_mult.group(2)]
             hi = 60.0 if _mkey == "thickness" else 1000.0
             scale_param(_mkey, mfac, 1.0, hi)
             actions.append(f"scaled {_mkey} to {mfac * 100:.0f}%")
             _axis_scaled = True
-        pct = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent|procent)", text)
+        pct = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent|procent)", raw)
         # "N times bigger" / the common "10 time bigger" typo / "5x larger"
         times = re.search(
             r"\b(\d+(?:[.,]\d+)?)\s*(?:x\b|time?s?\b)[^.]{0,16}?\b(?:bigger|larger|the size|as big|större|storre)"
             r"|\b(\d+(?:[.,]\d+)?)\s*x\s*(?:bigger|larger|större|storre)\b",
-            text,
+            raw,
         )
         grow_words = ("bigger", "larger", "enlarge", "grow", "scale up", "scale it up",
                       "increase the size", "upsize", "make it big", "större", "storre",
@@ -511,8 +543,8 @@ def _apply_deterministic_edit(
         if _axis_scaled:
             pass
         elif times:
-            raw = times.group(1) or times.group(2)
-            factor = max(0.05, min(10.0, float(raw.replace(",", "."))))
+            _rawnum = times.group(1) or times.group(2)
+            factor = max(0.05, min(10.0, float(_rawnum.replace(",", "."))))
         elif re.search(r"\b(double|twice|2x|two times|dubbelt|dubbla)\b", text):
             factor = 2.0
         elif re.search(r"\b(triple|3x|three times)\b", text):

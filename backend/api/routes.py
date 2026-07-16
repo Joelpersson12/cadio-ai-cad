@@ -39,6 +39,7 @@ from backend.models.schema import (
 )
 from backend.services.ai_parser import (
     is_edit_only_prompt,
+    prompt_has_subject,
     parse_ai_command,
 )
 from backend.services.export_service import (
@@ -93,6 +94,7 @@ from backend.services.session_manager import (
     build_duct_adapter_from_prompt,
     is_spec_part_prompt,
     is_structural_ai_edit_prompt,
+    is_duct_adapter_edit_prompt,
     is_text_label_prompt,
     prepare_generation_target,
     place_object_on_plate,
@@ -187,7 +189,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-07-16T-parametric-duct-adapter"
+BUILD_MARKER = "2026-07-16T-adapter-rebuild-scaling-fixes"
 
 
 @router.get("/api/debug/version")
@@ -937,6 +939,13 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
             actions = add_bottom_plate_from_prompt(session, data.prompt)
         elif session["object_order"] and is_text_label_prompt(data.prompt):
             actions = add_text_label_from_prompt(session, data.prompt)
+        elif is_duct_adapter_edit_prompt(session, data.prompt):
+            # A Cadio-built adapter on the plate + a change request ("40°
+            # bend", "round end 100mm", "wall 3mm") — rebuild it to the new
+            # spec instead of starting a fresh generation.
+            actions = apply_structural_ai_edit_from_prompt(session, data.prompt)
+            if not actions:
+                actions = ["edit skipped: command was not specific enough"]
         elif is_structural_ai_edit_prompt(data.prompt):
             if not session["object_order"]:
                 obj = create_object("part_1")
@@ -947,6 +956,11 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
                 actions = ["edit skipped: command was not specific enough"]
         else:
             edit_only = is_edit_only_prompt(data.prompt)
+            # A dimensioned PRODUCT prompt on an empty plate ("headset stand
+            # 120mm tall") is a generation, not an edit of nothing — the
+            # imported model is then rebuilt to the typed sizes.
+            if edit_only and not session["object_order"] and prompt_has_subject(data.prompt):
+                edit_only = False
             if edit_only:
                 if not session["object_order"]:
                     obj = create_object("part_1")
