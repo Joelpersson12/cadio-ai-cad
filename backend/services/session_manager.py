@@ -334,6 +334,7 @@ def prepare_generation_target(session: Session, name: str = "part_1") -> CadObje
     # leak into the new one.
     session["source_files"] = []
     session["_source_mesh_cache"] = {}
+    session.pop("llm_build_plan", None)
 
     obj = create_object(name)
     obj["generated_seed"] = True
@@ -474,6 +475,23 @@ def _source_title_score(title: str, prompt: str) -> float:
         return 90.0
     hits = sum(1 for word in core_words if word in lower_title)
     return 34.0 * (hits / len(core_words))
+
+def _prompt_title_overlap(prompt: str, title: str) -> int:
+    """How many of the prompt's meaningful words appear in a match title.
+
+    Uses the normalized/translated query so non-English prompts count too.
+    0 means the title shares nothing with what the user asked for — an
+    unrelated model that must not be imported."""
+    from backend.services.prompt_translation import normalize_source_query
+
+    stop_words = {"with", "and", "the", "for", "from", "that", "this", "into", "onto", "under", "over", "mount", "holder", "stand"}
+    text = f"{_prompt_match_text(prompt)} {normalize_source_query(prompt)}"
+    core_words = {word for word in re.findall(r"[a-z0-9]+", text.lower()) if len(word) > 2 and word not in stop_words}
+    if not core_words:
+        return 1  # nothing meaningful to compare — don't block
+    lower_title = (title or "").lower()
+    return sum(1 for word in core_words if word in lower_title)
+
 
 def _rank_source_files(files: list[Any], prompt: str, preferred_slots: int = 0) -> list[Any]:
     return sorted(files, key=lambda source_file: _source_file_score(source_file, prompt, preferred_slots), reverse=True)
@@ -1240,6 +1258,12 @@ def _try_replace_with_imported_source_model(
     except Exception:
         examples = []
 
+    # Relevance gate: a match whose title shares NOTHING with the prompt's key
+    # words is a wrong model, not a model ("holster for a S&W 9mm" must never
+    # import a "wall mount hat holder"). Better to fall through to the
+    # LLM/parametric build than to show something unrelated.
+    examples = [ex for ex in examples if _prompt_title_overlap(prompt, ex.title) > 0]
+
     ranked_assemblies: list[tuple[float, Any, list[dict[str, Any]], list[dict[str, Any]]]] = []
     ranked_candidates: list[tuple[float, Any, list[dict[str, Any]], dict[str, Any]]] = []
     # File resolution is a network round-trip per candidate — the dominant cost
@@ -1788,6 +1812,158 @@ def _spawn_variant_prefetch(session_id: str, examples: list[Any], prompt: str) -
             pool.shutdown(wait=True)
 
     Thread(target=_work, name="cadio-variant-prefetch", daemon=True).start()
+
+
+# ---------------------------------------------------------------------------
+# LLM-designed builds — assemble a build plan (from llm_builder) into real,
+# editable bodies. The plan is stored with the session so later edit prompts
+# can hand the LLM the model's exact structure ("scan") and rebuild.
+# ---------------------------------------------------------------------------
+
+
+def _component_from_plan_part(part: dict[str, Any], params: dict[str, float], color: str) -> CadObject | None:
+    shape = part.get("shape")
+    label = str(part.get("label") or shape or "part").strip().replace(" ", "_")[:48]
+    pos = [float(v) for v in part.get("position_mm", [0, 0, 0])]
+    rot = [float(v) for v in part.get("rotation_deg", [0, 0, 0])]
+    try:
+        if shape == "box":
+            return _create_box_component(label, part["width_mm"], part["depth_mm"], part["height_mm"], pos, params, rotation=rot, color=color)
+        if shape == "wedge":
+            obj = _create_gusset_component(label, part["width_mm"], part["depth_mm"], part["height_mm"], pos, params, color=color)
+            obj["transform"].rotation = rot
+            return obj
+        if shape == "cylinder":
+            return _create_cylinder_component(label, part["radius_mm"], part["height_mm"], pos, params, rotation=rot, color=color)
+        if shape == "tube":
+            mesh = _make_tube_mesh(part["radius_mm"], part.get("inner_radius_mm", part["radius_mm"] * 0.8), part["height_mm"])
+            part_params = dict(DEFAULT_PARAMETERS)
+            part_params.update(params)
+            part_params.update({
+                "width": part["radius_mm"] * 2.0,
+                "depth": part["radius_mm"] * 2.0,
+                "height": float(part["height_mm"]),
+            })
+            obj = create_manual_object(label, mesh, part_params)
+            obj["primitive"] = "cylinder"
+            obj["template_component"] = True
+            obj["color"] = color
+            obj["transform"] = Transform(position=pos, rotation=rot, scale=[1.0, 1.0, 1.0])
+            return obj
+    except Exception:  # noqa: BLE001 — one bad part must not sink the build
+        return None
+    return None
+
+
+def build_objects_from_llm_plan(
+    session: Session,
+    seed_obj: CadObject | None,
+    prompt: str,
+    plan: dict[str, Any],
+) -> list[str]:
+    """Assemble an LLM build plan into editable bodies on the plate.
+
+    Returns action strings on success, [] on failure (caller falls through to
+    the normal pipeline). Stores the plan + part ids on the session so edit
+    prompts can be answered by editing the plan and rebuilding."""
+    parts_spec = plan.get("parts") if isinstance(plan, dict) else None
+    if not parts_spec:
+        return []
+    color = (seed_obj or {}).get("color", "#a9aaad") if isinstance(seed_obj, dict) else "#a9aaad"
+    params = dict(DEFAULT_PARAMETERS)
+    parts: list[CadObject] = []
+    for part_spec in parts_spec:
+        component = _component_from_plan_part(part_spec, params, color)
+        if component is not None:
+            component["llm_built"] = True
+            component["assembly_source"] = "llm-design"
+            parts.append(component)
+    if not parts:
+        return []
+
+    # Ground the assembly on the plate and center it in x/y.
+    try:
+        mins, maxs = _world_extents_for_objects(parts)
+        dx = -(mins[0] + maxs[0]) / 2.0
+        dy = -(mins[1] + maxs[1]) / 2.0
+        dz = -mins[2]
+        for component in parts:
+            t = component["transform"]
+            t.position = [t.position[0] + dx, t.position[1] + dy, t.position[2] + dz]
+    except Exception:  # noqa: BLE001 — placement polish must not sink the build
+        pass
+
+    if seed_obj is not None and seed_obj.get("id") in session.get("objects", {}):
+        _remove_object_direct(session, seed_obj["id"])
+    for component in parts:
+        add_object(session, component)
+    session["selected_object_id"] = ""
+    session["llm_build_plan"] = {
+        "prompt": prompt,
+        "plan": plan,
+        "part_ids": [component["id"] for component in parts],
+    }
+    name = str(plan.get("name", "custom design")).replace("_", " ")
+    return [
+        f"designed from your description: {name}",
+        f"ai-built: {len(parts)} parts, editable — ask for any change",
+    ]
+
+
+def apply_llm_plan_edit(session: Session, prompt: str) -> list[str]:
+    """Edit an LLM-built model by updating its stored build plan.
+
+    Hands the LLM the model's current plan (its structural 'scan') plus the
+    edit request, then rebuilds from the returned plan. [] on any failure so
+    callers fall through to the normal edit pipeline."""
+    stored = session.get("llm_build_plan")
+    if not isinstance(stored, dict) or not stored.get("plan"):
+        return []
+    try:
+        from backend.services.llm_builder import llm_edit_plan
+    except Exception:  # noqa: BLE001
+        return []
+    new_plan = llm_edit_plan(str(stored.get("prompt", "")), stored["plan"], prompt)
+    if not new_plan or not new_plan.get("parts"):
+        return []
+
+    # Keep the color the user may have set, then swap old parts for new.
+    old_ids = [oid for oid in stored.get("part_ids", []) if oid in session.get("objects", {})]
+    color = session["objects"][old_ids[0]].get("color", "#a9aaad") if old_ids else "#a9aaad"
+    params = dict(DEFAULT_PARAMETERS)
+    parts: list[CadObject] = []
+    for part_spec in new_plan["parts"]:
+        component = _component_from_plan_part(part_spec, params, color)
+        if component is not None:
+            component["llm_built"] = True
+            component["assembly_source"] = "llm-design"
+            parts.append(component)
+    if not parts:
+        return []
+    try:
+        mins, maxs = _world_extents_for_objects(parts)
+        dx = -(mins[0] + maxs[0]) / 2.0
+        dy = -(mins[1] + maxs[1]) / 2.0
+        dz = -mins[2]
+        for component in parts:
+            t = component["transform"]
+            t.position = [t.position[0] + dx, t.position[1] + dy, t.position[2] + dz]
+    except Exception:  # noqa: BLE001
+        pass
+    for oid in old_ids:
+        _remove_object_direct(session, oid)
+    for component in parts:
+        add_object(session, component)
+    session["selected_object_id"] = ""
+    session["llm_build_plan"] = {
+        "prompt": stored.get("prompt", ""),
+        "plan": new_plan,
+        "part_ids": [component["id"] for component in parts],
+    }
+    return [
+        f"applied your change: {prompt.strip()[:80]}",
+        f"ai-edited: rebuilt {len(parts)} parts from the updated design",
+    ]
 
 
 def select_source_file(session: Session, file_id: str, mode: str = "swap") -> list[str]:

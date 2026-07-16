@@ -115,6 +115,16 @@ from backend.services.session_manager import (
     undo_session,
     redo_session,
 )
+from backend.services.session_manager import (
+    apply_llm_plan_edit,
+    build_objects_from_llm_plan,
+)
+from backend.services.llm_builder import (
+    is_plan_edit_prompt as _is_plan_edit_prompt,
+    is_specific_build_prompt as _is_specific_build_prompt,
+    llm_available as _llm_available,
+    llm_design_plan as _llm_design_plan,
+)
 from backend.services.geometry_validator import GeometryValidator
 from backend.services.example_discovery import ExampleDiscovery
 from backend.services.cad_engine import DEFAULT_PARAMETERS
@@ -189,7 +199,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-07-16T-adapter-rebuild-scaling-fixes"
+BUILD_MARKER = "2026-07-16T-llm-design-brain"
 
 
 @router.get("/api/debug/version")
@@ -935,6 +945,16 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
             add_object(session, obj)
             session["selected_object_id"] = obj["id"]
             actions = ["create new object"]
+        # LLM-built models carry their build plan (a machine-readable "scan").
+        # Edits on them go to the LLM plan editor first — it can change angles,
+        # bends and named features that the deterministic editor can't. Falls
+        # through to the normal edit pipeline when it returns nothing.
+        elif (
+            session.get("llm_build_plan")
+            and (is_edit_request or _is_plan_edit_prompt(data.prompt))
+            and (plan_edit_actions := apply_llm_plan_edit(session, data.prompt))
+        ):
+            actions = plan_edit_actions
         elif session["object_order"] and is_bottom_plate_prompt(data.prompt):
             actions = add_bottom_plate_from_prompt(session, data.prompt)
         elif session["object_order"] and is_text_label_prompt(data.prompt):
@@ -976,7 +996,21 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
                     session,
                     f"generated_{len(session['edit_history']) + 1}",
                 )
-            source_actions = [] if edit_only else replace_object_with_source_model(session, obj, data.prompt)
+            # Specific descriptions ("90-degree exhaust adapter, 6x6 inch
+            # outlet into a 6 inch hose...") are BUILT precisely to spec by
+            # the LLM design brain, instead of settling for the closest — and
+            # possibly unrelated — public model. Generic prompts ("headset
+            # stand") keep the source-import-first pipeline unchanged.
+            llm_build_actions: list[str] = []
+            if not edit_only and _llm_available() and _is_specific_build_prompt(data.prompt):
+                design_plan = _llm_design_plan(data.prompt)
+                if design_plan:
+                    llm_build_actions = build_objects_from_llm_plan(session, obj, data.prompt, design_plan)
+            source_actions = (
+                llm_build_actions
+                if llm_build_actions
+                else ([] if edit_only else replace_object_with_source_model(session, obj, data.prompt))
+            )
             if source_actions:
                 actions = source_actions
             else:
@@ -1034,7 +1068,11 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
             if not edit_only and obj.get("id") in session["objects"]:
                 session["selected_object_id"] = ""
 
-        if session.get("fit"):
+        # Auto-fit only on fresh generations. On edits it fights the user:
+        # "make it taller" grew the model past the plate, auto-fit scaled the
+        # WHOLE thing down, and the result looked SMALLER than before. Edits
+        # keep true dimensions; the per-printer too-big warning handles size.
+        if session.get("fit") and not is_edit_request:
             auto_fit_session(session)
 
         bump_version(session)
