@@ -89,6 +89,7 @@ Design rules:
 - Whole model must fit a 250x250x250 mm printer unless the user asks bigger.
 - Use as few parts as truly needed (usually 3-12). Label every part descriptively.
 - If the user references a style ("looks like an Apex Legends loot box"), design the FUNCTIONAL object they asked for with that style's proportions/details — never a replica prop of something else.
+- Mounting systems use their REAL standard dimensions: IKEA Skadis (5 mm thick hooks through 5x15 mm slots on a 40 mm grid), Gridfinity (42x42 mm base units, 7 mm height units), standard pegboard (6 mm holes, 25.4 mm spacing), VESA (75/100 mm hole patterns), GoPro (3-tab mount, 3.5 mm gap per tab, M5 bolt).
 
 Return ONLY JSON matching the schema."""
 
@@ -263,3 +264,51 @@ def is_plan_edit_prompt(prompt: str) -> bool:
     if not text or len(text.split()) > 24:
         return False
     return bool(_EDIT_VERB_RE.search(text))
+
+
+# ── Mounting-system anchors ─────────────────────────────────────────────────
+# When a prompt names a specific mounting/storage system, a match that isn't
+# built for that system is useless no matter how good it looks — a generic
+# filament holder does not clip into an IKEA Skadis board. These tokens must
+# appear in a source match's title for the import to count as relevant.
+_ANCHOR_SYSTEMS: tuple[str, ...] = (
+    "skadis",
+    "gridfinity",
+    "pegboard",
+    "multiboard",
+    "opengrid",
+    "underware",
+    "honeycomb",
+    "molle",
+    "vesa",
+    "gopro",
+    "picatinny",
+    "dewalt",
+    "makita",
+    "milwaukee",
+    "ryobi",
+    "bosch",
+    "einhell",
+    "parkside",
+)
+
+
+def _fold_ascii(text: str) -> str:
+    import unicodedata
+
+    return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode("ascii").lower()
+
+
+def prompt_anchor_tokens(prompt: str) -> set[str]:
+    """The mounting systems a prompt explicitly names (diacritics folded, so
+    'skådis' matches 'skadis')."""
+    folded = _fold_ascii(prompt)
+    return {anchor for anchor in _ANCHOR_SYSTEMS if anchor in folded}
+
+
+def title_matches_anchors(title: str, anchors: set[str]) -> bool:
+    """True when the title mentions at least one of the required systems."""
+    if not anchors:
+        return True
+    folded = _fold_ascii(title)
+    return any(anchor in folded for anchor in anchors)

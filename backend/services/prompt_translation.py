@@ -32,7 +32,11 @@ _PHRASE_TRANSLATIONS: tuple[tuple[str, str], ...] = (
     (r"\b(?:batteri\s*hallaren?|batterihallaren?)\b", "battery holder"),
     (r"\b(?:batteri\s*faste(?:t)?|batterifaste(?:t)?)\b", "battery mount"),
     (r"\b(?:vagg\s*faste(?:t)?|vaggfaste(?:t)?|vagg\s*montering(?:en)?|vaggmontering(?:en)?|vagg\s*hallaren?|vagghallaren?)\b", "wall mount"),
-    (r"\b(?:skadis|skadis\s*tavla|ikea\s*skadis|pegboard|verktygstavla|verktygs\s*tavla)\b", "pegboard"),
+    # "Skadis" is the exact term the model sites use (thousands of uploads) —
+    # rewriting it to generic "pegboard" made searches miss every Skadis-
+    # specific design. Keep it; only the generic Swedish words map to pegboard.
+    (r"\b(?:ikea\s*skadis|skadis\s*tavla|skadis)\b", "ikea skadis"),
+    (r"\b(?:pegboard|verktygstavla|verktygs\s*tavla)\b", "pegboard"),
     (r"\b(?:gridfinity|grid\s*finity|rutnat\s*forvaring|rutnatsforvaring)\b", "gridfinity"),
     (r"\b(?:skrivbord\s*faste(?:t)?|skrivbordsfaste(?:t)?|bord\s*faste(?:t)?|bordfaste(?:t)?)\b", "desk mount"),
     (r"\b(?:skrivbord\s*hallaren?|skrivbordshallaren?|bord\s*hallaren?|bordhallaren?)\b", "desk holder"),
@@ -256,7 +260,7 @@ _WORD_TRANSLATIONS: dict[str, str] = {
     "skruvar": "screws",
     "skena": "rail",
     "skenor": "rails",
-    "skadis": "pegboard",
+    "skadis": "skadis",
     "skal": "shell",
     "skrivbord": "desk",
     "skrivbords": "desk",

@@ -1264,6 +1264,18 @@ def _try_replace_with_imported_source_model(
     # LLM/parametric build than to show something unrelated.
     examples = [ex for ex in examples if _prompt_title_overlap(prompt, ex.title) > 0]
 
+    # System anchor gate: when the prompt names a mounting system (IKEA Skadis,
+    # Gridfinity, ...), only models actually made for that system qualify — a
+    # generic filament holder does not clip into a Skadis board.
+    try:
+        from backend.services.llm_builder import prompt_anchor_tokens, title_matches_anchors
+
+        _anchors = prompt_anchor_tokens(prompt)
+        if _anchors:
+            examples = [ex for ex in examples if title_matches_anchors(ex.title, _anchors)]
+    except Exception:  # noqa: BLE001 — gating must never break the search
+        pass
+
     ranked_assemblies: list[tuple[float, Any, list[dict[str, Any]], list[dict[str, Any]]]] = []
     ranked_candidates: list[tuple[float, Any, list[dict[str, Any]], dict[str, Any]]] = []
     # File resolution is a network round-trip per candidate — the dominant cost
