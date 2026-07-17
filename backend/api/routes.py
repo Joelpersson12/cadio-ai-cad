@@ -124,6 +124,7 @@ from backend.services.llm_builder import (
     is_specific_build_prompt as _is_specific_build_prompt,
     llm_available as _llm_available,
     llm_design_plan as _llm_design_plan,
+    prompt_anchor_tokens as _prompt_anchor_tokens,
 )
 from backend.services.geometry_validator import GeometryValidator
 from backend.services.example_discovery import ExampleDiscovery
@@ -199,7 +200,7 @@ def health() -> dict[str, Any]:
 
 # Bump this string on every deploy so /api/debug/version proves which code
 # is actually live on the Hugging Face Space (build can lag the file sync).
-BUILD_MARKER = "2026-07-16T-llm-design-brain"
+BUILD_MARKER = "2026-07-17T-skadis-anchor-search"
 
 
 @router.get("/api/debug/version")
@@ -1001,8 +1002,16 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
             # the LLM design brain, instead of settling for the closest — and
             # possibly unrelated — public model. Generic prompts ("headset
             # stand") keep the source-import-first pipeline unchanged.
+            # Routing between the LLM design brain and source import:
+            # - system-anchored prompts ("filament holder for IKEA Skadis")
+            #   prefer a REAL community model made for that system, so source
+            #   search (with its anchor gate) runs first; the brain is the
+            #   fallback when no genuine system match exists.
+            # - other specific prompts are built to spec by the brain first.
+            # - generic prompts keep the source-first pipeline untouched.
+            _anchored = bool(_prompt_anchor_tokens(data.prompt))
             llm_build_actions: list[str] = []
-            if not edit_only and _llm_available() and _is_specific_build_prompt(data.prompt):
+            if not edit_only and _llm_available() and not _anchored and _is_specific_build_prompt(data.prompt):
                 design_plan = _llm_design_plan(data.prompt)
                 if design_plan:
                     llm_build_actions = build_objects_from_llm_plan(session, obj, data.prompt, design_plan)
@@ -1011,6 +1020,10 @@ def _sync_generate(data: GenerateRequest) -> tuple[ScenePayload, str]:
                 if llm_build_actions
                 else ([] if edit_only else replace_object_with_source_model(session, obj, data.prompt))
             )
+            if not source_actions and not edit_only and _llm_available() and _anchored:
+                design_plan = _llm_design_plan(data.prompt)
+                if design_plan:
+                    source_actions = build_objects_from_llm_plan(session, obj, data.prompt, design_plan)
             if source_actions:
                 actions = source_actions
             else:
